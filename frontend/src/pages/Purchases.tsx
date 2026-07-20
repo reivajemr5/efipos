@@ -62,6 +62,8 @@ export default function Purchases() {
   const [receiveId, setReceiveId] = useState<number | null>(null)
   const [showNewSupplierForm, setShowNewSupplierForm] = useState(false)
   const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
+  const [showNewProductForm, setShowNewProductForm] = useState(false)
+  const [newProductForm, setNewProductForm] = useState({ code: '', name: '', price: '', currency: 'usd', ivaPercent: '16' })
 
   async function load() {
     const params = filterStatus ? `status=${filterStatus}` : ''
@@ -99,6 +101,22 @@ export default function Purchases() {
     if (!receiveId || receiveItems.length === 0) return
     await api.purchases.receive(receiveId, { items: receiveItems })
     setShowReceiveForm(false); setReceiveId(null); setReceiveItems([]); load()
+  }
+
+  async function createProduct(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      const product = await api.products.create({
+        ...newProductForm,
+        price: Number(newProductForm.price),
+        ivaPercent: Number(newProductForm.ivaPercent),
+        stock: 0, minStock: 1,
+      })
+      setProducts((prev) => [...prev, product])
+      setShowNewProductForm(false)
+      setNewProductForm({ code: '', name: '', price: '', currency: 'usd', ivaPercent: '16' })
+      addItem(product.id)
+    } catch { }
   }
 
   async function createSupplier(e: React.FormEvent) {
@@ -282,6 +300,8 @@ export default function Purchases() {
                     <span className="text-gray-500">${Number(p.price).toFixed(2)} (stock: {p.stock})</span>
                   </button>
                 ))}
+                <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
+                  className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
             )}
             <input value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Buscar y agregar productos..."
@@ -340,6 +360,8 @@ export default function Purchases() {
                     <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
                   </button>
                 ))}
+                <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
+                  className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
             )}
 
@@ -348,6 +370,31 @@ export default function Purchases() {
                 className="flex-1 bg-green-700 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-green-600">Confirmar Recepción</button>
               <button onClick={() => setShowReceiveForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showNewProductForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewProductForm(false)}>
+          <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Nuevo Producto</h3>
+            <form onSubmit={createProduct} className="space-y-3">
+              <input value={newProductForm.code} onChange={(e) => setNewProductForm({ ...newProductForm, code: e.target.value })} placeholder="Código" className="w-full px-3 py-2 border rounded-lg" required />
+              <input value={newProductForm.name} onChange={(e) => setNewProductForm({ ...newProductForm, name: e.target.value })} placeholder="Nombre" className="w-full px-3 py-2 border rounded-lg" required />
+              <input value={newProductForm.price} onChange={(e) => setNewProductForm({ ...newProductForm, price: e.target.value })} type="number" step="0.01" placeholder="Precio" className="w-full px-3 py-2 border rounded-lg" required />
+              <div className="flex gap-2">
+                <select value={newProductForm.currency} onChange={(e) => setNewProductForm({ ...newProductForm, currency: e.target.value })} className="flex-1 px-3 py-2 border rounded-lg">
+                  <option value="usd">$ USD</option><option value="bs">Bs</option>
+                </select>
+                <select value={newProductForm.ivaPercent} onChange={(e) => setNewProductForm({ ...newProductForm, ivaPercent: e.target.value })} className="flex-1 px-3 py-2 border rounded-lg">
+                  <option value="0">0%</option><option value="8">8%</option><option value="16">16%</option>
+                </select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="submit" className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Crear y agregar</button>
+                <button type="button" onClick={() => setShowNewProductForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Cancelar</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
