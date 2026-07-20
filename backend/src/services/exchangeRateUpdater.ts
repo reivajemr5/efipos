@@ -1,18 +1,14 @@
 import prisma from '../lib/prisma'
 
-const API_URLS = [
-  'https://ve.dolarapi.com/v1/tasas/bcv',
-  'https://pydolarve.org/api/v1/price?pair=USD_VES',
-]
-
 async function fetchFromDolarApi(): Promise<number | null> {
   try {
-    const res = await fetch('https://ve.dolarapi.com/v1/tasas/bcv', {
+    const res = await fetch('https://ve.dolarapi.com/v1/dolares', {
       signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) return null
-    const data: any = await res.json()
-    return data?.promedio || data?.rate || null
+    const data: any[] = await res.json()
+    const oficial = data.find((d: any) => d.fuente === 'oficial')
+    return oficial?.promedio || null
   } catch {
     return null
   }
