@@ -7,6 +7,7 @@ import Clients from './pages/Clients'
 import Suppliers from './pages/Suppliers'
 import Products from './pages/Products'
 import Quotes from './pages/Quotes'
+import Purchases from './pages/Purchases'
 import Invoices from './pages/Invoices'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
@@ -30,6 +31,7 @@ function App() {
           <Route path="products" element={<Products />} />
           <Route path="clients" element={<Clients />} />
           <Route path="suppliers" element={<Suppliers />} />
+          <Route path="purchases" element={<Purchases />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
         </Route>

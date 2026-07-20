@@ -37,6 +37,14 @@ CREATE TABLE "suppliers" (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE "product_suppliers" (
+    product_id INTEGER NOT NULL REFERENCES "products"(id) ON DELETE CASCADE,
+    supplier_id INTEGER NOT NULL REFERENCES "suppliers"(id) ON DELETE CASCADE,
+    price DECIMAL(12,2),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (product_id, supplier_id)
+);
+
 CREATE TABLE "products" (
     id SERIAL PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
@@ -47,7 +55,6 @@ CREATE TABLE "products" (
     iva_percent DECIMAL(5,2) NOT NULL DEFAULT 16,
     stock INTEGER NOT NULL DEFAULT 0,
     min_stock INTEGER NOT NULL DEFAULT 5,
-    supplier_id INTEGER REFERENCES "suppliers"(id),
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -122,4 +129,35 @@ CREATE TABLE "cash_closes" (
     difference DECIMAL(12,2) NOT NULL,
     close_date TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TYPE "PurchaseStatus" AS ENUM ('pendiente', 'pagada', 'anulada');
+
+CREATE TABLE "purchase_invoices" (
+    id SERIAL PRIMARY KEY,
+    number TEXT NOT NULL UNIQUE,
+    supplier_id INTEGER NOT NULL REFERENCES "suppliers"(id),
+    user_id INTEGER NOT NULL REFERENCES "users"(id),
+    currency "Currency" NOT NULL DEFAULT 'usd',
+    exchange_rate DECIMAL(14,4),
+    subtotal DECIMAL(12,2) NOT NULL,
+    iva_total DECIMAL(12,2) NOT NULL,
+    total DECIMAL(12,2) NOT NULL,
+    total_bs DECIMAL(14,2),
+    status "PurchaseStatus" NOT NULL DEFAULT 'pendiente',
+    payment_method TEXT NOT NULL DEFAULT 'efectivo',
+    due_date TIMESTAMP,
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    cancelled_at TIMESTAMP
+);
+
+CREATE TABLE "purchase_invoice_items" (
+    id SERIAL PRIMARY KEY,
+    purchase_invoice_id INTEGER NOT NULL REFERENCES "purchase_invoices"(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES "products"(id),
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(12,2) NOT NULL,
+    iva_percent DECIMAL(5,2) NOT NULL,
+    subtotal DECIMAL(12,2) NOT NULL
 );

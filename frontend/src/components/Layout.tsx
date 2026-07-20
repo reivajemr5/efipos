@@ -7,6 +7,7 @@ import OfflineIndicator from './OfflineIndicator'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '🏠' },
+  { to: '/purchases', label: 'Compras', icon: '📥' },
   { to: '/invoices', label: 'Facturación', icon: '🧾' },
   { to: '/quotes', label: 'Cotizaciones', icon: '📋' },
   { to: '/products', label: 'Productos', icon: '📦' },

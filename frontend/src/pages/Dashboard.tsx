@@ -56,6 +56,12 @@ export default function Dashboard() {
           <p className="mt-2 font-semibold text-gray-800">Cotizaciones</p>
           <p className="text-xs text-gray-400">Presupuestos para clientes</p>
         </button>
+        <button onClick={() => navigate('/purchases')}
+          className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow text-left">
+          <span className="text-3xl">📥</span>
+          <p className="mt-2 font-semibold text-gray-800">Compras</p>
+          <p className="text-xs text-gray-400">Cuentas por pagar</p>
+        </button>
         <button onClick={() => navigate('/products')}
           className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow text-left">
           <span className="text-3xl">📦</span>

@@ -11,8 +11,7 @@ interface Product {
   ivaPercent: number
   stock: number
   minStock: number
-  supplierId: number | null
-  supplier: { id: number; name: string } | null
+  suppliers: { supplier: { id: number; name: string } }[]
 }
 
 interface Supplier {
@@ -26,7 +25,7 @@ export default function Products() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
-  const [form, setForm] = useState({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierId: '' })
+  const [form, setForm] = useState({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] as number[] })
 
   async function load() {
     const [prods, sups] = await Promise.all([
@@ -39,9 +38,18 @@ export default function Products() {
 
   useEffect(() => { load() }, [search])
 
+  function toggleSupplier(id: number) {
+    setForm((prev) => ({
+      ...prev,
+      supplierIds: prev.supplierIds.includes(id)
+        ? prev.supplierIds.filter((sid) => sid !== id)
+        : [...prev.supplierIds, id],
+    }))
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    const data = { ...form, price: Number(form.price), currency: form.currency, ivaPercent: Number(form.ivaPercent), stock: Number(form.stock), minStock: Number(form.minStock), supplierId: form.supplierId ? Number(form.supplierId) : null }
+    const data = { ...form, price: Number(form.price), currency: form.currency, ivaPercent: Number(form.ivaPercent), stock: Number(form.stock), minStock: Number(form.minStock) }
     if (editing) {
       await api.products.update(editing.id, data)
     } else {
@@ -49,13 +57,23 @@ export default function Products() {
     }
     setShowForm(false)
     setEditing(null)
-    setForm({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierId: '' })
+    setForm({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] })
     load()
   }
 
   function edit(p: Product) {
     setEditing(p)
-    setForm({ code: p.code, name: p.name, description: p.description || '', price: String(p.price), currency: p.currency, ivaPercent: String(p.ivaPercent), stock: String(p.stock), minStock: String(p.minStock), supplierId: p.supplierId ? String(p.supplierId) : '' })
+    setForm({
+      code: p.code,
+      name: p.name,
+      description: p.description || '',
+      price: String(p.price),
+      currency: p.currency,
+      ivaPercent: String(p.ivaPercent),
+      stock: String(p.stock),
+      minStock: String(p.minStock),
+      supplierIds: p.suppliers.map((ps) => ps.supplier.id),
+    })
     setShowForm(true)
   }
 
@@ -69,7 +87,7 @@ export default function Products() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-800">Productos</h2>
-        <button onClick={() => { setEditing(null); setForm({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierId: '' }); setShowForm(true) }}
+        <button onClick={() => { setEditing(null); setForm({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] }); setShowForm(true) }}
           className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800">+ Nuevo</button>
       </div>
       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o código..."
@@ -96,10 +114,18 @@ export default function Products() {
                 <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} type="number" placeholder="Stock" className="flex-1 px-3 py-2 border rounded-lg" />
                 <input value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} type="number" placeholder="Stock mín" className="flex-1 px-3 py-2 border rounded-lg" />
               </div>
-              <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className="w-full px-3 py-2 border rounded-lg">
-                <option value="">Sin proveedor</option>
-                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div className="border rounded-lg p-2">
+                <p className="text-xs text-gray-500 mb-1">Proveedores:</p>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {suppliers.map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded">
+                      <input type="checkbox" checked={form.supplierIds.includes(s.id)} onChange={() => toggleSupplier(s.id)} className="rounded" />
+                      {s.name}
+                    </label>
+                  ))}
+                  {suppliers.length === 0 && <p className="text-xs text-gray-400">No hay proveedores registrados</p>}
+                </div>
+              </div>
               <div className="flex gap-2 pt-2">
                 <button type="submit" className="flex-1 bg-blue-900 text-white py-2 rounded-lg">{editing ? 'Guardar' : 'Crear'}</button>
                 <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
@@ -131,7 +157,11 @@ export default function Products() {
                   Stock: {p.stock}
                 </span>
               </div>
-              {p.supplier && <p className="text-xs text-gray-400 mt-1">Proveedor: {p.supplier.name}</p>}
+              {p.suppliers.length > 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Proveedores: {p.suppliers.map((ps) => ps.supplier.name).join(', ')}
+                </p>
+              )}
             </div>
           )
         })}

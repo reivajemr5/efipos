@@ -55,6 +55,13 @@ export const api = {
     convert: (id: number) => request(`/quotes/${id}/convert`, { method: 'POST' }),
     delete: (id: number) => request(`/quotes/${id}`, { method: 'DELETE' }),
   },
+  purchases: {
+    list: (params?: string) => request(`/purchases${params ? `?${params}` : ''}`),
+    getById: (id: number) => request(`/purchases/${id}`),
+    create: (data: any) => request('/purchases', { method: 'POST', body: JSON.stringify(data) }),
+    pay: (id: number) => request(`/purchases/${id}/pay`, { method: 'POST' }),
+    cancel: (id: number) => request(`/purchases/${id}/cancel`, { method: 'POST' }),
+  },
   invoices: {
     list: (params?: string) => request(`/invoices${params ? `?${params}` : ''}`),
     getById: (id: number) => request(`/invoices/${id}`),
