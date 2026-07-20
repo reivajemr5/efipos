@@ -282,6 +282,7 @@ export default function Purchases() {
               className="w-full px-3 py-2 border rounded-lg mb-3">
               <option value="efectivo_bs">Efectivo Bs</option>
               <option value="efectivo_usd">Efectivo $</option>
+              <option value="credito">Crédito</option>
               <option value="tarjeta_debito">Tarjeta de Débito</option>
               <option value="tarjeta_credito">Tarjeta de Crédito</option>
               <option value="cheque">Cheque</option>
