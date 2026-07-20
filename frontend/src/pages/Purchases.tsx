@@ -38,6 +38,8 @@ interface Product {
   currency: string
   ivaPercent: number
   stock: number
+  minStock: number
+  suppliers: { supplier: { id: number; name: string } }[]
 }
 
 export default function Purchases() {
@@ -57,6 +59,7 @@ export default function Purchases() {
   const [searchProduct, setSearchProduct] = useState('')
   const [showSupplierPicker, setShowSupplierPicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showLowStock, setShowLowStock] = useState(false)
   const [showReceiveForm, setShowReceiveForm] = useState(false)
   const [receiveItems, setReceiveItems] = useState<{ productId: number; quantity: number }[]>([])
   const [receiveId, setReceiveId] = useState<number | null>(null)
@@ -64,6 +67,17 @@ export default function Purchases() {
   const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [newProductForm, setNewProductForm] = useState({ code: '', name: '', price: '', currency: 'usd', ivaPercent: '16' })
+
+  function filteredProducts() {
+    let list = products
+    if (selectedSupplier) {
+      list = list.filter((p) => p.suppliers?.some((s) => s.supplier.id === selectedSupplier.id))
+    }
+    if (showLowStock) {
+      list = list.filter((p) => p.stock <= p.minStock)
+    }
+    return list.sort((a, b) => a.stock / (a.minStock || 1) - b.stock / (b.minStock || 1))
+  }
 
   async function load() {
     const params = filterStatus ? `status=${filterStatus}` : ''
@@ -291,15 +305,28 @@ export default function Purchases() {
               })}
             </div>
 
+            <div className="flex items-center gap-2 mb-2">
+              {selectedSupplier && (
+                <span className="text-xs text-gray-500">Productos de: <strong>{selectedSupplier.name}</strong></span>
+              )}
+              <label className="ml-auto flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+                <input type="checkbox" checked={showLowStock} onChange={(e) => setShowLowStock(e.target.checked)} className="rounded" />
+                Solo bajo stock
+              </label>
+            </div>
             {showProductPicker && (
               <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
-                {products.filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => (
-                  <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct('') }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between">
-                    <span>{p.name}</span>
-                    <span className="text-gray-500">${Number(p.price).toFixed(2)} (stock: {p.stock})</span>
-                  </button>
-                ))}
+                {filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => {
+                  const lowStock = p.stock <= p.minStock
+                  return (
+                    <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct('') }}
+                      className={`w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between ${lowStock ? 'bg-amber-50' : ''}`}>
+                      <span>{p.name}</span>
+                      <span className="text-gray-500">${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700 font-semibold">stock: {p.stock}</span>}</span>
+                    </button>
+                  )
+                })}
+                {filteredProducts().length === 0 && <p className="text-xs text-gray-400 text-center py-3">No hay productos disponibles de este proveedor</p>}
                 <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
                   className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
@@ -348,18 +375,25 @@ export default function Purchases() {
               })}
             </div>
 
+            <label className="flex items-center gap-1 text-xs text-gray-500 mb-2 cursor-pointer">
+              <input type="checkbox" checked={showLowStock} onChange={(e) => setShowLowStock(e.target.checked)} className="rounded" />
+              Solo bajo stock
+            </label>
             <input value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Agregar productos adicionales..."
               className="w-full px-3 py-2 border rounded-lg mb-3" onFocus={() => setShowProductPicker(true)}
               onBlur={() => setTimeout(() => setShowProductPicker(false), 200)} />
             {showProductPicker && (
               <div className="max-h-32 overflow-y-auto border rounded-lg mb-3">
-                {products.filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => (
-                  <button key={p.id} onClick={() => { addReceiveItem(p.id); setSearchProduct('') }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between">
-                    <span>{p.name}</span>
-                    <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
-                  </button>
-                ))}
+                {filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => {
+                  const lowStock = p.stock <= p.minStock
+                  return (
+                    <button key={p.id} onClick={() => { addReceiveItem(p.id); setSearchProduct('') }}
+                      className={`w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between ${lowStock ? 'bg-amber-50' : ''}`}>
+                      <span>{p.name}</span>
+                      <span className="text-gray-500">${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700">stock: {p.stock}</span>}</span>
+                    </button>
+                  )
+                })}
                 <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
                   className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
