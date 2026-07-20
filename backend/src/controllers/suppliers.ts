@@ -11,7 +11,7 @@ export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const supplier = await prisma.supplier.findUnique({
     where: { id },
-    include: { products: { where: { active: true } } },
+    include: { products: { include: { product: true } } },
   })
   if (!supplier) { res.status(404).json({ error: 'Proveedor no encontrado' }); return }
   res.json(supplier)
