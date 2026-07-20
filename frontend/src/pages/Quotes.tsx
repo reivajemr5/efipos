@@ -44,6 +44,8 @@ export default function Quotes() {
   const [items, setItems] = useState<{ productId: number; quantity: number }[]>([])
   const [validDays, setValidDays] = useState('30')
   const [showClientPicker, setShowClientPicker] = useState(false)
+  const [showNewClientForm, setShowNewClientForm] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showProductPicker, setShowProductPicker] = useState(false)
 
   async function load() {
@@ -52,6 +54,17 @@ export default function Quotes() {
   }
 
   useEffect(() => { load() }, [])
+
+  async function createClient(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      const client = await api.clients.create(newClientForm)
+      setClients((prev) => [...prev, client])
+      setSelectedClient(client)
+      setShowNewClientForm(false)
+      setNewClientForm({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
+    } catch { }
+  }
 
   async function createQuote() {
     if (!selectedClient || items.length === 0) return
@@ -145,6 +158,8 @@ export default function Quotes() {
                       <button key={c.id} onClick={() => { setSelectedClient(c); setShowClientPicker(false); setSearchClient('') }}
                         className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm">{c.name} - {c.documentType}{c.documentNumber}</button>
                     ))}
+                    <button onClick={() => { setShowNewClientForm(true); setShowClientPicker(false) }}
+                      className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo cliente</button>
                   </div>
                 )}
               </div>
@@ -197,6 +212,29 @@ export default function Quotes() {
                 className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">Generar Cotización</button>
               <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showNewClientForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewClientForm(false)}>
+          <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Nuevo Cliente</h3>
+            <form onSubmit={createClient} className="space-y-3">
+              <input value={newClientForm.name} onChange={(e) => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="Nombre" className="w-full px-3 py-2 border rounded-lg" required />
+              <div className="flex gap-2">
+                <select value={newClientForm.documentType} onChange={(e) => setNewClientForm({ ...newClientForm, documentType: e.target.value })} className="px-3 py-2 border rounded-lg">
+                  <option value="V">V</option><option value="J">J</option><option value="E">E</option>
+                </select>
+                <input value={newClientForm.documentNumber} onChange={(e) => setNewClientForm({ ...newClientForm, documentNumber: e.target.value })} placeholder="N° documento" className="flex-1 px-3 py-2 border rounded-lg" required />
+              </div>
+              <input value={newClientForm.phone} onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="Teléfono" className="w-full px-3 py-2 border rounded-lg" />
+              <input value={newClientForm.address} onChange={(e) => setNewClientForm({ ...newClientForm, address: e.target.value })} placeholder="Dirección" className="w-full px-3 py-2 border rounded-lg" />
+              <div className="flex gap-2 pt-2">
+                <button type="submit" className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Crear y seleccionar</button>
+                <button type="button" onClick={() => setShowNewClientForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Cancelar</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
