@@ -67,6 +67,7 @@ export default function Purchases() {
   const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [newProductForm, setNewProductForm] = useState({ code: '', name: '', price: '', currency: 'usd', ivaPercent: '16' })
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
 
   function filteredProducts() {
     let list = products
@@ -169,6 +170,12 @@ export default function Purchases() {
   }
 
   function addItem(productId: number) {
+    const existingOrder = purchases.find(
+      (p) => p.status === 'pedido' && p.supplier.id !== selectedSupplier?.id && p.items.some((i) => i.productId === productId)
+    )
+    if (existingOrder) {
+      setDuplicateWarning(`"${products.find((p) => p.id === productId)?.name}" ya tiene un pedido pendiente con ${existingOrder.supplier.name} (${existingOrder.number})`)
+    }
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === productId)
       if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
@@ -314,6 +321,12 @@ export default function Purchases() {
                 Solo bajo stock
               </label>
             </div>
+            {duplicateWarning && (
+              <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs px-3 py-2 rounded-lg mb-2 flex justify-between items-center">
+                <span>⚠️ {duplicateWarning}</span>
+                <button onClick={() => setDuplicateWarning(null)} className="text-amber-600 font-bold ml-2">✕</button>
+              </div>
+            )}
             {showProductPicker && (
               <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
                 {filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => {
