@@ -1,5 +1,18 @@
 import prisma from '../lib/prisma'
 
+async function fetchFromJustCarlux(): Promise<number | null> {
+  try {
+    const res = await fetch('https://bcv.justcarlux.dev/api/v1/rates', {
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) return null
+    const data: any = await res.json()
+    return data?.rates?.usd || null
+  } catch {
+    return null
+  }
+}
+
 async function fetchFromDolarApi(): Promise<number | null> {
   try {
     const res = await fetch('https://ve.dolarapi.com/v1/dolares', {
@@ -14,23 +27,9 @@ async function fetchFromDolarApi(): Promise<number | null> {
   }
 }
 
-async function fetchFromPyDolarVe(): Promise<number | null> {
-  try {
-    const res = await fetch('https://pydolarve.org/api/v1/price?pair=USD_VES', {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!res.ok) return null
-    const data: any = await res.json()
-    return data?.price || data?.rate || null
-  } catch {
-    return null
-  }
-}
-
 export async function fetchBCVRate(): Promise<number | null> {
-  let rate = await fetchFromDolarApi()
-  if (!rate) rate = await fetchFromPyDolarVe()
+  let rate = await fetchFromJustCarlux()
+  if (!rate) rate = await fetchFromDolarApi()
   return rate
 }
 
