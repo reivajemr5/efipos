@@ -48,6 +48,7 @@ export default function Purchases() {
   const [showDetail, setShowDetail] = useState<Purchase | null>(null)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const [items, setItems] = useState<{ productId: number; quantity: number }[]>([])
+  const [purchaseType, setPurchaseType] = useState('pedido')
   const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -71,6 +72,11 @@ export default function Purchases() {
 
   useEffect(() => { load() }, [filterStatus])
 
+  async function receivePurchase(id: number) {
+    await api.purchases.receive(id)
+    setShowDetail(null); load()
+  }
+
   async function createSupplier(e: React.FormEvent) {
     e.preventDefault()
     try {
@@ -89,9 +95,10 @@ export default function Purchases() {
       paymentMethod,
       dueDate: dueDate || null,
       notes: notes || null,
+      type: purchaseType,
       items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
     })
-    setShowForm(false); setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); load()
+    setShowForm(false); setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); load()
   }
 
   async function markAsPaid(id: number) {
@@ -142,11 +149,18 @@ export default function Purchases() {
 
   const statusBadge = (s: string) => {
     const styles: Record<string, string> = {
-      pendiente: 'bg-amber-100 text-amber-800',
+      pedido: 'bg-amber-100 text-amber-800',
+      recibido: 'bg-blue-100 text-blue-800',
       pagada: 'bg-green-100 text-green-800',
       anulada: 'bg-red-100 text-red-800',
     }
-    return <span className={`text-xs px-2 py-0.5 rounded-full ${styles[s] || ''}`}>{s}</span>
+    const labels: Record<string, string> = {
+      pedido: 'Pedido',
+      recibido: 'Recibida',
+      pagada: 'Pagada',
+      anulada: 'Anulada',
+    }
+    return <span className={`text-xs px-2 py-0.5 rounded-full ${styles[s] || ''}`}>{labels[s] || s}</span>
   }
 
   return (
@@ -157,10 +171,10 @@ export default function Purchases() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        {['', 'pendiente', 'pagada', 'anulada'].map((s) => (
+        {['', 'pedido', 'recibido', 'pagada', 'anulada'].map((s) => (
           <button key={s} onClick={() => setFilterStatus(s)}
             className={`px-3 py-1 rounded-full text-sm ${filterStatus === s ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>
-            {s === '' ? 'Todas' : s === 'pendiente' ? 'Pendientes' : s === 'pagada' ? 'Pagadas' : 'Anuladas'}
+            {s === '' ? 'Todas' : s === 'pedido' ? 'Pedidos' : s === 'recibido' ? 'Recibidas' : s === 'pagada' ? 'Pagadas' : 'Anuladas'}
           </button>
         ))}
       </div>
@@ -192,6 +206,14 @@ export default function Purchases() {
                 )}
               </div>
             )}
+
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => setPurchaseType('pedido')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'pedido' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Pedido</button>
+              <button onClick={() => setPurchaseType('factura')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'factura' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Factura de Compra</button>
+            </div>
+            {purchaseType === 'pedido' && <p className="text-xs text-gray-500 mb-2">El pedido no afecta el stock. Al recibirlo se incrementará automáticamente.</p>}
 
             <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg mb-3">
@@ -315,8 +337,11 @@ export default function Purchases() {
               <p className="text-lg font-bold">Total: ${Number(showDetail.total).toFixed(2)}</p>
             </div>
             <div className="flex gap-2 mt-4">
-              {showDetail.status === 'pendiente' && (
-                <button onClick={() => markAsPaid(showDetail.id)} className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-600">Marcar Pagada</button>
+              {showDetail.status === 'pedido' && (
+                <button onClick={() => receivePurchase(showDetail.id)} className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-600">Recibir Pedido</button>
+              )}
+              {showDetail.status === 'recibido' && (
+                <button onClick={() => markAsPaid(showDetail.id)} className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Marcar Pagada</button>
               )}
               {showDetail.status !== 'anulada' && (
                 <button onClick={() => cancelPurchase(showDetail.id)} className="flex-1 bg-red-600 text-white py-2 rounded-lg">Anular</button>

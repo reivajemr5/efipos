@@ -24,7 +24,8 @@ enum InvoiceStatus {
 }
 
 enum PurchaseStatus {
-  pendiente
+  pedido
+  recibido
   pagada
   anulada
 }
@@ -220,7 +221,7 @@ model PurchaseInvoice {
   ivaTotal      Decimal          @map("iva_total") @db.Decimal(12, 2)
   total         Decimal          @db.Decimal(12, 2)
   totalBs       Decimal?         @map("total_bs") @db.Decimal(14, 2)
-  status        PurchaseStatus   @default(pendiente)
+  status        PurchaseStatus   @default(pedido)
   paymentMethod String           @default("efectivo") @map("payment_method")
   dueDate       DateTime?        @map("due_date")
   notes         String?

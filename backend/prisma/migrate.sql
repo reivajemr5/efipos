@@ -131,7 +131,7 @@ CREATE TABLE "cash_closes" (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TYPE "PurchaseStatus" AS ENUM ('pendiente', 'pagada', 'anulada');
+CREATE TYPE "PurchaseStatus" AS ENUM ('pedido', 'recibido', 'pagada', 'anulada');
 
 CREATE TABLE "purchase_invoices" (
     id SERIAL PRIMARY KEY,
@@ -144,7 +144,7 @@ CREATE TABLE "purchase_invoices" (
     iva_total DECIMAL(12,2) NOT NULL,
     total DECIMAL(12,2) NOT NULL,
     total_bs DECIMAL(14,2),
-    status "PurchaseStatus" NOT NULL DEFAULT 'pendiente',
+    status "PurchaseStatus" NOT NULL DEFAULT 'pedido',
     payment_method TEXT NOT NULL DEFAULT 'efectivo',
     due_date TIMESTAMP,
     notes TEXT,

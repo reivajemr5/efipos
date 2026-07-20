@@ -32,7 +32,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items } = req.body
+  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type } = req.body
 
   if (!supplierId || !items?.length) {
     res.status(400).json({ error: 'Proveedor y productos requeridos' })
@@ -72,7 +72,9 @@ export async function create(req: AuthRequest, res: Response) {
   }
 
   const count = await prisma.purchaseInvoice.count()
-  const number = `COMP-${String(count + 1).padStart(4, '0')}`
+  const prefix = type === 'factura' ? 'FACT-C' : 'PED-'
+  const number = `${prefix}${String(count + 1).padStart(4, '0')}`
+  const status = type === 'factura' ? 'recibido' : 'pedido'
 
   const purchase = await prisma.purchaseInvoice.create({
     data: {
@@ -85,7 +87,8 @@ export async function create(req: AuthRequest, res: Response) {
       ivaTotal,
       total,
       totalBs,
-      paymentMethod: paymentMethod || 'efectivo',
+      status,
+      paymentMethod: paymentMethod || 'efectivo_bs',
       dueDate: dueDate ? new Date(dueDate) : null,
       notes: notes || null,
       items: { create: purchaseItems },
@@ -96,14 +99,41 @@ export async function create(req: AuthRequest, res: Response) {
     },
   })
 
-  for (const item of purchaseItems) {
+  if (type === 'factura') {
+    for (const item of purchaseItems) {
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      })
+    }
+  }
+
+  res.status(201).json(purchase)
+}
+
+export async function receive(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const purchase = await prisma.purchaseInvoice.findUnique({
+    where: { id },
+    include: { items: true },
+  })
+
+  if (!purchase) { res.status(404).json({ error: 'Compra no encontrada' }); return }
+  if (purchase.status !== 'pedido') { res.status(400).json({ error: 'Solo se pueden recibir pedidos pendientes' }); return }
+
+  await prisma.purchaseInvoice.update({
+    where: { id },
+    data: { status: 'recibido' },
+  })
+
+  for (const item of purchase.items) {
     await prisma.product.update({
       where: { id: item.productId },
       data: { stock: { increment: item.quantity } },
     })
   }
 
-  res.status(201).json(purchase)
+  res.json({ message: 'Pedido recibido exitosamente' })
 }
 
 export async function markAsPaid(req: AuthRequest, res: Response) {
@@ -111,6 +141,7 @@ export async function markAsPaid(req: AuthRequest, res: Response) {
   const purchase = await prisma.purchaseInvoice.findUnique({ where: { id } })
   if (!purchase) { res.status(404).json({ error: 'Compra no encontrada' }); return }
   if (purchase.status === 'anulada') { res.status(400).json({ error: 'No se puede pagar una compra anulada' }); return }
+  if (purchase.status === 'pedido') { res.status(400).json({ error: 'Debe recibir el pedido antes de pagar' }); return }
 
   const updated = await prisma.purchaseInvoice.update({
     where: { id },
@@ -134,11 +165,13 @@ export async function cancel(req: AuthRequest, res: Response) {
     data: { status: 'anulada', cancelledAt: new Date() },
   })
 
-  for (const item of purchase.items) {
-    await prisma.product.update({
-      where: { id: item.productId },
-      data: { stock: { decrement: item.quantity } },
-    })
+  if (purchase.status === 'recibido' || purchase.status === 'pagada') {
+    for (const item of purchase.items) {
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: { stock: { decrement: item.quantity } },
+      })
+    }
   }
 
   res.json({ message: 'Compra anulada exitosamente' })
