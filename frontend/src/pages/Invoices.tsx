@@ -47,7 +47,7 @@ export default function Invoices() {
   const [showPrint, setShowPrint] = useState<Invoice | null>(null)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [items, setItems] = useState<{ productId: number; quantity: number }[]>([])
-  const [paymentMethod, setPaymentMethod] = useState('efectivo')
+  const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
   const [currency, setCurrency] = useState('usd')
   const [exchangeRate, setExchangeRate] = useState<number>(0)
   const [searchClient, setSearchClient] = useState('')
@@ -231,9 +231,13 @@ export default function Invoices() {
 
             <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg mb-3">
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="mixto">Mixto</option>
+              <option value="efectivo_bs">Efectivo Bs</option>
+              <option value="efectivo_usd">Efectivo $</option>
+              <option value="tarjeta_debito">Tarjeta de Débito</option>
+              <option value="tarjeta_credito">Tarjeta de Crédito</option>
+              <option value="cheque">Cheque</option>
+              <option value="pago_movil">Pago Móvil</option>
+              <option value="biopago">Biopago</option>
             </select>
 
             <div className="flex gap-2 mb-3">
