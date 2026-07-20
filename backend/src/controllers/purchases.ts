@@ -113,6 +113,8 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function receive(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
+  const { items: receivedItems } = req.body
+
   const purchase = await prisma.purchaseInvoice.findUnique({
     where: { id },
     include: { items: true },
@@ -121,19 +123,80 @@ export async function receive(req: AuthRequest, res: Response) {
   if (!purchase) { res.status(404).json({ error: 'Compra no encontrada' }); return }
   if (purchase.status !== 'pedido') { res.status(400).json({ error: 'Solo se pueden recibir pedidos pendientes' }); return }
 
-  await prisma.purchaseInvoice.update({
-    where: { id },
-    data: { status: 'recibido' },
-  })
+  if (receivedItems?.length) {
+    const receivedIds = receivedItems.map((i: any) => i.productId)
+    const products = await prisma.product.findMany({ where: { id: { in: receivedIds } } })
+    const productMap = new Map(products.map((p) => [p.id, p]))
 
-  for (const item of purchase.items) {
-    await prisma.product.update({
-      where: { id: item.productId },
-      data: { stock: { increment: item.quantity } },
+    const existingIds = purchase.items.map((i) => i.productId)
+    const toRemove = purchase.items.filter((i) => !receivedIds.includes(i.productId))
+
+    for (const item of toRemove) {
+      await prisma.purchaseInvoiceItem.delete({ where: { id: item.id } })
+    }
+
+    for (const ri of receivedItems) {
+      const product = productMap.get(ri.productId)
+      if (!product) throw new Error(`Producto ${ri.productId} no encontrado`)
+
+      const existing = purchase.items.find((i) => i.productId === ri.productId)
+      const unitPrice = ri.unitPrice || Number(product.price)
+      const itemSubtotal = unitPrice * ri.quantity
+      const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
+
+      if (existing) {
+        await prisma.purchaseInvoiceItem.update({
+          where: { id: existing.id },
+          data: { quantity: ri.quantity, unitPrice, subtotal: itemSubtotal },
+        })
+      } else {
+        await prisma.purchaseInvoiceItem.create({
+          data: {
+            purchaseInvoiceId: id,
+            productId: ri.productId,
+            quantity: ri.quantity,
+            unitPrice,
+            ivaPercent: product.ivaPercent,
+            subtotal: itemSubtotal,
+          },
+        })
+      }
+
+      await prisma.product.update({
+        where: { id: ri.productId },
+        data: { stock: { increment: ri.quantity } },
+      })
+    }
+
+    const allItems = await prisma.purchaseInvoiceItem.findMany({ where: { purchaseInvoiceId: id } })
+    const subtotal = allItems.reduce((s, i) => s + Number(i.subtotal), 0)
+    const ivaTotal = allItems.reduce((s, i) => s + Number(i.subtotal) * Number(i.ivaPercent) / 100, 0)
+    const total = subtotal + ivaTotal
+
+    await prisma.purchaseInvoice.update({
+      where: { id },
+      data: { status: 'recibido', subtotal, ivaTotal, total },
     })
+  } else {
+    await prisma.purchaseInvoice.update({
+      where: { id },
+      data: { status: 'recibido' },
+    })
+
+    for (const item of purchase.items) {
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      })
+    }
   }
 
-  res.json({ message: 'Pedido recibido exitosamente' })
+  const updated = await prisma.purchaseInvoice.findUnique({
+    where: { id },
+    include: { items: { include: { product: { select: { id: true, name: true, code: true } } } } },
+  })
+
+  res.json({ message: 'Pedido recibido exitosamente', purchase: updated })
 }
 
 export async function markAsPaid(req: AuthRequest, res: Response) {

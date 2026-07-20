@@ -57,6 +57,9 @@ export default function Purchases() {
   const [searchProduct, setSearchProduct] = useState('')
   const [showSupplierPicker, setShowSupplierPicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showReceiveForm, setShowReceiveForm] = useState(false)
+  const [receiveItems, setReceiveItems] = useState<{ productId: number; quantity: number }[]>([])
+  const [receiveId, setReceiveId] = useState<number | null>(null)
   const [showNewSupplierForm, setShowNewSupplierForm] = useState(false)
   const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
 
@@ -72,9 +75,30 @@ export default function Purchases() {
 
   useEffect(() => { load() }, [filterStatus])
 
-  async function receivePurchase(id: number) {
-    await api.purchases.receive(id)
-    setShowDetail(null); load()
+  function addReceiveItem(productId: number) {
+    setReceiveItems((prev) => {
+      const existing = prev.find((i) => i.productId === productId)
+      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
+      return [...prev, { productId, quantity: 1 }]
+    })
+  }
+
+  function updateReceiveQty(productId: number, quantity: number) {
+    if (quantity <= 0) { setReceiveItems((prev) => prev.filter((i) => i.productId !== productId)); return }
+    setReceiveItems((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity } : i))
+  }
+
+  function openReceiveForm(purchase: Purchase) {
+    setReceiveId(purchase.id)
+    setReceiveItems(purchase.items.map((i) => ({ productId: i.productId, quantity: i.quantity })))
+    setShowReceiveForm(true)
+    setShowDetail(null)
+  }
+
+  async function confirmReceive() {
+    if (!receiveId || receiveItems.length === 0) return
+    await api.purchases.receive(receiveId, { items: receiveItems })
+    setShowReceiveForm(false); setReceiveId(null); setReceiveItems([]); load()
   }
 
   async function createSupplier(e: React.FormEvent) {
@@ -282,6 +306,52 @@ export default function Purchases() {
         </div>
       )}
 
+      {showReceiveForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowReceiveForm(false)}>
+          <div className="bg-white p-6 rounded-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Recibir Pedido</h3>
+            <p className="text-sm text-gray-500 mb-3">Ajusta las cantidades que realmente llegaron. Los items con cantidad 0 se eliminarán.</p>
+
+            <div className="space-y-2 mb-3">
+              {receiveItems.map((item) => {
+                const p = products.find((x) => x.id === item.productId)
+                if (!p) return null
+                return (
+                  <div key={item.productId} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
+                    <span className="flex-1 text-sm">{p.name}</span>
+                    <input type="number" value={item.quantity} min="0"
+                      onChange={(e) => updateReceiveQty(item.productId, Number(e.target.value))}
+                      className="w-16 px-2 py-1 border rounded text-center text-sm" />
+                    <button onClick={() => updateReceiveQty(item.productId, 0)} className="text-red-500 text-sm">✕</button>
+                  </div>
+                )
+              })}
+            </div>
+
+            <input value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Agregar productos adicionales..."
+              className="w-full px-3 py-2 border rounded-lg mb-3" onFocus={() => setShowProductPicker(true)}
+              onBlur={() => setTimeout(() => setShowProductPicker(false), 200)} />
+            {showProductPicker && (
+              <div className="max-h-32 overflow-y-auto border rounded-lg mb-3">
+                {products.filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => (
+                  <button key={p.id} onClick={() => { addReceiveItem(p.id); setSearchProduct('') }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between">
+                    <span>{p.name}</span>
+                    <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-3">
+              <button onClick={confirmReceive} disabled={receiveItems.length === 0}
+                className="flex-1 bg-green-700 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-green-600">Confirmar Recepción</button>
+              <button onClick={() => setShowReceiveForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showNewSupplierForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewSupplierForm(false)}>
           <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
@@ -338,7 +408,7 @@ export default function Purchases() {
             </div>
             <div className="flex gap-2 mt-4">
               {showDetail.status === 'pedido' && (
-                <button onClick={() => receivePurchase(showDetail.id)} className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-600">Recibir Pedido</button>
+                <button onClick={() => openReceiveForm(showDetail)} className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-600">Recibir Pedido</button>
               )}
               {showDetail.status === 'recibido' && (
                 <button onClick={() => markAsPaid(showDetail.id)} className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Marcar Pagada</button>

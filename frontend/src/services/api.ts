@@ -59,7 +59,7 @@ export const api = {
     list: (params?: string) => request(`/purchases${params ? `?${params}` : ''}`),
     getById: (id: number) => request(`/purchases/${id}`),
     create: (data: any) => request('/purchases', { method: 'POST', body: JSON.stringify(data) }),
-    receive: (id: number) => request(`/purchases/${id}/receive`, { method: 'POST' }),
+    receive: (id: number, data?: any) => request(`/purchases/${id}/receive`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
     pay: (id: number) => request(`/purchases/${id}/pay`, { method: 'POST' }),
     cancel: (id: number) => request(`/purchases/${id}/cancel`, { method: 'POST' }),
   },
