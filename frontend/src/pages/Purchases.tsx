@@ -56,6 +56,8 @@ export default function Purchases() {
   const [searchProduct, setSearchProduct] = useState('')
   const [showSupplierPicker, setShowSupplierPicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showNewSupplierForm, setShowNewSupplierForm] = useState(false)
+  const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
 
   async function load() {
     const params = filterStatus ? `status=${filterStatus}` : ''
@@ -68,6 +70,17 @@ export default function Purchases() {
   }
 
   useEffect(() => { load() }, [filterStatus])
+
+  async function createSupplier(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      const supplier = await api.suppliers.create(newSupplierForm)
+      setSuppliers((prev) => [...prev, supplier])
+      setSelectedSupplier(supplier)
+      setShowNewSupplierForm(false)
+      setNewSupplierForm({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
+    } catch { }
+  }
 
   async function createPurchase() {
     if (!selectedSupplier || items.length === 0) return
@@ -173,6 +186,8 @@ export default function Purchases() {
                       <button key={s.id} onClick={() => { setSelectedSupplier(s); setShowSupplierPicker(false); setSearchSupplier('') }}
                         className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm">{s.name}</button>
                     ))}
+                    <button onClick={() => { setShowNewSupplierForm(true); setShowSupplierPicker(false) }}
+                      className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo proveedor</button>
                   </div>
                 )}
               </div>
@@ -237,6 +252,29 @@ export default function Purchases() {
                 className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">Registrar Compra</button>
               <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showNewSupplierForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewSupplierForm(false)}>
+          <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Nuevo Proveedor</h3>
+            <form onSubmit={createSupplier} className="space-y-3">
+              <input value={newSupplierForm.name} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, name: e.target.value })} placeholder="Nombre" className="w-full px-3 py-2 border rounded-lg" required />
+              <div className="flex gap-2">
+                <select value={newSupplierForm.documentType} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, documentType: e.target.value })} className="px-3 py-2 border rounded-lg">
+                  <option value="V">V</option><option value="J">J</option><option value="E">E</option>
+                </select>
+                <input value={newSupplierForm.documentNumber} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, documentNumber: e.target.value })} placeholder="N° documento" className="flex-1 px-3 py-2 border rounded-lg" required />
+              </div>
+              <input value={newSupplierForm.phone} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, phone: e.target.value })} placeholder="Teléfono" className="w-full px-3 py-2 border rounded-lg" />
+              <input value={newSupplierForm.address} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, address: e.target.value })} placeholder="Dirección" className="w-full px-3 py-2 border rounded-lg" />
+              <div className="flex gap-2 pt-2">
+                <button type="submit" className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Crear y seleccionar</button>
+                <button type="button" onClick={() => setShowNewSupplierForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Cancelar</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
