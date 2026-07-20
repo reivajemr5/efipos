@@ -6,7 +6,7 @@ async function fetchFromDolarApi(): Promise<number | null> {
       signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) return null
-    const data: any[] = await res.json()
+    const data = await res.json() as any[]
     const oficial = data.find((d: any) => d.fuente === 'oficial')
     return oficial?.promedio || null
   } catch {
