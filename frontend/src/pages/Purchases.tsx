@@ -459,7 +459,7 @@ export default function Purchases() {
                       <span className="text-gray-500">${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700">stock: {p.stock}</span>}</span>
                     </button>
                   )
-                })}
+                }) : null}
                 <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
                   className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
