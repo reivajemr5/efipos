@@ -7,7 +7,8 @@ import { useToastStore } from '../store/toast'
 interface Category { id: number; name: string }
 interface Supplier { id: number; name: string; documentType?: string; documentNumber?: string }
 interface Product {
-  id: number; type: string; code: string; name: string; brand: string | null
+  id: number; type: string; code: string; name: string
+  brand: { id: number; name: string } | null
   description: string | null; notes: string | null
   barcode: string | null; cost: number | null; price: number; price2: number | null
   currency: string; ivaPercent: number; stock: number; minStock: number
@@ -50,6 +51,7 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([])
   const [attributeTemplates, setAttributeTemplates] = useState<{ id: number; name: string; values: { id: number; value: string }[] }[]>([])
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -58,7 +60,7 @@ export default function Products() {
   const addToast = useToastStore((s) => s.addToast)
 
   const [form, setForm] = useState({
-    type: 'simple', code: '', name: '', brand: '', description: '', notes: '',
+      type: 'simple', code: '', name: '', brandId: '', description: '', notes: '',
     barcode: '', barcodes: [] as string[],
     cost: '', margin: '', price: '', margin2: '', price2: '',
     currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
@@ -79,16 +81,18 @@ export default function Products() {
   const [componentSearch, setComponentSearch] = useState('')
 
   async function load() {
-    const [prods, cats, sups, templates] = await Promise.all([
+    const [prods, cats, sups, templates, brds] = await Promise.all([
       api.products.list(search ? `q=${search}` : ''),
       api.categories.list(),
       api.suppliers.list(),
       api.attributeTemplates.list(),
+      api.brands.list(),
     ])
     setProducts(prods)
     setCategories(cats)
     setSuppliers(sups)
     setAttributeTemplates(templates)
+    setBrands(brds)
   }
 
   useEffect(() => { load() }, [search])
@@ -197,7 +201,7 @@ export default function Products() {
     const data = {
       type: form.type, code: form.code, name: form.name,
       description: form.description || null, notes: form.notes || null,
-      brand: form.brand || null, barcode: form.barcode || null,
+      brandId: form.brandId ? Number(form.brandId) : null, barcode: form.barcode || null,
       barcodes: form.barcodes.filter(Boolean),
       cost: form.cost ? Number(form.cost) : 0,
       price: Number(form.price),
@@ -223,7 +227,7 @@ export default function Products() {
   }
   function resetForm() {
     setForm({
-      type: 'simple', code: '', name: '', brand: '', description: '', notes: '',
+    type: 'simple', code: '', name: '', brandId: '', description: '', notes: '',
       barcode: '', barcodes: [],
       cost: '', margin: '', price: '', margin2: '', price2: '',
       currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
@@ -237,7 +241,7 @@ export default function Products() {
     const isComposite = p.type === 'compuesto'
     setEditing(p)
     setForm({
-      type: p.type, code: p.code, name: p.name, brand: p.brand || '',
+      type: p.type, code: p.code, name: p.name, brandId: p.brand ? String(p.brand.id) : '',
       description: p.description || '', notes: p.notes || '',
       barcode: p.barcode || '',
       barcodes: p.barcodes.map((b) => b.barcode),
@@ -333,8 +337,22 @@ export default function Products() {
               {/* Marca */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Marca <Tooltip text={tips.brand} /></label>
-                <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Marca del producto"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                <div className="flex gap-2">
+                  <select value={form.brandId} onChange={(e) => setForm({ ...form, brandId: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <option value="">Sin marca</option>
+                    {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <button type="button" onClick={async () => {
+                    const name = prompt('Nombre de la nueva marca:')
+                    if (!name?.trim()) return
+                    const brand = await api.brands.create({ name })
+                    setBrands((p) => [...p, brand])
+                    setForm({ ...form, brandId: String(brand.id) })
+                    addToast('Marca creada', 'success')
+                  }}
+                    className="bg-green-100 text-green-700 px-3 rounded-xl text-sm hover:bg-green-200 whitespace-nowrap">+ Nueva</button>
+                </div>
               </div>
 
               {/* Código de barras */}
@@ -701,7 +719,7 @@ export default function Products() {
                         {typeOptions.find((o) => o.value === p.type)?.label || p.type}
                       </span>
                       {p.category && <span className="text-xs text-gray-400">{p.category.name}</span>}
-                      {p.brand && <span className="text-xs text-gray-400 font-medium">{p.brand}</span>}
+                      {p.brand && <span className="text-xs text-gray-400 font-medium">{p.brand.name}</span>}
                     </div>
                     <p className="font-semibold text-gray-800 truncate">{p.name}</p>
                     <p className="text-xs text-gray-500 font-mono">{p.code}</p>

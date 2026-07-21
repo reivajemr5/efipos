@@ -23,6 +23,7 @@ export async function list(req: AuthRequest, res: Response) {
     include: {
       suppliers: { include: { supplier: { select: { id: true, name: true } } } },
       category: { select: { id: true, name: true } },
+      brand: { select: { id: true, name: true } },
       barcodes: { select: { id: true, barcode: true } },
     },
     orderBy: { name: 'asc' },
@@ -37,6 +38,7 @@ export async function getById(req: AuthRequest, res: Response) {
     include: {
       suppliers: { include: { supplier: { select: { id: true, name: true } } } },
       category: { select: { id: true, name: true } },
+      brand: { select: { id: true, name: true } },
       barcodes: { select: { id: true, barcode: true } },
     },
   })
@@ -45,14 +47,14 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, variations, supplierIds, brand } = req.body
+  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds } = req.body
   if (!code || !name || !price) {
     res.status(400).json({ error: 'Código, nombre y precio requeridos' })
     return
   }
   const product = await prisma.product.create({
     data: {
-      code, name, description, notes, brand: brand || null, type: type || 'simple',
+      code, name, description, notes, brandId: brandId || null, type: type || 'simple',
       price, cost: cost || 0, barcode,
       price2: price2 || null,
       currency: currency || 'bs',
@@ -69,6 +71,7 @@ export async function create(req: AuthRequest, res: Response) {
     include: {
       suppliers: { include: { supplier: { select: { id: true, name: true } } } },
       category: { select: { id: true, name: true } },
+      brand: { select: { id: true, name: true } },
       barcodes: { select: { id: true, barcode: true } },
     },
   })
@@ -77,7 +80,7 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function update(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, variations, supplierIds, active, brand } = req.body
+  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, active } = req.body
 
   if (supplierIds) {
     await prisma.productSupplier.deleteMany({ where: { productId: id } })
@@ -100,7 +103,7 @@ export async function update(req: AuthRequest, res: Response) {
   const product = await prisma.product.update({
     where: { id },
     data: {
-      code, name, description, notes, type, brand: brand || null,
+      code, name, description, notes, type, brandId: brandId || null,
       price, cost, barcode, price2,
       currency, ivaPercent, stock, minStock,
       categoryId: categoryId || null,
@@ -110,6 +113,7 @@ export async function update(req: AuthRequest, res: Response) {
     include: {
       suppliers: { include: { supplier: { select: { id: true, name: true } } } },
       category: { select: { id: true, name: true } },
+      brand: { select: { id: true, name: true } },
       barcodes: { select: { id: true, barcode: true } },
     },
   })

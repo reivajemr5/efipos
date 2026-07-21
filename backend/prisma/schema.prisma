@@ -93,6 +93,16 @@ model Category {
   @@map("categories")
 }
 
+model Brand {
+  id        Int       @id @default(autoincrement())
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  products  Product[]
+
+  @@map("brands")
+}
+
 model ProductBarcode {
   id        Int     @id @default(autoincrement())
   productId Int     @map("product_id")
@@ -108,7 +118,7 @@ model Product {
   code        String    @unique
   name        String
   description String?
-  brand       String?
+  brandId     Int?      @map("brand_id")
   notes       String?
   barcode     String?   @unique
   cost        Decimal?  @db.Decimal(12, 2)
@@ -123,6 +133,7 @@ model Product {
   variations  Json?     @default("[]")
   createdAt   DateTime  @default(now()) @map("created_at")
   category    Category?                @relation(fields: [categoryId], references: [id])
+  brand       Brand?                   @relation(fields: [brandId], references: [id])
   barcodes    ProductBarcode[]
   suppliers   ProductSupplier[]
   invoiceItems          InvoiceItem[]
