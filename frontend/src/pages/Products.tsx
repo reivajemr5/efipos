@@ -360,45 +360,50 @@ export default function Products() {
               {/* Precios con margen */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Precios</label>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-500 mb-0.5 block">Costo * <Tooltip text={tips.cost} /></label>
-                    <input value={form.cost} onChange={(e) => {
-                      const c = e.target.value
-                      setForm((p) => {
-                        const m = p.margin ? Number(p.margin) : 0
-                        const price = c && m ? (Number(c) * (1 + m / 100)).toFixed(2) : p.price
-                        const price2 = c && p.margin2 ? (Number(c) * (1 + Number(p.margin2) / 100)).toFixed(2) : p.price2
-                        return { ...p, cost: c, price, price2 }
-                      })
-                    }} type="number" step="0.01" placeholder="0.00" required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-0.5 block">Margen % <Tooltip text={tips.margin} /></label>
-                    <div className="flex gap-1">
-                      <input value={form.margin} onChange={(e) => {
-                        const m = e.target.value
-                        setForm((p) => ({
-                          ...p, margin: m,
-                          price: p.cost && m ? (Number(p.cost) * (1 + Number(m) / 100)).toFixed(2) : p.price,
-                        }))
-                      }} type="number" step="0.1" placeholder="30"
-                        className="w-20 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                      <span className="text-gray-400 self-center">→</span>
-                      <input value={form.price} onChange={(e) => {
-                        const p = e.target.value
-                        setForm((s) => ({
-                          ...s, price: p,
-                          margin: s.cost && Number(p) && Number(s.cost) ? ((Number(p) - Number(s.cost)) / Number(s.cost) * 100).toFixed(1) : s.margin,
-                        }))
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Costo * <Tooltip text={tips.cost} /></label>
+                      <input value={form.cost} onChange={(e) => {
+                        const c = e.target.value
+                        setForm((p) => {
+                          const m = p.margin ? Number(p.margin) : 0
+                          const price = c && m ? (Number(c) * (1 + m / 100)).toFixed(2) : p.price
+                          const price2 = c && p.margin2 ? (Number(c) * (1 + Number(p.margin2) / 100)).toFixed(2) : p.price2
+                          return { ...p, cost: c, price, price2 }
+                        })
                       }} type="number" step="0.01" placeholder="0.00" required
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                    </div>
+                    <div className="flex gap-1 items-end">
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-500 mb-0.5 block">Margen % <Tooltip text={tips.margin} /></label>
+                        <input value={form.margin} onChange={(e) => {
+                          const m = e.target.value
+                          setForm((p) => ({
+                            ...p, margin: m,
+                            price: p.cost && m ? (Number(p.cost) * (1 + Number(m) / 100)).toFixed(2) : p.price,
+                          }))
+                        }} type="number" step="0.1" placeholder="30"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                      </div>
+                      <span className="text-gray-400 pb-2.5">→</span>
+                      <div className="flex-[2]">
+                        <label className="text-xs text-gray-500 mb-0.5 block">Precio *</label>
+                        <input value={form.price} onChange={(e) => {
+                          const p = e.target.value
+                          setForm((s) => ({
+                            ...s, price: p,
+                            margin: s.cost && Number(p) && Number(s.cost) ? ((Number(p) - Number(s.cost)) / Number(s.cost) * 100).toFixed(1) : s.margin,
+                          }))
+                        }} type="number" step="0.01" placeholder="0.00" required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-0.5 block">Margen 2 % <Tooltip text={tips.margin2} /></label>
-                    <div className="flex gap-1">
+                  <div className="flex gap-1 items-end">
+                    <div className="w-24">
+                      <label className="text-xs text-gray-500 mb-0.5 block">Margen 2 % <Tooltip text={tips.margin2} /></label>
                       <input value={form.margin2} onChange={(e) => {
                         const m = e.target.value
                         setForm((p) => ({
@@ -406,8 +411,11 @@ export default function Products() {
                           price2: p.cost && m ? (Number(p.cost) * (1 + Number(m) / 100)).toFixed(2) : p.price2,
                         }))
                       }} type="number" step="0.1" placeholder="15"
-                        className="w-20 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                      <span className="text-gray-400 self-center">→</span>
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                    </div>
+                    <span className="text-gray-400 pb-2.5">→</span>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 mb-0.5 block">Precio 2 (Mayor)</label>
                       <input value={form.price2} onChange={(e) => {
                         const p = e.target.value
                         setForm((s) => ({
@@ -415,10 +423,9 @@ export default function Products() {
                           margin2: s.cost && Number(p) && Number(s.cost) ? ((Number(p) - Number(s.cost)) / Number(s.cost) * 100).toFixed(1) : s.margin2,
                         }))
                       }} type="number" step="0.01" placeholder="0.00"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
                     </div>
                   </div>
-                </div>
               </div>
 
               {/* Moneda, IVA, Stock */}
