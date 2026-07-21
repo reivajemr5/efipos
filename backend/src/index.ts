@@ -11,7 +11,6 @@ import invoiceRoutes from './routes/invoices'
 import purchaseRoutes from './routes/purchases'
 import reportRoutes from './routes/reports'
 import exchangeRateRoutes from './routes/exchangeRate'
-import purchaseRoutes from './routes/purchases'
 import { updateBCVRate } from './services/exchangeRateUpdater'
 
 dotenv.config()
