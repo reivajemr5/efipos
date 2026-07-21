@@ -7,7 +7,7 @@ import { useToastStore } from '../store/toast'
 interface Category { id: number; name: string }
 interface Supplier { id: number; name: string; documentType?: string; documentNumber?: string }
 interface Product {
-  id: number; type: string; code: string; name: string
+  id: number; type: string; code: string; name: string; brand: string | null
   description: string | null; notes: string | null
   barcode: string | null; cost: number | null; price: number; price2: number | null
   currency: string; ivaPercent: number; stock: number; minStock: number
@@ -40,6 +40,7 @@ const tips = {
   variations: 'Atributos como talla, color o sabor. Puedes asignar stock a cada variación',
   components: 'Productos del inventario que forman parte de este combo',
   notes: 'Notas internas. No se muestran en facturas',
+  brand: 'Marca del producto para facilitar búsquedas y filtros',
   suppliers: 'Proveedores que venden este producto',
 }
 
@@ -47,6 +48,7 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [attributeTemplates, setAttributeTemplates] = useState<{ id: number; name: string; values: { id: number; value: string }[] }[]>([])
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -54,7 +56,7 @@ export default function Products() {
   const addToast = useToastStore((s) => s.addToast)
 
   const [form, setForm] = useState({
-    type: 'simple', code: '', name: '', description: '', notes: '',
+    type: 'simple', code: '', name: '', brand: '', description: '', notes: '',
     barcode: '', barcodes: [] as string[],
     cost: '', price: '', price2: '',
     currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
@@ -62,6 +64,8 @@ export default function Products() {
     variations: [] as { name: string; values: { value: string; qty: number }[] }[],
     components: [] as { productId: number; name: string; quantity: number }[],
     newVarName: '', newVarValue: '', newVarQty: 0,
+    templateSearch: '', templateSearchResults: [] as { id: number; name: string; values: { id: number; value: string }[] }[],
+    showTemplateDropdown: false,
   })
 
   const [showNewCategory, setShowNewCategory] = useState(false)
@@ -73,17 +77,40 @@ export default function Products() {
   const [componentSearch, setComponentSearch] = useState('')
 
   async function load() {
-    const [prods, cats, sups] = await Promise.all([
+    const [prods, cats, sups, templates] = await Promise.all([
       api.products.list(search ? `q=${search}` : ''),
       api.categories.list(),
       api.suppliers.list(),
+      api.attributeTemplates.list(),
     ])
     setProducts(prods)
     setCategories(cats)
     setSuppliers(sups)
+    setAttributeTemplates(templates)
   }
 
   useEffect(() => { load() }, [search])
+
+  function applyTemplate(t: { id: number; name: string; values: { id: number; value: string }[] }) {
+    const existing = form.variations.find((v) => v.name === t.name)
+    if (existing) return
+    setForm((p) => ({
+      ...p,
+      variations: [...p.variations, { name: t.name, values: t.values.map((v) => ({ value: v.value, qty: 0 })) }],
+      templateSearch: '', showTemplateDropdown: false,
+    }))
+  }
+
+  async function createTemplateFromVar(name: string) {
+    if (!form.newVarName.trim()) return
+    const values = form.variations
+      .filter((v) => v.name === form.newVarName)
+      .flatMap((v) => v.values.map((vl) => vl.value))
+    if (!values.length) return
+    const template = await api.attributeTemplates.create({ name: form.newVarName.trim(), values })
+    setAttributeTemplates((p) => [...p, template])
+    addToast('Plantilla guardada', 'success')
+  }
 
   function toggleSupplier(id: number) {
     setForm((p) => ({ ...p, supplierIds: p.supplierIds.includes(id) ? p.supplierIds.filter((s) => s !== id) : [...p.supplierIds, id] }))
@@ -120,6 +147,10 @@ export default function Products() {
       const updated = p.variations.map((v, i) => i === varIdx ? { ...v, values: v.values.filter((_, j) => j !== valIdx) } : v)
       return { ...p, variations: updated.filter((v) => v.values.length > 0) }
     })
+  }
+
+  function removeVarGroup(varIdx: number) {
+    setForm((p) => ({ ...p, variations: p.variations.filter((_, i) => i !== varIdx) }))
   }
 
   function updateVarQty(varIdx: number, valIdx: number, qty: number) {
@@ -164,7 +195,7 @@ export default function Products() {
     const data = {
       type: form.type, code: form.code, name: form.name,
       description: form.description || null, notes: form.notes || null,
-      barcode: form.barcode || null,
+      brand: form.brand || null, barcode: form.barcode || null,
       barcodes: form.barcodes.filter(Boolean),
       cost: form.cost ? Number(form.cost) : 0,
       price: Number(form.price),
@@ -188,14 +219,15 @@ export default function Products() {
     resetForm()
     load()
   }
-
   function resetForm() {
     setForm({
-      type: 'simple', code: '', name: '', description: '', notes: '',
-      barcode: '', barcodes: [], cost: '', price: '', price2: '',
+      type: 'simple', code: '', name: '', brand: '', description: '', notes: '',
+      barcode: '', barcodes: [],
+      cost: '', price: '', price2: '',
       currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
       categoryId: '', supplierIds: [], variations: [], components: [],
       newVarName: '', newVarValue: '', newVarQty: 0,
+      templateSearch: '', templateSearchResults: [], showTemplateDropdown: false,
     })
   }
 
@@ -203,7 +235,7 @@ export default function Products() {
     const isComposite = p.type === 'compuesto'
     setEditing(p)
     setForm({
-      type: p.type, code: p.code, name: p.name,
+      type: p.type, code: p.code, name: p.name, brand: p.brand || '',
       description: p.description || '', notes: p.notes || '',
       barcode: p.barcode || '',
       barcodes: p.barcodes.map((b) => b.barcode),
@@ -291,6 +323,13 @@ export default function Products() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción <Tooltip text={tips.description} /></label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción del producto (opcional)"
                   className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" rows={2} />
+              </div>
+
+              {/* Marca */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Marca <Tooltip text={tips.brand} /></label>
+                <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Marca del producto"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
               </div>
 
               {/* Código de barras */}
@@ -396,10 +435,38 @@ export default function Products() {
                 )}
               </div>
 
-              {/* Variaciones con cantidades */}
+              {/* Variaciones con plantillas */}
               {form.type !== 'compuesto' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Variaciones <Tooltip text={tips.variations} /></label>
+
+                  {/* Template search */}
+                  <div className="relative mb-3">
+                    <input value={form.templateSearch} onChange={(e) => setForm({ ...form, templateSearch: e.target.value, showTemplateDropdown: true })}
+                      onFocus={() => setForm((p) => ({ ...p, showTemplateDropdown: true }))}
+                      onBlur={() => setTimeout(() => setForm((p) => ({ ...p, showTemplateDropdown: false })), 200)}
+                      placeholder="Buscar plantilla de atributo (Talla, Color, Peso...)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-900 focus:border-transparent outline-none" />
+                    {form.showTemplateDropdown && form.templateSearch.trim() !== '' && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        {attributeTemplates
+                          .filter((t) => t.name.toLowerCase().includes(form.templateSearch.toLowerCase()))
+                          .map((t) => (
+                            <button key={t.id} type="button"
+                              onMouseDown={() => applyTemplate(t)}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between">
+                              <span>{t.name}</span>
+                              <span className="text-xs text-gray-400">{t.values.length} valores</span>
+                            </button>
+                          ))}
+                        {attributeTemplates.filter((t) => t.name.toLowerCase().includes(form.templateSearch.toLowerCase())).length === 0 && (
+                          <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual input */}
                   <div className="flex gap-2 mb-2">
                     <input value={form.newVarName} onChange={(e) => setForm({ ...form, newVarName: e.target.value })}
                       placeholder="Atributo: Talla, Color..."
@@ -412,12 +479,19 @@ export default function Products() {
                       className="w-20 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                     <button type="button" onClick={addVarValue}
                       className="bg-blue-900 text-white px-3 rounded-xl text-sm">+</button>
+                    {form.newVarName.trim() && form.variations.some((v) => v.name === form.newVarName) && !attributeTemplates.some((t) => t.name === form.newVarName.trim()) && (
+                      <button type="button" onClick={() => createTemplateFromVar(form.newVarName.trim())}
+                        className="text-xs text-green-700 bg-green-50 px-2 rounded-xl hover:bg-green-100 whitespace-nowrap">💾 Plantilla</button>
+                    )}
                   </div>
                   <p className="text-xs text-gray-400 mb-2">Ej: Atributo "Talla", Valor "S", Stock "10" — Asígnale stock a cada variación</p>
 
                   {form.variations.map((v, vi) => (
                     <div key={vi} className="mb-2">
-                      <p className="text-xs font-medium text-gray-600 mb-1">{v.name}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-gray-600 mb-1">{v.name}</p>
+                        <button type="button" onClick={() => removeVarGroup(vi)} className="text-xs text-red-400 hover:text-red-600">Eliminar</button>
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {v.values.map((vl, vj) => (
                           <div key={vj} className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
@@ -577,6 +651,7 @@ export default function Products() {
                         {typeOptions.find((o) => o.value === p.type)?.label || p.type}
                       </span>
                       {p.category && <span className="text-xs text-gray-400">{p.category.name}</span>}
+                      {p.brand && <span className="text-xs text-gray-400 font-medium">{p.brand}</span>}
                     </div>
                     <p className="font-semibold text-gray-800 truncate">{p.name}</p>
                     <p className="text-xs text-gray-500 font-mono">{p.code}</p>

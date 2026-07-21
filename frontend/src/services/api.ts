@@ -112,6 +112,10 @@ export const api = {
       request('/reports/cash-close', { method: 'POST', body: JSON.stringify({ declaredTotal, closeDate }) }),
     dashboard: () => request('/reports/dashboard'),
   },
+  attributeTemplates: {
+    list: () => request('/attribute-templates'),
+    create: (data: any) => request('/attribute-templates', { method: 'POST', body: JSON.stringify(data) }),
+  },
   exchangeRate: {
     get: () => request('/exchange-rate'),
     update: (rate: number) => request('/exchange-rate', { method: 'PUT', body: JSON.stringify({ rate }) }),

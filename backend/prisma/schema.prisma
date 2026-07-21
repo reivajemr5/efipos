@@ -108,6 +108,7 @@ model Product {
   code        String    @unique
   name        String
   description String?
+  brand       String?
   notes       String?
   barcode     String?   @unique
   cost        Decimal?  @db.Decimal(12, 2)
@@ -300,6 +301,24 @@ model Payment {
   user              User             @relation(fields: [userId], references: [id])
 
   @@map("payments")
+}
+
+model AttributeTemplate {
+  id        Int                     @id @default(autoincrement())
+  name      String
+  values    AttributeTemplateValue[]
+  createdAt DateTime                @default(now()) @map("created_at")
+
+  @@map("attribute_templates")
+}
+
+model AttributeTemplateValue {
+  id         Int               @id @default(autoincrement())
+  templateId Int               @map("template_id")
+  template   AttributeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  value      String
+
+  @@map("attribute_template_values")
 }
 
 model CashClose {

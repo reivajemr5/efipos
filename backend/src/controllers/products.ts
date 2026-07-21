@@ -45,14 +45,14 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, variations, supplierIds } = req.body
+  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, variations, supplierIds, brand } = req.body
   if (!code || !name || !price) {
     res.status(400).json({ error: 'Código, nombre y precio requeridos' })
     return
   }
   const product = await prisma.product.create({
     data: {
-      code, name, description, notes, type: type || 'simple',
+      code, name, description, notes, brand: brand || null, type: type || 'simple',
       price, cost: cost || 0, barcode,
       price2: price2 || null,
       currency: currency || 'bs',
@@ -77,7 +77,7 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function update(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, variations, supplierIds, active } = req.body
+  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, variations, supplierIds, active, brand } = req.body
 
   if (supplierIds) {
     await prisma.productSupplier.deleteMany({ where: { productId: id } })
@@ -100,7 +100,7 @@ export async function update(req: AuthRequest, res: Response) {
   const product = await prisma.product.update({
     where: { id },
     data: {
-      code, name, description, notes, type,
+      code, name, description, notes, type, brand: brand || null,
       price, cost, barcode, price2,
       currency, ivaPercent, stock, minStock,
       categoryId: categoryId || null,
