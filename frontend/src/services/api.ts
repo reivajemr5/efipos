@@ -81,6 +81,11 @@ export const api = {
     adjust: (data: any) => request('/inventory/adjust', { method: 'POST', body: JSON.stringify(data) }),
     history: (productId: number) => request(`/inventory/history/${productId}`),
   },
+  payments: {
+    list: (params?: string) => request(`/payments${params ? `?${params}` : ''}`),
+    create: (data: any) => request('/payments', { method: 'POST', body: JSON.stringify(data) }),
+    totals: (params: string) => request(`/payments/totals?${params}`),
+  },
   accounts: {
     receivable: () => request('/accounts/receivable'),
     payable: () => request('/accounts/payable'),

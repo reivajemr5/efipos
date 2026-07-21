@@ -15,6 +15,7 @@ import AccountsReceivable from './pages/AccountsReceivable'
 import AccountsPayable from './pages/AccountsPayable'
 import Categories from './pages/Categories'
 import Inventory from './pages/Inventory'
+import Payments from './pages/Payments'
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="categories" element={<Categories />} />
           <Route path="inventory" element={<Inventory />} />
+          <Route path="payments" element={<Payments />} />
           <Route path="accounts/receivable" element={<AccountsReceivable />} />
           <Route path="accounts/payable" element={<AccountsPayable />} />
           <Route path="reports" element={<Reports />} />

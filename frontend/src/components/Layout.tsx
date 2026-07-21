@@ -19,6 +19,7 @@ const sidebarItems = [
   { to: '/suppliers', label: 'Proveedores', icon: '🏭' },
   { to: '/accounts/receivable', label: 'CxC', icon: '💰' },
   { to: '/accounts/payable', label: 'CxP', icon: '💳' },
+  { to: '/payments', label: 'Pagos', icon: '💵' },
   { to: '/reports', label: 'Reportes', icon: '📊' },
   { to: '/settings', label: 'Config.', icon: '⚙️' },
 ]
