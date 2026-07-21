@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
+import TablePickerModal from '../components/TablePickerModal'
 
 interface Purchase {
   id: number
@@ -62,6 +63,8 @@ export default function Purchases() {
   const [notes, setNotes] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [showLowStock, setShowLowStock] = useState(false)
+  const [showSupplierTable, setShowSupplierTable] = useState(false)
+  const [showProductTable, setShowProductTable] = useState(false)
   const [showReceiveForm, setShowReceiveForm] = useState(false)
   const [receiveItems, setReceiveItems] = useState<{ productId: number; quantity: number }[]>([])
   const [receiveId, setReceiveId] = useState<number | null>(null)
@@ -254,6 +257,7 @@ export default function Purchases() {
                 placeholder="Buscar proveedor (nombre o RIF)..."
                 onCreateNew={() => setShowNewSupplierForm(true)}
                 createNewLabel="+ Nuevo proveedor"
+                onAdvancedSearch={() => setShowSupplierTable(true)}
                 absolute
                 className="mb-2"
               />
@@ -400,6 +404,7 @@ export default function Purchases() {
               placeholder="Agregar productos adicionales..."
               onCreateNew={() => setShowNewProductForm(true)}
               createNewLabel="+ Nuevo producto"
+              onAdvancedSearch={() => setShowProductTable(true)}
               className="mb-3"
             />
 
@@ -414,6 +419,35 @@ export default function Purchases() {
 
       <ProductFormModal open={showNewProductForm} onClose={() => setShowNewProductForm(false)}
         onSaved={onProductCreated} />
+
+      <TablePickerModal
+        open={showSupplierTable} onClose={() => setShowSupplierTable(false)}
+        title="Proveedores"
+        items={suppliers}
+        columns={[
+          { key: 'name', label: 'Nombre', render: (s: any) => s.name },
+          { key: 'doc', label: 'Documento', render: (s: any) => `${s.documentType}-${s.documentNumber}` },
+          { key: 'phone', label: 'Teléfono', render: (s: any) => s.phone || '-' },
+        ]}
+        filterFn={(s: any, q: string) => s.name.toLowerCase().includes(q.toLowerCase()) || s.documentNumber.includes(q)}
+        onSelect={(s: any) => { setSelectedSupplier(s); setShowSupplierTable(false) }}
+        searchPlaceholder="Buscar proveedor..."
+      />
+
+      <TablePickerModal
+        open={showProductTable} onClose={() => setShowProductTable(false)}
+        title="Productos"
+        items={products}
+        columns={[
+          { key: 'code', label: 'Código', render: (p: any) => p.code },
+          { key: 'name', label: 'Nombre', render: (p: any) => p.name },
+          { key: 'price', label: 'Precio', render: (p: any) => `$${Number(p.price).toFixed(2)}` },
+          { key: 'stock', label: 'Stock', render: (p: any) => p.stock },
+        ]}
+        filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
+        onSelect={(p: any) => { addItem(p.id); setShowProductTable(false) }}
+        searchPlaceholder="Buscar producto..."
+      />
 
       {showNewSupplierForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewSupplierForm(false)}>

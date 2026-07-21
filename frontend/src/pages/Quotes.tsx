@@ -3,6 +3,7 @@ import { api } from '../services/api'
 import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
 import ClientFormModal from '../components/ClientFormModal'
+import TablePickerModal from '../components/TablePickerModal'
 
 interface Product {
   id: number; name: string; code: string; price: number; ivaPercent: number; stock: number
@@ -46,6 +47,8 @@ export default function Quotes() {
   const [validDays, setValidDays] = useState('30')
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [showNewProductForm, setShowNewProductForm] = useState(false)
+  const [showClientTable, setShowClientTable] = useState(false)
+  const [showProductTable, setShowProductTable] = useState(false)
 
   async function load() {
     const [q, c, p] = await Promise.all([api.quotes.list(), api.clients.list(), api.products.list()])
@@ -156,6 +159,7 @@ export default function Quotes() {
                 renderItem={(c) => <span>{c.name} - {c.documentType}{c.documentNumber}</span>}
                 keyExtractor={(c) => c.id}
                 placeholder="Buscar cliente (nombre o cédula)..."
+                onAdvancedSearch={() => setShowClientTable(true)}
                 absolute
                 className="mb-2"
               />
@@ -196,6 +200,7 @@ export default function Quotes() {
               placeholder="Buscar por nombre o código..."
               onCreateNew={() => setShowNewProductForm(true)}
               createNewLabel="+ Nuevo producto"
+              onAdvancedSearch={() => setShowProductTable(true)}
               className="mb-3"
             />
 
@@ -275,6 +280,34 @@ export default function Quotes() {
 
       <ProductFormModal open={showNewProductForm} onClose={() => setShowNewProductForm(false)}
         onSaved={onProductCreated} />
+
+      <TablePickerModal
+        open={showClientTable} onClose={() => setShowClientTable(false)}
+        title="Clientes"
+        items={clients}
+        columns={[
+          { key: 'name', label: 'Nombre', render: (c: any) => c.name },
+          { key: 'doc', label: 'Documento', render: (c: any) => `${c.documentType}-${c.documentNumber}` },
+        ]}
+        filterFn={(c: any, q: string) => c.name.toLowerCase().includes(q.toLowerCase()) || c.documentNumber.includes(q)}
+        onSelect={(c: any) => { setSelectedClient(c); setShowClientTable(false) }}
+        searchPlaceholder="Buscar cliente..."
+      />
+
+      <TablePickerModal
+        open={showProductTable} onClose={() => setShowProductTable(false)}
+        title="Productos"
+        items={products}
+        columns={[
+          { key: 'code', label: 'Código', render: (p: any) => p.code },
+          { key: 'name', label: 'Nombre', render: (p: any) => p.name },
+          { key: 'price', label: 'Precio', render: (p: any) => `$${Number(p.price).toFixed(2)}` },
+          { key: 'stock', label: 'Stock', render: (p: any) => p.stock },
+        ]}
+        filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
+        onSelect={(p: any) => { addItem(p.id); setShowProductTable(false) }}
+        searchPlaceholder="Buscar producto..."
+      />
     </div>
   )
 }

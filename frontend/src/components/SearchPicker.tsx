@@ -13,6 +13,7 @@ interface SearchPickerProps<T> {
   minQueryLength?: number
   className?: string
   absolute?: boolean
+  onAdvancedSearch?: () => void
 }
 
 export default function SearchPicker<T>({
@@ -24,6 +25,7 @@ export default function SearchPicker<T>({
   minQueryLength = 2,
   className = '',
   absolute = false,
+  onAdvancedSearch,
 }: SearchPickerProps<T>) {
   const [query, setQuery] = useState('')
   const [show, setShow] = useState(false)
@@ -110,18 +112,25 @@ export default function SearchPicker<T>({
   )
 
   const input = (
-    <input
-      ref={inputRef}
-      value={query}
-      onChange={(e) => {
-        setQuery(e.target.value)
-        setShow(e.target.value.length >= minQueryLength)
-        setIdx(0)
-      }}
-      onKeyDown={handleKeyDown}
-      placeholder={placeholder}
-      className="w-full px-3 py-2 border rounded-lg"
-    />
+    <div className="flex gap-1">
+      <input
+        ref={inputRef}
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setShow(e.target.value.length >= minQueryLength)
+          setIdx(0)
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="flex-1 min-w-0 w-full px-3 py-2 border rounded-lg"
+      />
+      {onAdvancedSearch && (
+        <button type="button" onClick={onAdvancedSearch}
+          className="px-2.5 py-2 border rounded-lg bg-gray-50 hover:bg-gray-200 text-gray-500 shrink-0"
+          title="Búsqueda avanzada">🔍</button>
+      )}
+    </div>
   )
 
   if (absolute) {
