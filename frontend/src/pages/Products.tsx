@@ -101,7 +101,7 @@ export default function Products() {
     }))
   }
 
-  async function createTemplateFromVar(name: string) {
+  async function createTemplateFromVar() {
     if (!form.newVarName.trim()) return
     const values = form.variations
       .filter((v) => v.name === form.newVarName)
@@ -249,6 +249,7 @@ export default function Products() {
       variations: isComposite ? [] : (Array.isArray(p.variations) ? p.variations.filter((v: any) => v.name) : []),
       components: isComposite ? (Array.isArray(p.variations) ? p.variations : []) : [],
       newVarName: '', newVarValue: '', newVarQty: 0,
+      templateSearch: '', templateSearchResults: [], showTemplateDropdown: false,
     })
     setShowForm(true)
   }
@@ -480,7 +481,7 @@ export default function Products() {
                     <button type="button" onClick={addVarValue}
                       className="bg-blue-900 text-white px-3 rounded-xl text-sm">+</button>
                     {form.newVarName.trim() && form.variations.some((v) => v.name === form.newVarName) && !attributeTemplates.some((t) => t.name === form.newVarName.trim()) && (
-                      <button type="button" onClick={() => createTemplateFromVar(form.newVarName.trim())}
+                      <button type="button" onClick={() => createTemplateFromVar()}
                         className="text-xs text-green-700 bg-green-50 px-2 rounded-xl hover:bg-green-100 whitespace-nowrap">💾 Plantilla</button>
                     )}
                   </div>
