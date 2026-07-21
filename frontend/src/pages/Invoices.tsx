@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import { db } from '../services/db'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import ProductFormModal from '../components/ProductFormModal'
 
 interface Product {
   id: number; name: string; code: string; price: number; currency: string; ivaPercent: number; stock: number
@@ -56,6 +57,7 @@ export default function Invoices() {
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [newClientForm, setNewClientForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [clientPickIdx, setClientPickIdx] = useState(0)
   const [productPickIdx, setProductPickIdx] = useState(0)
   const [filterStatus, setFilterStatus] = useState('')
@@ -145,6 +147,12 @@ export default function Invoices() {
     if (!confirm('¿Anular esta factura? Se restaurará el stock.')) return
     await api.invoices.cancel(id)
     setShowDetail(null); load()
+  }
+
+  function onProductCreated(product: any) {
+    setProducts((prev) => [...prev, product])
+    setShowNewProductForm(false)
+    addItem(product.id)
   }
 
   function addItem(productId: number) {
@@ -313,6 +321,8 @@ export default function Invoices() {
                     <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
                   </button>
                 )) : <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
+                <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
+                  className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
             )}
             <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setShowProductPicker(true); setProductPickIdx(0) }}
@@ -474,6 +484,9 @@ export default function Invoices() {
         ))}
         {invoices.length === 0 && <p className="text-gray-400 text-center py-8">No hay facturas</p>}
       </div>
+
+      <ProductFormModal open={showNewProductForm} onClose={() => setShowNewProductForm(false)}
+        onSaved={onProductCreated} />
     </div>
   )
 }

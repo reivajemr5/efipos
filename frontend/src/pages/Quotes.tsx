@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
+import ProductFormModal from '../components/ProductFormModal'
 
 interface Product {
   id: number; name: string; code: string; price: number; ivaPercent: number; stock: number
@@ -47,6 +48,7 @@ export default function Quotes() {
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [newClientForm, setNewClientForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [clientPickIdx, setClientPickIdx] = useState(0)
   const [productPickIdx, setProductPickIdx] = useState(0)
   const clientSearchRef = useRef<HTMLInputElement>(null)
@@ -88,6 +90,12 @@ export default function Quotes() {
     if (!confirm('¿Eliminar esta cotización?')) return
     await api.quotes.delete(id)
     load()
+  }
+
+  function onProductCreated(product: any) {
+    setProducts((prev) => [...prev, product])
+    setShowNewProductForm(false)
+    addItem(product.id)
   }
 
   function addItem(productId: number) {
@@ -224,6 +232,8 @@ export default function Quotes() {
                     <span className="text-gray-500">${Number(p.price).toFixed(2)} (stock: {p.stock})</span>
                   </button>
                 )) : <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
+                <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
+                  className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
               </div>
             )}
             <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setShowProductPicker(true); setProductPickIdx(0) }}
@@ -334,6 +344,9 @@ export default function Quotes() {
         ))}
         {quotes.length === 0 && <p className="text-gray-400 text-center py-8">No hay cotizaciones</p>}
       </div>
+
+      <ProductFormModal open={showNewProductForm} onClose={() => setShowNewProductForm(false)}
+        onSaved={onProductCreated} />
     </div>
   )
 }
