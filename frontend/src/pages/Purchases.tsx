@@ -321,7 +321,7 @@ export default function Purchases() {
               items={filteredProducts()}
               onSelect={(p) => addItem(p.id)}
               filter={(p, q) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)}
-              renderItem={(p, highlighted) => {
+              renderItem={(p) => {
                 const lowStock = p.stock <= p.minStock
                 return (
                   <span className="flex justify-between w-full">
