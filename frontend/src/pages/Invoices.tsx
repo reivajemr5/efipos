@@ -3,6 +3,8 @@ import { api } from '../services/api'
 import { db } from '../services/db'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import ProductFormModal from '../components/ProductFormModal'
+import SearchPicker from '../components/SearchPicker'
+import ClientFormModal from '../components/ClientFormModal'
 
 interface Product {
   id: number; name: string; code: string; price: number; currency: string; ivaPercent: number; stock: number
@@ -51,18 +53,9 @@ export default function Invoices() {
   const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
   const [currency, setCurrency] = useState('usd')
   const [exchangeRate, setExchangeRate] = useState<number>(0)
-  const [searchClient, setSearchClient] = useState('')
-  const [searchProduct, setSearchProduct] = useState('')
-  const [showClientPicker, setShowClientPicker] = useState(false)
   const [showNewClientForm, setShowNewClientForm] = useState(false)
-  const [newClientForm, setNewClientForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
-  const [showProductPicker, setShowProductPicker] = useState(false)
   const [showNewProductForm, setShowNewProductForm] = useState(false)
-  const [clientPickIdx, setClientPickIdx] = useState(0)
-  const [productPickIdx, setProductPickIdx] = useState(0)
   const [filterStatus, setFilterStatus] = useState('')
-  const clientSearchRef = useRef<HTMLInputElement>(null)
-  const productSearchRef = useRef<HTMLInputElement>(null)
   const [offlineCount, setOfflineCount] = useState(0)
   const isOnline = useOnlineStatus()
   const printRef = useRef<HTMLDivElement>(null)
@@ -86,15 +79,10 @@ export default function Invoices() {
 
   useEffect(() => { load() }, [filterStatus])
 
-  async function createClient(e: React.FormEvent) {
-    e.preventDefault()
-    try {
-      const client = await api.clients.create(newClientForm)
-      setClients((prev) => [...prev, client])
-      setSelectedClient(client)
-      setShowNewClientForm(false)
-      setNewClientForm({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
-    } catch { }
+  function onClientCreated(client: any) {
+    setClients((prev) => [...prev, client])
+    setSelectedClient(client)
+    setShowNewClientForm(false)
   }
 
   async function createInvoice() {
@@ -225,39 +213,16 @@ export default function Invoices() {
                 <button onClick={() => setSelectedClient(null)} className="text-red-500 text-sm">Cambiar</button>
               </div>
             ) : (
-              <div className="relative mb-2">
-                <input ref={clientSearchRef} value={searchClient} onChange={(e) => { setSearchClient(e.target.value); setShowClientPicker(true); setClientPickIdx(0) }}
-                  placeholder="Buscar cliente (nombre o cédula)..."
-                  className="w-full px-3 py-2 border rounded-lg"
-                  onKeyDown={(e) => {
-                    const filtered = clients.filter((c) =>
-                      c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
-                      c.documentNumber.includes(searchClient))
-                    if (e.key === 'ArrowDown') { e.preventDefault(); setClientPickIdx((i) => Math.min(i + 1, filtered.length - 1)) }
-                    if (e.key === 'ArrowUp') { e.preventDefault(); setClientPickIdx((i) => Math.max(i - 1, 0)) }
-                    if (e.key === 'Enter' && filtered[clientPickIdx]) {
-                      setSelectedClient(filtered[clientPickIdx]); setShowClientPicker(false); setSearchClient('')
-                    }
-                    if (e.key === 'Escape') setShowClientPicker(false)
-                  }} />
-                {showClientPicker && searchClient.length >= 2 && (
-                  <div className="absolute top-full left-0 right-0 bg-white border rounded-lg mt-1 max-h-40 overflow-y-auto z-10 shadow">
-                    {clients.filter((c) =>
-                      c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
-                      c.documentNumber.includes(searchClient)
-                    ).map((c, i) => (
-                      <button key={c.id} onClick={() => { setSelectedClient(c); setShowClientPicker(false); setSearchClient('') }}
-                        className={`w-full text-left px-3 py-2 text-sm ${i === clientPickIdx ? 'bg-blue-100' : 'hover:bg-gray-100'}`}>
-                        {c.name} - {c.documentType}{c.documentNumber}
-                      </button>
-                    ))}
-                    {clients.filter((c) =>
-                      c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
-                      c.documentNumber.includes(searchClient)
-                    ).length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
-                  </div>
-                )}
-              </div>
+              <SearchPicker
+                items={clients}
+                onSelect={setSelectedClient}
+                filter={(c, q) => c.name.toLowerCase().includes(q) || c.documentNumber.includes(q)}
+                renderItem={(c) => <span>{c.name} - {c.documentType}{c.documentNumber}</span>}
+                keyExtractor={(c) => c.id}
+                placeholder="Buscar cliente (nombre o cédula)..."
+                absolute
+                className="mb-2"
+              />
             )}
 
             <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
@@ -306,39 +271,22 @@ export default function Invoices() {
               })}
             </div>
 
-            {showProductPicker && searchProduct.length >= 2 && (
-              <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
-                {products.filter((p) =>
-                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
-                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
-                ).length > 0 ? products.filter((p) =>
-                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
-                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
-                ).map((p, i) => (
-                  <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct(''); setShowProductPicker(false) }}
-                    className={`w-full text-left px-3 py-2 text-sm flex justify-between ${i === productPickIdx ? 'bg-blue-100' : 'hover:bg-gray-100'}`}>
-                    <span>{p.code} - {p.name} {p.stock <= 0 && <span className="text-red-500">(sin stock)</span>}</span>
-                    <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
-                  </button>
-                )) : <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
-                <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
-                  className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
-              </div>
-            )}
-            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setShowProductPicker(true); setProductPickIdx(0) }}
+            <SearchPicker
+              items={products}
+              onSelect={(p) => addItem(p.id)}
+              filter={(p, q) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)}
+              renderItem={(p) => (
+                <span className="flex justify-between w-full">
+                  <span>{p.code} - {p.name} {p.stock <= 0 && <span className="text-red-500">(sin stock)</span>}</span>
+                  <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
+                </span>
+              )}
+              keyExtractor={(p) => p.id}
               placeholder="Buscar por nombre o código..."
-              className="w-full px-3 py-2 border rounded-lg mb-3"
-              onKeyDown={(e) => {
-                const filtered = products.filter((p) =>
-                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
-                  p.code.toLowerCase().includes(searchProduct.toLowerCase()))
-                if (e.key === 'ArrowDown') { e.preventDefault(); setProductPickIdx((i) => Math.min(i + 1, filtered.length - 1)) }
-                if (e.key === 'ArrowUp') { e.preventDefault(); setProductPickIdx((i) => Math.max(i - 1, 0)) }
-                if (e.key === 'Enter' && filtered[productPickIdx]) {
-                  addItem(filtered[productPickIdx].id); setSearchProduct(''); setShowProductPicker(false)
-                }
-                if (e.key === 'Escape') setShowProductPicker(false)
-              }} />
+              onCreateNew={() => setShowNewProductForm(true)}
+              createNewLabel="+ Nuevo producto"
+              className="mb-3"
+            />
 
             <div className="border-t pt-3 text-right space-y-1">
               <p className="text-sm text-gray-600">Subtotal: <span className="font-mono">{currency === 'usd' ? '$' : 'Bs.'}{(calcSubtotal()).toFixed(2)}</span></p>
@@ -358,28 +306,8 @@ export default function Invoices() {
         </div>
       )}
 
-      {showNewClientForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewClientForm(false)}>
-          <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Nuevo Cliente</h3>
-            <form onSubmit={createClient} className="space-y-3">
-              <input value={newClientForm.name} onChange={(e) => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="Nombre" className="w-full px-3 py-2 border rounded-lg" required />
-              <div className="flex gap-2">
-                <select value={newClientForm.documentType} onChange={(e) => setNewClientForm({ ...newClientForm, documentType: e.target.value })} className="px-3 py-2 border rounded-lg">
-                  <option value="V">V</option><option value="J">J</option><option value="E">E</option>
-                </select>
-                <input value={newClientForm.documentNumber} onChange={(e) => setNewClientForm({ ...newClientForm, documentNumber: e.target.value })} placeholder="N° documento" className="flex-1 px-3 py-2 border rounded-lg" required />
-              </div>
-              <input value={newClientForm.phone} onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="Teléfono" className="w-full px-3 py-2 border rounded-lg" />
-              <input value={newClientForm.address} onChange={(e) => setNewClientForm({ ...newClientForm, address: e.target.value })} placeholder="Dirección" className="w-full px-3 py-2 border rounded-lg" />
-              <div className="flex gap-2 pt-2">
-                <button type="submit" className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Crear y seleccionar</button>
-                <button type="button" onClick={() => setShowNewClientForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Cancelar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)}
+        onSaved={onClientCreated} />
 
       {showDetail && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDetail(null)}>
