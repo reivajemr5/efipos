@@ -154,10 +154,9 @@ export default function Quotes() {
               </div>
             ) : (
               <div className="relative mb-2">
-                <input ref={clientSearchRef} value={searchClient} onChange={(e) => { setSearchClient(e.target.value); setClientPickIdx(0) }}
+                <input ref={clientSearchRef} value={searchClient} onChange={(e) => { setSearchClient(e.target.value); setShowClientPicker(true); setClientPickIdx(0) }}
                   placeholder="Buscar cliente (nombre o cédula)..."
                   className="w-full px-3 py-2 border rounded-lg"
-                  onFocus={() => { setShowClientPicker(true); setClientPickIdx(0) }}
                   onKeyDown={(e) => {
                     const filtered = clients.filter((c) =>
                       c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
@@ -169,7 +168,7 @@ export default function Quotes() {
                     }
                     if (e.key === 'Escape') setShowClientPicker(false)
                   }} />
-                {showClientPicker && (
+                {showClientPicker && searchClient.length >= 2 && (
                   <div className="absolute top-full left-0 right-0 bg-white border rounded-lg mt-1 max-h-40 overflow-y-auto z-10 shadow">
                     {clients.filter((c) =>
                       c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
@@ -180,8 +179,10 @@ export default function Quotes() {
                         {c.name} - {c.documentType}{c.documentNumber}
                       </button>
                     ))}
-                    <button onClick={() => { setShowNewClientForm(true); setShowClientPicker(false) }}
-                      className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo cliente</button>
+                    {clients.filter((c) =>
+                      c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
+                      c.documentNumber.includes(searchClient)
+                    ).length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
                   </div>
                 )}
               </div>
@@ -208,24 +209,26 @@ export default function Quotes() {
               })}
             </div>
 
-            {showProductPicker && (
+            {showProductPicker && searchProduct.length >= 2 && (
               <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
                 {products.filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
+                ).length > 0 ? products.filter((p) =>
                   p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
                   p.code.toLowerCase().includes(searchProduct.toLowerCase())
                 ).map((p, i) => (
                   <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct(''); setShowProductPicker(false) }}
                     className={`w-full text-left px-3 py-2 text-sm flex justify-between ${i === productPickIdx ? 'bg-blue-100' : 'hover:bg-gray-100'}`}>
-                    <span>{p.name}</span>
+                    <span>{p.code} - {p.name}</span>
                     <span className="text-gray-500">${Number(p.price).toFixed(2)} (stock: {p.stock})</span>
                   </button>
-                ))}
+                )) : <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
               </div>
             )}
-            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setProductPickIdx(0) }}
+            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setShowProductPicker(true); setProductPickIdx(0) }}
               placeholder="Buscar por nombre o código..."
               className="w-full px-3 py-2 border rounded-lg mb-3"
-              onFocus={() => { setShowProductPicker(true); setProductPickIdx(0) }}
               onKeyDown={(e) => {
                 const filtered = products.filter((p) =>
                   p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||

@@ -263,10 +263,9 @@ export default function Purchases() {
               </div>
             ) : (
               <div className="relative mb-2">
-                <input ref={supplierSearchRef} value={searchSupplier} onChange={(e) => { setSearchSupplier(e.target.value); setSupplierPickIdx(0) }}
+                <input ref={supplierSearchRef} value={searchSupplier} onChange={(e) => { setSearchSupplier(e.target.value); setShowSupplierPicker(true); setSupplierPickIdx(0) }}
                   placeholder="Buscar proveedor (nombre o RIF)..."
                   className="w-full px-3 py-2 border rounded-lg"
-                  onFocus={() => { setShowSupplierPicker(true); setSupplierPickIdx(0) }}
                   onKeyDown={(e) => {
                     const filtered = suppliers.filter((s) =>
                       s.name.toLowerCase().includes(searchSupplier.toLowerCase()) ||
@@ -279,7 +278,7 @@ export default function Purchases() {
                     }
                     if (e.key === 'Escape') setShowSupplierPicker(false)
                   }} />
-                {showSupplierPicker && (
+                {showSupplierPicker && searchSupplier.length >= 2 && (
                   <div className="absolute top-full left-0 right-0 bg-white border rounded-lg mt-1 max-h-40 overflow-y-auto z-10 shadow">
                     {suppliers.filter((s) =>
                       s.name.toLowerCase().includes(searchSupplier.toLowerCase()) ||
@@ -290,6 +289,10 @@ export default function Purchases() {
                         {s.name} - {s.documentType}{s.documentNumber}
                       </button>
                     ))}
+                    {suppliers.filter((s) =>
+                      s.name.toLowerCase().includes(searchSupplier.toLowerCase()) ||
+                      s.documentNumber.includes(searchSupplier)
+                    ).length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin resultados</p>}
                     <button onClick={() => { setShowNewSupplierForm(true); setShowSupplierPicker(false) }}
                       className={`w-full text-left px-3 py-2 text-sm font-medium border-t ${supplierPickIdx === suppliers.filter((s) => s.name.toLowerCase().includes(searchSupplier.toLowerCase()) || s.documentNumber.includes(searchSupplier)).length ? 'bg-blue-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>+ Nuevo proveedor</button>
                   </div>
@@ -355,9 +358,12 @@ export default function Purchases() {
                 <button onClick={() => setDuplicateWarning(null)} className="text-amber-600 font-bold ml-2">✕</button>
               </div>
             )}
-            {showProductPicker && (
+            {showProductPicker && searchProduct.length >= 2 && (
               <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
                 {filteredProducts().filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
+                ).length > 0 ? filteredProducts().filter((p) =>
                   p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
                   p.code.toLowerCase().includes(searchProduct.toLowerCase())
                 ).map((p, i) => {
@@ -369,16 +375,14 @@ export default function Purchases() {
                       <span className="text-gray-500">${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700 font-semibold">stock: {p.stock}</span>}</span>
                     </button>
                   )
-                })}
-                {filteredProducts().length === 0 && <p className="text-xs text-gray-400 text-center py-3">No hay productos disponibles de este proveedor</p>}
+                }) : <p className="text-xs text-gray-400 text-center py-3">Sin resultados</p>}
                 <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
                   className={`w-full text-left px-3 py-2 text-sm font-medium border-t ${productPickIdx === filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase()) || p.code.toLowerCase().includes(searchProduct.toLowerCase())).length ? 'bg-blue-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>+ Nuevo producto</button>
               </div>
             )}
-            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setProductPickIdx(0) }}
+            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setShowProductPicker(true); setProductPickIdx(0) }}
               placeholder="Buscar por nombre o código..."
               className="w-full px-3 py-2 border rounded-lg mb-3"
-              onFocus={() => { setShowProductPicker(true); setProductPickIdx(0) }}
               onKeyDown={(e) => {
                 const filtered = filteredProducts().filter((p) =>
                   p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
@@ -436,17 +440,22 @@ export default function Purchases() {
               <input type="checkbox" checked={showLowStock} onChange={(e) => setShowLowStock(e.target.checked)} className="rounded" />
               Solo bajo stock
             </label>
-            <input value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Agregar productos adicionales..."
-              className="w-full px-3 py-2 border rounded-lg mb-3" onFocus={() => setShowProductPicker(true)}
-              onBlur={() => setTimeout(() => setShowProductPicker(false), 200)} />
-            {showProductPicker && (
+            <input value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setShowProductPicker(true) }} placeholder="Agregar productos adicionales..."
+              className="w-full px-3 py-2 border rounded-lg mb-3" />
+            {showProductPicker && searchProduct.length >= 2 && (
               <div className="max-h-32 overflow-y-auto border rounded-lg mb-3">
-                {filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => {
+                {filteredProducts().filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
+                ).length > 0 ? filteredProducts().filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
+                ).map((p) => {
                   const lowStock = p.stock <= p.minStock
                   return (
                     <button key={p.id} onClick={() => { addReceiveItem(p.id); setSearchProduct('') }}
                       className={`w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between ${lowStock ? 'bg-amber-50' : ''}`}>
-                      <span>{p.name}</span>
+                      <span>{p.code} - {p.name}</span>
                       <span className="text-gray-500">${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700">stock: {p.stock}</span>}</span>
                     </button>
                   )
