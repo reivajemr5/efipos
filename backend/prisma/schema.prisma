@@ -199,7 +199,6 @@ model InvoiceItem {
   @@map("invoice_items")
 }
 
-<<<<<<< HEAD
 model ProductSupplier {
   productId  Int      @map("product_id")
   supplierId Int      @map("supplier_id")
@@ -210,7 +209,8 @@ model ProductSupplier {
 
   @@id([productId, supplierId])
   @@map("product_suppliers")
-=======
+}
+
 model PurchaseInvoice {
   id            Int              @id @default(autoincrement())
   number        String           @unique
@@ -247,7 +247,6 @@ model PurchaseInvoiceItem {
   product           Product          @relation(fields: [productId], references: [id])
 
   @@map("purchase_invoice_items")
->>>>>>> 3d69993 (feat: modulo compras completo, busqueda por RIF/codigo, barcode/costo en productos, navegacion por teclado)
 }
 
 model CashClose {
