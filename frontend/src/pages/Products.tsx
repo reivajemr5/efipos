@@ -4,7 +4,7 @@ import BarcodeScanner from '../components/BarcodeScanner'
 import { useToastStore } from '../store/toast'
 
 interface Category { id: number; name: string }
-interface Supplier { id: number; name: string }
+interface Supplier { id: number; name: string; documentType?: string; documentNumber?: string }
 interface Product {
   id: number; type: string; code: string; name: string
   description: string | null; notes: string | null
@@ -16,10 +16,31 @@ interface Product {
 }
 
 const typeOptions = [
-  { value: 'simple', label: 'Simple' },
-  { value: 'compuesto', label: 'Compuesto' },
-  { value: 'servicio', label: 'Servicio' },
+  { value: 'simple', label: 'Simple', desc: 'Producto físico con stock propio' },
+  { value: 'compuesto', label: 'Compuesto', desc: 'Combo de productos del inventario' },
+  { value: 'servicio', label: 'Servicio', desc: 'Servicio sin control de stock' },
 ]
+
+const helpText: Record<string, string> = {
+  type: 'Define si es un producto físico, un combo o un servicio',
+  code: 'Código interno único para identificar el producto (ej: PRD-001)',
+  name: 'Nombre del producto como aparecerá en facturas',
+  description: 'Descripción detallada del producto (opcional)',
+  barcode: 'Código de barras principal del producto',
+  barcodesExtra: 'Agrega códigos de barras adicionales si el producto tiene más de uno',
+  cost: 'Precio que te costó el producto al comprarlo (para calcular ganancia)',
+  price: 'Precio de venta al público',
+  price2: 'Segundo precio de venta (ej: precio por mayoreo)',
+  currency: 'Moneda en la que se maneja el producto',
+  iva: 'Porcentaje de IVA aplicable al producto',
+  stock: 'Cantidad actual disponible en inventario',
+  minStock: 'Cantidad mínima antes de alertar stock bajo',
+  category: 'Categoría para agrupar productos similares',
+  variations: 'Atributos del producto como talla, color, sabor, etc.',
+  components: 'Productos del inventario que componen este combo',
+  notes: 'Notas internas (no visibles en facturas)',
+  suppliers: 'Proveedores que venden este producto',
+}
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([])
@@ -30,12 +51,24 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
   const addToast = useToastStore((s) => s.addToast)
+
   const [form, setForm] = useState({
     type: 'simple', code: '', name: '', description: '', notes: '',
-    barcode: '', barcodes: [] as string[], cost: '', price: '', price2: '',
-    currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5',
-    categoryId: '', supplierIds: [] as number[], variations: '',
+    barcode: '', barcodes: [] as string[],
+    cost: '', price: '', price2: '',
+    currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
+    categoryId: '', supplierIds: [] as number[],
+    variations: [] as { name: string; values: string[] }[],
+    components: [] as { productId: number; name: string; quantity: number }[],
+    newVarName: '', newVarValues: '',
   })
+
+  // Inline creators
+  const [showNewCategory, setShowNewCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [showNewSupplier, setShowNewSupplier] = useState(false)
+  const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'J', documentNumber: '' })
+  const [componentSearch, setComponentSearch] = useState('')
 
   async function load() {
     const [prods, cats, sups] = await Promise.all([
@@ -57,9 +90,44 @@ export default function Products() {
   function addBarcode(b: string) {
     if (b && !form.barcodes.includes(b)) setForm((p) => ({ ...p, barcodes: [...p.barcodes, b], barcode: b }))
   }
+  function removeBarcode(b: string) { setForm((p) => ({ ...p, barcodes: p.barcodes.filter((x) => x !== b) })) }
 
-  function removeBarcode(b: string) {
-    setForm((p) => ({ ...p, barcodes: p.barcodes.filter((x) => x !== b) }))
+  function addVariation() {
+    const name = form.newVarName.trim()
+    const values = form.newVarValues.split(',').map((s) => s.trim()).filter(Boolean)
+    if (!name || values.length === 0) return
+    setForm((p) => ({ ...p, variations: [...p.variations, { name, values }], newVarName: '', newVarValues: '' }))
+  }
+  function removeVariation(i: number) { setForm((p) => ({ ...p, variations: p.variations.filter((_, idx) => idx !== i) })) }
+
+  function addComponent(prod: Product) {
+    if (form.components.find((c) => c.productId === prod.id)) return
+    setForm((p) => ({ ...p, components: [...p.components, { productId: prod.id, name: prod.name, quantity: 1 }] }))
+  }
+  function removeComponent(id: number) { setForm((p) => ({ ...p, components: p.components.filter((c) => c.productId !== id) })) }
+  function updateComponentQty(id: number, qty: number) {
+    setForm((p) => ({ ...p, components: p.components.map((c) => c.productId === id ? { ...c, quantity: qty } : c) }))
+  }
+
+  async function createInlineCategory() {
+    if (!newCategoryName.trim()) return
+    const cat = await api.categories.create({ name: newCategoryName })
+    setCategories((p) => [...p, cat])
+    setForm((p) => ({ ...p, categoryId: String(cat.id) }))
+    setNewCategoryName('')
+    setShowNewCategory(false)
+    addToast('Categoría creada', 'success')
+  }
+
+  async function createInlineSupplier() {
+    const { name, documentType, documentNumber } = newSupplierForm
+    if (!name.trim()) return
+    const sup = await api.suppliers.create({ name, documentType, documentNumber })
+    setSuppliers((p) => [...p, sup])
+    setForm((p) => ({ ...p, supplierIds: [...p.supplierIds, sup.id] }))
+    setNewSupplierForm({ name: '', documentType: 'J', documentNumber: '' })
+    setShowNewSupplier(false)
+    addToast('Proveedor creado', 'success')
   }
 
   async function save(e: React.FormEvent) {
@@ -73,9 +141,10 @@ export default function Products() {
       price: Number(form.price),
       price2: form.price2 ? Number(form.price2) : null,
       currency: form.currency, ivaPercent: Number(form.ivaPercent),
-      stock: Number(form.stock), minStock: Number(form.minStock),
+      stock: form.type === 'servicio' ? 0 : Number(form.stock),
+      minStock: Number(form.minStock),
       categoryId: form.categoryId ? Number(form.categoryId) : null,
-      variations: form.variations ? JSON.parse(form.variations) : [],
+      variations: form.type === 'compuesto' ? form.components : form.variations,
       supplierIds: form.supplierIds,
     }
     if (editing) {
@@ -92,10 +161,17 @@ export default function Products() {
   }
 
   function resetForm() {
-    setForm({ type: 'simple', code: '', name: '', description: '', notes: '', barcode: '', barcodes: [], cost: '', price: '', price2: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', categoryId: '', supplierIds: [], variations: '' })
+    setForm({
+      type: 'simple', code: '', name: '', description: '', notes: '',
+      barcode: '', barcodes: [], cost: '', price: '', price2: '',
+      currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
+      categoryId: '', supplierIds: [], variations: [], components: [],
+      newVarName: '', newVarValues: '',
+    })
   }
 
   function edit(p: Product) {
+    const isComposite = p.type === 'compuesto'
     setEditing(p)
     setForm({
       type: p.type, code: p.code, name: p.name,
@@ -109,7 +185,9 @@ export default function Products() {
       stock: String(p.stock), minStock: String(p.minStock),
       categoryId: p.category ? String(p.category.id) : '',
       supplierIds: p.suppliers.map((ps) => ps.supplier.id),
-      variations: Array.isArray(p.variations) ? JSON.stringify(p.variations) : '',
+      variations: isComposite ? [] : (Array.isArray(p.variations) ? p.variations.filter((v: any) => v.name) : []),
+      components: isComposite ? (Array.isArray(p.variations) ? p.variations : []) : [],
+      newVarName: '', newVarValues: '',
     })
     setShowForm(true)
   }
@@ -120,6 +198,12 @@ export default function Products() {
     addToast('Producto desactivado', 'success')
     load()
   }
+
+  const availableComponents = products.filter((p) =>
+    p.type !== 'compuesto' && p.id !== editing?.id &&
+    !form.components.some((c) => c.productId === p.id) &&
+    (p.name.toLowerCase().includes(componentSearch.toLowerCase()) || p.code.toLowerCase().includes(componentSearch.toLowerCase()))
+  )
 
   return (
     <div className="space-y-6">
@@ -136,117 +220,268 @@ export default function Products() {
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
         </div>
         <button onClick={() => setScannerOpen(true)}
-          className="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 rounded-xl transition-colors text-sm text-gray-600 flex items-center gap-1">
-          📷 Escanear
-        </button>
+          className="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 rounded-xl transition-colors text-sm text-gray-600 flex items-center gap-1">📷 Escanear</button>
       </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
           <div className="bg-white p-6 rounded-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-xl animate-slide-in" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">{editing ? 'Editar' : 'Nuevo'} Producto</h3>
-            <form onSubmit={save} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                  {typeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                  <option value="">Sin categoría</option>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
+            <h3 className="text-lg font-bold mb-4">{editing ? `Editar: ${editing.name}` : 'Nuevo Producto'}</h3>
+            <form onSubmit={save} className="space-y-5">
 
-              <div className="grid grid-cols-2 gap-3">
-                <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Código interno *"
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
-                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nombre *"
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
-              </div>
-
-              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción"
-                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" rows={2} />
-
+              {/* Tipo */}
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">Códigos de barras</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de producto <span className="text-gray-400 font-normal">— {helpText.type}</span></label>
+                <div className="grid grid-cols-3 gap-2">
+                  {typeOptions.map((o) => (
+                    <button key={o.value} type="button" onClick={() => setForm({ ...form, type: o.value })}
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${form.type === o.value ? 'border-blue-900 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                      <p className="text-sm font-medium text-gray-800">{o.label}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{o.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Código + Nombre */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Código interno <span className="text-gray-400 font-normal">— {helpText.code}</span></label>
+                  <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Ej: PRD-001"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-gray-400 font-normal">— {helpText.name}</span></label>
+                  <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nombre del producto"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
+                </div>
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción <span className="text-gray-400 font-normal">— {helpText.description}</span></label>
+                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción del producto (opcional)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" rows={2} />
+              </div>
+
+              {/* Código de barras */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Códigos de barras <span className="text-gray-400 font-normal">— {helpText.barcodesExtra}</span></label>
                 <div className="flex gap-2 mb-1">
-                  <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                    placeholder="Código de barras principal"
+                  <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="Código de barras principal"
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
                   <button type="button" onClick={() => { if (form.barcode) addBarcode(form.barcode) }}
                     className="bg-gray-100 px-3 rounded-xl text-sm hover:bg-gray-200">+ Agregar</button>
                 </div>
                 {form.barcodes.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 mt-1">
                     {form.barcodes.map((b) => (
                       <span key={b} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-lg">
-                        {b}
-                        <button type="button" onClick={() => removeBarcode(b)} className="text-blue-400 hover:text-blue-700">✕</button>
+                        {b} <button type="button" onClick={() => removeBarcode(b)} className="text-blue-400 hover:text-blue-700">✕</button>
                       </span>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-0.5">Costo</label>
-                  <input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} type="number" step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-0.5">Precio venta *</label>
-                  <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} type="number" step="0.01" required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-0.5">Precio venta 2</label>
-                  <input value={form.price2} onChange={(e) => setForm({ ...form, price2: e.target.value })} type="number" step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-3">
-                <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                  <option value="bs">Bs</option><option value="usd">$</option>
-                </select>
-                <select value={form.ivaPercent} onChange={(e) => setForm({ ...form, ivaPercent: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                  <option value="0">0% IVA</option><option value="8">8% IVA</option><option value="16">16% IVA</option>
-                </select>
-                <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} type="number" placeholder="Stock"
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-                <input value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} type="number" placeholder="Stock mín"
-                  className="px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-              </div>
-
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Notas internas"
-                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" rows={2} />
-
+              {/* Precios */}
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">Variaciones (JSON)</label>
-                <textarea value={form.variations} onChange={(e) => setForm({ ...form, variations: e.target.value })}
-                  placeholder='[{"nombre": "Talla", "valores": ["S", "M", "L"]}, {"nombre": "Color", "valores": ["Rojo", "Azul"]}]'
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono" rows={2} />
-              </div>
-
-              <div className="border border-gray-200 rounded-xl p-3">
-                <p className="text-xs text-gray-500 font-medium mb-2">Proveedores que lo venden</p>
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {suppliers.length === 0 && <p className="text-xs text-gray-400">No hay proveedores registrados</p>}
-                  {suppliers.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-2 py-1 rounded-lg">
-                      <input type="checkbox" checked={form.supplierIds.includes(s.id)} onChange={() => toggleSupplier(s.id)}
-                        className="rounded text-blue-900" />
-                      {s.name}
-                    </label>
-                  ))}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Precios</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">Costo <span className="text-gray-400">— {helpText.cost}</span></label>
+                    <input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} type="number" step="0.01" placeholder="0.00"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                    {form.cost && form.price && Number(form.price) > 0 && Number(form.cost) > 0 && (
+                      <p className={`text-xs mt-0.5 ${Number(form.price) >= Number(form.cost) ? 'text-green-600' : 'text-red-600'}`}>
+                        Margen: {((Number(form.price) - Number(form.cost)) / Number(form.cost) * 100).toFixed(0)}%
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">Precio venta * <span className="text-gray-400">— {helpText.price}</span></label>
+                    <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} type="number" step="0.01" placeholder="0.00" required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">Precio 2 (Mayor) <span className="text-gray-400">— {helpText.price2}</span></label>
+                    <input value={form.price2} onChange={(e) => setForm({ ...form, price2: e.target.value })} type="number" step="0.01" placeholder="0.00"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              {/* Moneda, IVA, Stock */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Configuración de inventario</label>
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">Moneda</label>
+                    <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                      <option value="bs">Bs</option><option value="usd">$</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">IVA %</label>
+                    <select value={form.ivaPercent} onChange={(e) => setForm({ ...form, ivaPercent: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                      <option value="0">0% (Exento)</option><option value="8">8%</option><option value="16">16%</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">Stock actual</label>
+                    <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} type="number" placeholder="0"
+                      disabled={form.type === 'servicio'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-0.5 block">Stock mínimo</label>
+                    <input value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} type="number" placeholder="5"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Categoría + inline create */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría <span className="text-gray-400 font-normal">— {helpText.category}</span></label>
+                <div className="flex gap-2">
+                  <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <option value="">Sin categoría</option>
+                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setShowNewCategory(true)}
+                    className="bg-green-100 text-green-700 px-3 rounded-xl text-sm hover:bg-green-200 whitespace-nowrap">+ Nueva</button>
+                </div>
+                {showNewCategory && (
+                  <div className="flex gap-2 mt-2 animate-slide-in">
+                    <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Nombre de la categoría"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm" autoFocus />
+                    <button type="button" onClick={createInlineCategory}
+                      className="bg-blue-900 text-white px-3 py-2 rounded-xl text-sm">Crear</button>
+                    <button type="button" onClick={() => setShowNewCategory(false)}
+                      className="text-gray-400 px-2 text-sm">✕</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Variaciones (para simple/servicio) */}
+              {form.type !== 'compuesto' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Variaciones <span className="text-gray-400 font-normal">— {helpText.variations}</span></label>
+                  <div className="flex gap-2 mb-2">
+                    <input value={form.newVarName} onChange={(e) => setForm({ ...form, newVarName: e.target.value })} placeholder="Ej: Talla, Color, Sabor"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                    <input value={form.newVarValues} onChange={(e) => setForm({ ...form, newVarValues: e.target.value })} placeholder="Valores: S,M,L"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                    <button type="button" onClick={addVariation}
+                      className="bg-blue-900 text-white px-3 rounded-xl text-sm">+</button>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-2">Ej: Nombre "Talla", Valores "S, M, L" — Separa valores con coma</p>
+                  {form.variations.length > 0 && (
+                    <div className="space-y-1.5">
+                      {form.variations.map((v, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                          <span className="text-sm font-medium text-gray-700 min-w-20">{v.name}:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {v.values.map((val, j) => (
+                              <span key={j} className="text-xs bg-white border border-gray-200 px-2 py-0.5 rounded-lg">{val}</span>
+                            ))}
+                          </div>
+                          <button type="button" onClick={() => removeVariation(i)} className="ml-auto text-red-400 hover:text-red-600 text-sm">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Componentes (para compuesto) */}
+              {form.type === 'compuesto' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Componentes del combo <span className="text-gray-400 font-normal">— {helpText.components}</span></label>
+
+                  {/* Componentes agregados */}
+                  {form.components.length > 0 && (
+                    <div className="space-y-1.5 mb-3">
+                      {form.components.map((c) => (
+                        <div key={c.productId} className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2">
+                          <span className="text-sm text-gray-700 flex-1">{c.name}</span>
+                          <input type="number" min="1" value={c.quantity}
+                            onChange={(e) => updateComponentQty(c.productId, Number(e.target.value))}
+                            className="w-16 px-2 py-1 border border-gray-200 rounded-lg text-sm text-center" />
+                          <button type="button" onClick={() => removeComponent(c.productId)} className="text-red-400 hover:text-red-600 text-sm">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Buscador de productos */}
+                  <input value={componentSearch} onChange={(e) => setComponentSearch(e.target.value)} placeholder="Buscar producto para agregar al combo..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm mb-1" />
+                  {componentSearch && availableComponents.length > 0 && (
+                    <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-100">
+                      {availableComponents.slice(0, 8).map((p) => (
+                        <button key={p.id} type="button" onClick={() => { addComponent(p); setComponentSearch('') }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex justify-between">
+                          <span>{p.code} - {p.name}</span>
+                          <span className="text-gray-400 font-mono">stock: {p.stock}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Notas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notas internas <span className="text-gray-400 font-normal">— {helpText.notes}</span></label>
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Notas para uso interno (no se muestran en facturas)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" rows={2} />
+              </div>
+
+              {/* Proveedores */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Proveedores <span className="text-gray-400 font-normal">— {helpText.suppliers}</span></label>
+                  <button type="button" onClick={() => setShowNewSupplier(true)}
+                    className="text-blue-600 text-xs font-medium hover:text-blue-800">+ Nuevo proveedor</button>
+                </div>
+                <div className="border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto">
+                  {suppliers.length === 0 && <p className="text-xs text-gray-400 py-2 text-center">No hay proveedores. Crea uno nuevo.</p>}
+                  <div className="space-y-1">
+                    {suppliers.map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded-lg">
+                        <input type="checkbox" checked={form.supplierIds.includes(s.id)} onChange={() => toggleSupplier(s.id)}
+                          className="rounded text-blue-900" />
+                        <span>{s.name}</span>
+                        <span className="text-xs text-gray-400 font-mono">{s.documentType}-{s.documentNumber}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {showNewSupplier && (
+                  <div className="flex gap-2 mt-2 p-3 bg-gray-50 rounded-xl animate-slide-in">
+                    <input value={newSupplierForm.name} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, name: e.target.value })}
+                      placeholder="Nombre" className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                    <select value={newSupplierForm.documentType} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, documentType: e.target.value })}
+                      className="px-2 py-2 border border-gray-300 rounded-xl text-sm">
+                      <option value="J">J</option><option value="V">V</option><option value="E">E</option>
+                    </select>
+                    <input value={newSupplierForm.documentNumber} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, documentNumber: e.target.value })}
+                      placeholder="RIF" className="w-28 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                    <button type="button" onClick={createInlineSupplier}
+                      className="bg-blue-900 text-white px-3 py-2 rounded-xl text-sm">Crear</button>
+                    <button type="button" onClick={() => setShowNewSupplier(false)}
+                      className="text-gray-400 px-2 text-sm">✕</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Submit */}
+              <div className="flex gap-2 pt-2 border-t border-gray-100">
                 <button type="submit" className="flex-1 bg-blue-900 text-white py-2.5 rounded-xl hover:bg-blue-800 transition-colors text-sm font-medium">
                   {editing ? 'Guardar Cambios' : 'Crear Producto'}
                 </button>
@@ -258,10 +493,13 @@ export default function Products() {
         </div>
       )}
 
+      {/* Product list */}
       <div className="space-y-2">
         {products.length === 0 && <p className="text-gray-400 text-center py-12">No hay productos registrados</p>}
         {products.map((p) => {
           const lowStock = p.stock <= p.minStock
+          const isComposite = p.type === 'compuesto'
+          const components = isComposite && Array.isArray(p.variations) ? p.variations as any[] : []
           return (
             <div key={p.id} className={`bg-white rounded-2xl border ${lowStock ? 'border-amber-200' : 'border-gray-100'} shadow-sm hover:shadow-md transition-shadow`}>
               <div className="p-4">
@@ -277,8 +515,8 @@ export default function Products() {
                     <p className="text-xs text-gray-500 font-mono">{p.code}</p>
                   </div>
                   <div className="flex gap-2 ml-3">
-                    <button onClick={() => edit(p)} className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">Editar</button>
-                    <button onClick={() => remove(p.id)} className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors">Eliminar</button>
+                    <button onClick={() => edit(p)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
+                    <button onClick={() => remove(p.id)} className="text-red-600 hover:text-red-800 text-sm font-medium">Eliminar</button>
                   </div>
                 </div>
 
@@ -289,35 +527,42 @@ export default function Products() {
                     <span className="text-gray-500">Costo: <span className="font-mono">{p.currency === 'usd' ? '$' : 'Bs.'}{Number(p.cost).toFixed(2)}</span></span>
                   )}
                   <span className="text-gray-500">IVA {p.ivaPercent}%</span>
-                  <span className={lowStock ? 'text-amber-700 font-semibold' : 'text-gray-700'}>
-                    Stock: <span className="font-mono">{p.stock}</span>
-                    {lowStock && <span className="text-amber-600 text-xs ml-1">(mín: {p.minStock})</span>}
-                  </span>
+                  {p.type !== 'servicio' && (
+                    <span className={lowStock ? 'text-amber-700 font-semibold' : 'text-gray-700'}>
+                      Stock: <span className="font-mono">{p.stock}</span>
+                      {lowStock && <span className="text-amber-600 text-xs ml-1">(mín: {p.minStock})</span>}
+                    </span>
+                  )}
                 </div>
 
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {p.barcodes.map((b) => (
-                    <span key={b.id} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-lg font-mono">{b.barcode}</span>
-                  ))}
-                </div>
+                {isComposite && components.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {components.map((c: any, i: number) => (
+                      <span key={i} className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg">{c.quantity}x {c.name}</span>
+                    ))}
+                  </div>
+                )}
+
+                {!isComposite && p.barcodes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {p.barcodes.map((b) => (
+                      <span key={b.id} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-lg font-mono">{b.barcode}</span>
+                    ))}
+                  </div>
+                )}
 
                 {p.suppliers.length > 0 && (
-                  <p className="text-xs text-gray-400 mt-2">
-                    Proveedores: {p.suppliers.map((ps) => ps.supplier.name).join(', ')}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-2">Proveedores: {p.suppliers.map((ps) => ps.supplier.name).join(', ')}</p>
                 )}
+
+                {p.description && <p className="text-xs text-gray-400 mt-1 line-clamp-1">{p.description}</p>}
               </div>
             </div>
           )
         })}
       </div>
 
-      {scannerOpen && (
-        <BarcodeScanner
-          onScan={(barcode) => { setSearch(barcode) }}
-          onClose={() => setScannerOpen(false)}
-        />
-      )}
+      {scannerOpen && <BarcodeScanner onScan={(barcode) => setSearch(barcode)} onClose={() => setScannerOpen(false)} />}
     </div>
   )
 }

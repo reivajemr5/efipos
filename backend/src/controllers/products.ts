@@ -56,7 +56,7 @@ export async function create(req: AuthRequest, res: Response) {
       price, cost: cost || 0, barcode,
       price2: price2 || null,
       currency: currency || 'bs',
-      ivaPercent: ivaPercent || 16,
+      ivaPercent: ivaPercent || 0,
       stock: stock || 0,
       minStock: minStock || 5,
       categoryId: categoryId || null,
