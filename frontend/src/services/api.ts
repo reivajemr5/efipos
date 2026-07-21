@@ -70,6 +70,12 @@ export const api = {
     cancel: (id: number) => request(`/invoices/${id}/cancel`, { method: 'POST' }),
     print: (id: number) => request(`/invoices/print/${id}`),
   },
+  categories: {
+    list: () => request('/categories'),
+    create: (data: any) => request('/categories', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/categories/${id}`, { method: 'DELETE' }),
+  },
   accounts: {
     receivable: () => request('/accounts/receivable'),
     payable: () => request('/accounts/payable'),

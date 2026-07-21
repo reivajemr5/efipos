@@ -13,6 +13,7 @@ const sidebarItems = [
   { to: '/quotes', label: 'Cotizaciones', icon: '📋' },
   { to: '/purchases', label: 'Compras', icon: '📥' },
   { to: '/products', label: 'Productos', icon: '📦' },
+  { to: '/categories', label: 'Categorías', icon: '🏷️' },
   { to: '/clients', label: 'Clientes', icon: '👥' },
   { to: '/suppliers', label: 'Proveedores', icon: '🏭' },
   { to: '/accounts/receivable', label: 'CxC', icon: '💰' },

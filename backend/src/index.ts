@@ -13,6 +13,7 @@ import reportRoutes from './routes/reports'
 import exchangeRateRoutes from './routes/exchangeRate'
 import accountRoutes from './routes/accounts'
 import searchRoutes from './routes/search'
+import categoryRoutes from './routes/categories'
 import { updateBCVRate } from './services/exchangeRateUpdater'
 
 dotenv.config()
@@ -38,6 +39,7 @@ app.use('/api/v1/exchange-rate', exchangeRateRoutes)
 app.use('/api/v1/purchases', purchaseRoutes)
 app.use('/api/v1/accounts', accountRoutes)
 app.use('/api/v1/search', searchRoutes)
+app.use('/api/v1/categories', categoryRoutes)
 
 // Auto-update BCV rate every day at 10:00 AM
 cron.schedule('0 10 * * *', async () => {
