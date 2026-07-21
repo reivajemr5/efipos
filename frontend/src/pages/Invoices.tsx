@@ -216,7 +216,7 @@ export default function Invoices() {
               <SearchPicker
                 items={clients}
                 onSelect={setSelectedClient}
-                filter={(c, q) => c.name.toLowerCase().includes(q) || c.documentNumber.includes(q)}
+                filter={(c, q) => c.name.toLowerCase().includes(q.toLowerCase()) || c.documentNumber.includes(q)}
                 renderItem={(c) => <span>{c.name} - {c.documentType}{c.documentNumber}</span>}
                 keyExtractor={(c) => c.id}
                 placeholder="Buscar cliente (nombre o cédula)..."
@@ -274,7 +274,7 @@ export default function Invoices() {
             <SearchPicker
               items={products}
               onSelect={(p) => addItem(p.id)}
-              filter={(p, q) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)}
+              filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
               renderItem={(p) => (
                 <span className="flex justify-between w-full">
                   <span>{p.code} - {p.name} {p.stock <= 0 && <span className="text-red-500">(sin stock)</span>}</span>

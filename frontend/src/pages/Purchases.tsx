@@ -248,7 +248,7 @@ export default function Purchases() {
               <SearchPicker
                 items={suppliers}
                 onSelect={setSelectedSupplier}
-                filter={(s, q) => s.name.toLowerCase().includes(q) || s.documentNumber.includes(q)}
+                filter={(s, q) => s.name.toLowerCase().includes(q.toLowerCase()) || s.documentNumber.includes(q)}
                 renderItem={(s) => <span>{s.name} - {s.documentType}{s.documentNumber}</span>}
                 keyExtractor={(s) => s.id}
                 placeholder="Buscar proveedor (nombre o RIF)..."
@@ -320,7 +320,7 @@ export default function Purchases() {
             <SearchPicker
               items={filteredProducts()}
               onSelect={(p) => addItem(p.id)}
-              filter={(p, q) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)}
+              filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
               renderItem={(p) => {
                 const lowStock = p.stock <= p.minStock
                 return (
@@ -386,7 +386,7 @@ export default function Purchases() {
             <SearchPicker
               items={filteredProducts()}
               onSelect={(p) => addReceiveItem(p.id)}
-              filter={(p, q) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)}
+              filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
               renderItem={(p) => {
                 const lowStock = p.stock <= p.minStock
                 return (
