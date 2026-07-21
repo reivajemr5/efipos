@@ -360,8 +360,8 @@ export default function Products() {
               {/* Precios con margen */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Precios</label>
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 mb-0.5 block">Costo * <Tooltip text={tips.cost} /></label>
                       <input value={form.cost} onChange={(e) => {
@@ -375,8 +375,8 @@ export default function Products() {
                       }} type="number" step="0.01" placeholder="0.00" required
                         className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
                     </div>
-                    <div className="flex gap-1 items-end">
-                      <div className="flex-1">
+                    <div className="flex gap-1.5 items-end">
+                      <div className="flex-1 min-w-0">
                         <label className="text-xs text-gray-500 mb-0.5 block">Margen % <Tooltip text={tips.margin} /></label>
                         <input value={form.margin} onChange={(e) => {
                           const m = e.target.value
@@ -387,8 +387,8 @@ export default function Products() {
                         }} type="number" step="0.1" placeholder="30"
                           className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
                       </div>
-                      <span className="text-gray-400 pb-2.5">→</span>
-                      <div className="flex-[2]">
+                      <span className="text-gray-400 pb-2.5 shrink-0">→</span>
+                      <div className="flex-[2] min-w-0">
                         <label className="text-xs text-gray-500 mb-0.5 block">Precio *</label>
                         <input value={form.price} onChange={(e) => {
                           const p = e.target.value
@@ -401,8 +401,8 @@ export default function Products() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-1 items-end">
-                    <div className="w-24">
+                  <div className="flex gap-1.5 items-end">
+                    <div className="w-20 shrink-0">
                       <label className="text-xs text-gray-500 mb-0.5 block">Margen 2 % <Tooltip text={tips.margin2} /></label>
                       <input value={form.margin2} onChange={(e) => {
                         const m = e.target.value
@@ -413,8 +413,8 @@ export default function Products() {
                       }} type="number" step="0.1" placeholder="15"
                         className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
                     </div>
-                    <span className="text-gray-400 pb-2.5">→</span>
-                    <div className="flex-1">
+                    <span className="text-gray-400 pb-2.5 shrink-0">→</span>
+                    <div className="flex-1 min-w-0">
                       <label className="text-xs text-gray-500 mb-0.5 block">Precio 2 (Mayor)</label>
                       <input value={form.price2} onChange={(e) => {
                         const p = e.target.value
