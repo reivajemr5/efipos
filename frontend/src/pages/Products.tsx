@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
+import BarcodeScanner from '../components/BarcodeScanner'
+import { useToastStore } from '../store/toast'
 
 interface Product {
   id: number
@@ -27,7 +29,9 @@ export default function Products() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [form, setForm] = useState({ code: '', name: '', description: '', barcode: '', cost: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] as number[] })
+  const addToast = useToastStore((s) => s.addToast)
 
   async function load() {
     const [prods, sups] = await Promise.all([
@@ -54,8 +58,10 @@ export default function Products() {
     const data = { ...form, price: Number(form.price), cost: form.cost ? Number(form.cost) : 0, barcode: form.barcode || null, currency: form.currency, ivaPercent: Number(form.ivaPercent), stock: Number(form.stock), minStock: Number(form.minStock) }
     if (editing) {
       await api.products.update(editing.id, data)
+      addToast('Producto actualizado', 'success')
     } else {
       await api.products.create(data)
+      addToast('Producto creado', 'success')
     }
     setShowForm(false)
     setEditing(null)
@@ -84,6 +90,7 @@ export default function Products() {
   async function remove(id: number) {
     if (!confirm('¿Desactivar este producto?')) return
     await api.products.delete(id)
+    addToast('Producto desactivado', 'success')
     load()
   }
 
@@ -94,8 +101,14 @@ export default function Products() {
         <button onClick={() => { setEditing(null); setForm({ code: '', name: '', description: '', barcode: '', cost: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] }); setShowForm(true) }}
           className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800">+ Nuevo</button>
       </div>
-      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, código o código de barras..."
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <div className="flex gap-2 mb-4">
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, código o código de barras..."
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button onClick={() => setScannerOpen(true)}
+          className="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 rounded-lg transition-colors flex items-center gap-1 text-sm text-gray-600">
+          📷 Escanear
+        </button>
+      </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
@@ -173,6 +186,12 @@ export default function Products() {
         })}
         {products.length === 0 && <p className="text-gray-400 text-center py-8 col-span-2">No hay productos registrados</p>}
       </div>
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={(barcode) => { setSearch(barcode) }}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
     </div>
   )
 }

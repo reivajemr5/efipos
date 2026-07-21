@@ -8,10 +8,11 @@ import Suppliers from './pages/Suppliers'
 import Products from './pages/Products'
 import Purchases from './pages/Purchases'
 import Quotes from './pages/Quotes'
-import Purchases from './pages/Purchases'
 import Invoices from './pages/Invoices'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import AccountsReceivable from './pages/AccountsReceivable'
+import AccountsPayable from './pages/AccountsPayable'
 
 function App() {
   return (
@@ -33,7 +34,8 @@ function App() {
           <Route path="purchases" element={<Purchases />} />
           <Route path="clients" element={<Clients />} />
           <Route path="suppliers" element={<Suppliers />} />
-          <Route path="purchases" element={<Purchases />} />
+          <Route path="accounts/receivable" element={<AccountsReceivable />} />
+          <Route path="accounts/payable" element={<AccountsPayable />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
         </Route>

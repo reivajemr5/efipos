@@ -70,6 +70,13 @@ export const api = {
     cancel: (id: number) => request(`/invoices/${id}/cancel`, { method: 'POST' }),
     print: (id: number) => request(`/invoices/print/${id}`),
   },
+  accounts: {
+    receivable: () => request('/accounts/receivable'),
+    payable: () => request('/accounts/payable'),
+  },
+  search: {
+    global: (q: string) => request(`/search?q=${encodeURIComponent(q)}`),
+  },
   reports: {
     sales: (dateFrom?: string, dateTo?: string) => {
       const params = new URLSearchParams()
@@ -87,6 +94,7 @@ export const api = {
     cashClose: (date?: string) => request(`/reports/cash-close${date ? `?date=${date}` : ''}`),
     saveCashClose: (declaredTotal: number, closeDate?: string) =>
       request('/reports/cash-close', { method: 'POST', body: JSON.stringify({ declaredTotal, closeDate }) }),
+    dashboard: () => request('/reports/dashboard'),
   },
   purchases: {
     list: (params?: string) => request(`/purchases${params ? `?${params}` : ''}`),
