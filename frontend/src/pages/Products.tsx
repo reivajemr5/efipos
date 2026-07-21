@@ -432,7 +432,7 @@ export default function Products() {
               {/* Moneda, IVA, Stock */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Configuración de inventario</label>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 mb-0.5 block">Moneda <Tooltip text={tips.currency} /></label>
                     <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
@@ -517,10 +517,10 @@ export default function Products() {
                   </div>
 
                   {/* Manual input */}
-                  <div className="flex gap-2 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     <input value={form.newVarName} onChange={(e) => setForm({ ...form, newVarName: e.target.value })}
                       placeholder="Atributo: Talla, Color..."
-                      className="w-36 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                      className="flex-1 sm:w-36 sm:flex-none px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                     <input value={form.newVarValue} onChange={(e) => setForm({ ...form, newVarValue: e.target.value })}
                       placeholder="Valor: S, Rojo..."
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm" />
