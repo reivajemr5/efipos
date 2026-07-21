@@ -96,14 +96,6 @@ export const api = {
       request('/reports/cash-close', { method: 'POST', body: JSON.stringify({ declaredTotal, closeDate }) }),
     dashboard: () => request('/reports/dashboard'),
   },
-  purchases: {
-    list: (params?: string) => request(`/purchases${params ? `?${params}` : ''}`),
-    getById: (id: number) => request(`/purchases/${id}`),
-    create: (data: any) => request('/purchases', { method: 'POST', body: JSON.stringify(data) }),
-    receive: (id: number, data: any) => request(`/purchases/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
-    pay: (id: number) => request(`/purchases/${id}/pay`, { method: 'POST' }),
-    cancel: (id: number) => request(`/purchases/${id}/cancel`, { method: 'POST' }),
-  },
   exchangeRate: {
     get: () => request('/exchange-rate'),
     update: (rate: number) => request('/exchange-rate', { method: 'PUT', body: JSON.stringify({ rate }) }),

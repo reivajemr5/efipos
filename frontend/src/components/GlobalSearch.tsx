@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 
@@ -11,7 +11,7 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -25,15 +25,15 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
   }, [query])
 
   const groups: ResultGroup[] = [
-    { label: 'Productos', items: results.products, icon: '📦', route: (i) => '/products' },
-    { label: 'Clientes', items: results.clients, icon: '👤', route: (i) => '/clients' },
-    { label: 'Facturas', items: results.invoices, icon: '🧾', route: (i) => '/invoices' },
+    { label: 'Productos', items: results.products, icon: '📦', route: () => '/products' },
+    { label: 'Clientes', items: results.clients, icon: '👤', route: () => '/clients' },
+    { label: 'Facturas', items: results.invoices, icon: '🧾', route: () => '/invoices' },
   ]
 
   const flatItems = groups.flatMap((g) => g.items)
   const totalItems = flatItems.length
 
-  const select = useCallback((idx: number) => {
+  const select = (idx: number) => {
     let cursor = idx
     for (const g of groups) {
       if (cursor < g.items.length) {
@@ -43,7 +43,7 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
       }
       cursor -= g.items.length
     }
-  }, [navigate, onClose, groups])
+  }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, totalItems - 1)) }
@@ -102,9 +102,9 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
               <span>{g.label}</span>
               <span className="text-gray-300">({g.items.length})</span>
             </div>
-            {g.items.map((item: any, i: number) => {
-              const globalIdx = groups.flatMap((x) => x.items).indexOf(item)
-              return renderItem(item, globalIdx)
+            {g.items.map((item: any) => {
+              const idx = groups.flatMap((x) => x.items).indexOf(item)
+              return renderItem(item, idx)
             })}
           </div>
         ))}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { syncCatalogs, processPendingChanges } from '../services/sync'
@@ -32,6 +32,7 @@ const mobileNavItems = [
 export default function Layout() {
   const { user, logout } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const isOnline = useOnlineStatus()
   const [searchOpen, setSearchOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
