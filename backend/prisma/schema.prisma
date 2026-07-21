@@ -86,6 +86,8 @@ model Product {
   code        String    @unique
   name        String
   description String?
+  barcode     String?   @unique
+  cost        Decimal?  @db.Decimal(12, 2)
   price       Decimal   @db.Decimal(12, 2)
   currency    Currency  @default(bs)
   ivaPercent  Decimal   @default(16) @map("iva_percent") @db.Decimal(5, 2)
@@ -93,12 +95,24 @@ model Product {
   minStock    Int       @default(5) @map("min_stock")
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now()) @map("created_at")
-  suppliers   ProductSupplier[]
-  invoiceItems           InvoiceItem[]
-  quoteItems             QuoteItem[]
-  purchaseInvoiceItems   PurchaseInvoiceItem[]
+  suppliers             ProductSupplier[]
+  invoiceItems          InvoiceItem[]
+  quoteItems            QuoteItem[]
+  purchaseInvoiceItems  PurchaseInvoiceItem[]
 
   @@map("products")
+}
+
+model ProductSupplier {
+  productId  Int      @map("product_id")
+  supplierId Int      @map("supplier_id")
+  price      Decimal? @db.Decimal(12, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@id([productId, supplierId])
+  @@map("product_suppliers")
 }
 
 model ExchangeRate {
@@ -185,6 +199,7 @@ model InvoiceItem {
   @@map("invoice_items")
 }
 
+<<<<<<< HEAD
 model ProductSupplier {
   productId  Int      @map("product_id")
   supplierId Int      @map("supplier_id")
@@ -195,6 +210,44 @@ model ProductSupplier {
 
   @@id([productId, supplierId])
   @@map("product_suppliers")
+=======
+model PurchaseInvoice {
+  id            Int              @id @default(autoincrement())
+  number        String           @unique
+  supplierId    Int              @map("supplier_id")
+  userId        Int              @map("user_id")
+  currency      Currency         @default(usd)
+  exchangeRate  Decimal?         @map("exchange_rate") @db.Decimal(14, 4)
+  subtotal      Decimal          @db.Decimal(12, 2)
+  ivaTotal      Decimal          @map("iva_total") @db.Decimal(12, 2)
+  total         Decimal          @db.Decimal(12, 2)
+  totalBs       Decimal?         @map("total_bs") @db.Decimal(14, 2)
+  status        PurchaseStatus   @default(pedido)
+  paymentMethod String           @default("efectivo") @map("payment_method")
+  dueDate       DateTime?        @map("due_date")
+  notes         String?
+  createdAt     DateTime         @default(now()) @map("created_at")
+  cancelledAt   DateTime?        @map("cancelled_at")
+  supplier      Supplier         @relation(fields: [supplierId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
+  items         PurchaseInvoiceItem[]
+
+  @@map("purchase_invoices")
+}
+
+model PurchaseInvoiceItem {
+  id                Int              @id @default(autoincrement())
+  purchaseInvoiceId Int              @map("purchase_invoice_id")
+  productId         Int              @map("product_id")
+  quantity          Int
+  unitPrice         Decimal          @map("unit_price") @db.Decimal(12, 2)
+  ivaPercent        Decimal          @map("iva_percent") @db.Decimal(5, 2)
+  subtotal          Decimal          @db.Decimal(12, 2)
+  purchaseInvoice   PurchaseInvoice  @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  product           Product          @relation(fields: [productId], references: [id])
+
+  @@map("purchase_invoice_items")
+>>>>>>> 3d69993 (feat: modulo compras completo, busqueda por RIF/codigo, barcode/costo en productos, navegacion por teclado)
 }
 
 model CashClose {

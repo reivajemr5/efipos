@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 
 interface Purchase {
@@ -28,6 +28,8 @@ interface Purchase {
 interface Supplier {
   id: number
   name: string
+  documentType: string
+  documentNumber: string
 }
 
 interface Product {
@@ -39,6 +41,8 @@ interface Product {
   ivaPercent: number
   stock: number
   minStock: number
+  barcode?: string | null
+  cost?: number | null
   suppliers: { supplier: { id: number; name: string } }[]
 }
 
@@ -60,6 +64,10 @@ export default function Purchases() {
   const [showSupplierPicker, setShowSupplierPicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [showLowStock, setShowLowStock] = useState(false)
+  const [supplierPickIdx, setSupplierPickIdx] = useState(0)
+  const [productPickIdx, setProductPickIdx] = useState(0)
+  const supplierSearchRef = useRef<HTMLInputElement>(null)
+  const productSearchRef = useRef<HTMLInputElement>(null)
   const [showReceiveForm, setShowReceiveForm] = useState(false)
   const [receiveItems, setReceiveItems] = useState<{ productId: number; quantity: number }[]>([])
   const [receiveId, setReceiveId] = useState<number | null>(null)
@@ -255,16 +263,35 @@ export default function Purchases() {
               </div>
             ) : (
               <div className="relative mb-2">
-                <input value={searchSupplier} onChange={(e) => setSearchSupplier(e.target.value)} placeholder="Buscar proveedor..."
-                  className="w-full px-3 py-2 border rounded-lg" onFocus={() => setShowSupplierPicker(true)} />
+                <input ref={supplierSearchRef} value={searchSupplier} onChange={(e) => { setSearchSupplier(e.target.value); setSupplierPickIdx(0) }}
+                  placeholder="Buscar proveedor (nombre o RIF)..."
+                  className="w-full px-3 py-2 border rounded-lg"
+                  onFocus={() => { setShowSupplierPicker(true); setSupplierPickIdx(0) }}
+                  onKeyDown={(e) => {
+                    const filtered = suppliers.filter((s) =>
+                      s.name.toLowerCase().includes(searchSupplier.toLowerCase()) ||
+                      s.documentNumber.includes(searchSupplier))
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setSupplierPickIdx((i) => Math.min(i + 1, filtered.length)) }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); setSupplierPickIdx((i) => Math.max(i - 1, 0)) }
+                    if (e.key === 'Enter') {
+                      if (filtered[supplierPickIdx]) { setSelectedSupplier(filtered[supplierPickIdx]); setShowSupplierPicker(false); setSearchSupplier('') }
+                      else { setShowNewSupplierForm(true); setShowSupplierPicker(false) }
+                    }
+                    if (e.key === 'Escape') setShowSupplierPicker(false)
+                  }} />
                 {showSupplierPicker && (
                   <div className="absolute top-full left-0 right-0 bg-white border rounded-lg mt-1 max-h-40 overflow-y-auto z-10 shadow">
-                    {suppliers.filter((s) => s.name.toLowerCase().includes(searchSupplier.toLowerCase())).map((s) => (
+                    {suppliers.filter((s) =>
+                      s.name.toLowerCase().includes(searchSupplier.toLowerCase()) ||
+                      s.documentNumber.includes(searchSupplier)
+                    ).map((s, i) => (
                       <button key={s.id} onClick={() => { setSelectedSupplier(s); setShowSupplierPicker(false); setSearchSupplier('') }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm">{s.name}</button>
+                        className={`w-full text-left px-3 py-2 text-sm ${i === supplierPickIdx ? 'bg-blue-100' : 'hover:bg-gray-100'}`}>
+                        {s.name} - {s.documentType}{s.documentNumber}
+                      </button>
                     ))}
                     <button onClick={() => { setShowNewSupplierForm(true); setShowSupplierPicker(false) }}
-                      className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo proveedor</button>
+                      className={`w-full text-left px-3 py-2 text-sm font-medium border-t ${supplierPickIdx === suppliers.filter((s) => s.name.toLowerCase().includes(searchSupplier.toLowerCase()) || s.documentNumber.includes(searchSupplier)).length ? 'bg-blue-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>+ Nuevo proveedor</button>
                   </div>
                 )}
               </div>
@@ -330,24 +357,40 @@ export default function Purchases() {
             )}
             {showProductPicker && (
               <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
-                {filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => {
+                {filteredProducts().filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
+                ).map((p, i) => {
                   const lowStock = p.stock <= p.minStock
                   return (
-                    <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct('') }}
-                      className={`w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between ${lowStock ? 'bg-amber-50' : ''}`}>
-                      <span>{p.name}</span>
+                    <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct(''); setShowProductPicker(false) }}
+                      className={`w-full text-left px-3 py-2 text-sm flex justify-between ${i === productPickIdx ? 'bg-blue-100' : lowStock ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-100'}`}>
+                      <span>{p.code} - {p.name}</span>
                       <span className="text-gray-500">${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700 font-semibold">stock: {p.stock}</span>}</span>
                     </button>
                   )
                 })}
                 {filteredProducts().length === 0 && <p className="text-xs text-gray-400 text-center py-3">No hay productos disponibles de este proveedor</p>}
                 <button onClick={() => { setShowNewProductForm(true); setShowProductPicker(false) }}
-                  className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo producto</button>
+                  className={`w-full text-left px-3 py-2 text-sm font-medium border-t ${productPickIdx === filteredProducts().filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase()) || p.code.toLowerCase().includes(searchProduct.toLowerCase())).length ? 'bg-blue-100' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>+ Nuevo producto</button>
               </div>
             )}
-            <input value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Buscar y agregar productos..."
-              className="w-full px-3 py-2 border rounded-lg mb-3" onFocus={() => setShowProductPicker(true)}
-              onBlur={() => setTimeout(() => setShowProductPicker(false), 200)} />
+            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setProductPickIdx(0) }}
+              placeholder="Buscar por nombre o código..."
+              className="w-full px-3 py-2 border rounded-lg mb-3"
+              onFocus={() => { setShowProductPicker(true); setProductPickIdx(0) }}
+              onKeyDown={(e) => {
+                const filtered = filteredProducts().filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase()))
+                if (e.key === 'ArrowDown') { e.preventDefault(); setProductPickIdx((i) => Math.min(i + 1, filtered.length)) }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setProductPickIdx((i) => Math.max(i - 1, 0)) }
+                if (e.key === 'Enter') {
+                  if (filtered[productPickIdx]) { addItem(filtered[productPickIdx].id); setSearchProduct(''); setShowProductPicker(false) }
+                  else { setShowNewProductForm(true); setShowProductPicker(false) }
+                }
+                if (e.key === 'Escape') setShowProductPicker(false)
+              }} />
 
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas (opcional)"
               className="w-full px-3 py-2 border rounded-lg mb-3" />

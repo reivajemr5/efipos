@@ -35,7 +35,7 @@ export const api = {
     delete: (id: number) => request(`/clients/${id}`, { method: 'DELETE' }),
   },
   suppliers: {
-    list: () => request('/suppliers'),
+    list: (q?: string) => request(`/suppliers${q ? `?q=${q}` : ''}`),
     getById: (id: number) => request(`/suppliers/${id}`),
     create: (data: any) => request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -87,6 +87,14 @@ export const api = {
     cashClose: (date?: string) => request(`/reports/cash-close${date ? `?date=${date}` : ''}`),
     saveCashClose: (declaredTotal: number, closeDate?: string) =>
       request('/reports/cash-close', { method: 'POST', body: JSON.stringify({ declaredTotal, closeDate }) }),
+  },
+  purchases: {
+    list: (params?: string) => request(`/purchases${params ? `?${params}` : ''}`),
+    getById: (id: number) => request(`/purchases/${id}`),
+    create: (data: any) => request('/purchases', { method: 'POST', body: JSON.stringify(data) }),
+    receive: (id: number, data: any) => request(`/purchases/${id}/receive`, { method: 'POST', body: JSON.stringify(data) }),
+    pay: (id: number) => request(`/purchases/${id}/pay`, { method: 'POST' }),
+    cancel: (id: number) => request(`/purchases/${id}/cancel`, { method: 'POST' }),
   },
   exchangeRate: {
     get: () => request('/exchange-rate'),

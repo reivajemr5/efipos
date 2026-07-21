@@ -12,15 +12,16 @@ interface Supplier {
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Supplier | null>(null)
   const [form, setForm] = useState({ name: '', documentType: 'J', documentNumber: '', phone: '', address: '' })
 
   async function load() {
-    setSuppliers(await api.suppliers.list())
+    setSuppliers(await api.suppliers.list(search || undefined))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [search])
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -78,6 +79,8 @@ export default function Suppliers() {
         </div>
       )}
 
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o RIF..."
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" />
       <div className="space-y-2">
         {suppliers.map((s) => (
           <div key={s.id} className="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between">

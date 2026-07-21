@@ -9,6 +9,7 @@ export async function list(req: AuthRequest, res: Response) {
     where.OR = [
       { name: { contains: String(q), mode: 'insensitive' as const } },
       { code: { contains: String(q), mode: 'insensitive' as const } },
+      { barcode: { contains: String(q) } },
     ]
   }
   if (supplier_id) {
@@ -35,14 +36,14 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { code, name, description, price, currency, ivaPercent, stock, minStock, supplierIds } = req.body
+  const { code, name, description, price, cost, barcode, currency, ivaPercent, stock, minStock, supplierIds } = req.body
   if (!code || !name || !price) {
     res.status(400).json({ error: 'Código, nombre y precio requeridos' })
     return
   }
   const product = await prisma.product.create({
     data: {
-      code, name, description, price,
+      code, name, description, price, cost: cost || 0, barcode,
       currency: currency || 'bs',
       ivaPercent: ivaPercent || 16,
       stock: stock || 0,
@@ -58,7 +59,7 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function update(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { code, name, description, price, currency, ivaPercent, stock, minStock, supplierIds, active } = req.body
+  const { code, name, description, price, cost, barcode, currency, ivaPercent, stock, minStock, supplierIds, active } = req.body
 
   if (supplierIds) {
     await prisma.productSupplier.deleteMany({ where: { productId: id } })
@@ -71,7 +72,7 @@ export async function update(req: AuthRequest, res: Response) {
 
   const product = await prisma.product.update({
     where: { id },
-    data: { code, name, description, price, currency, ivaPercent, stock, minStock, active },
+    data: { code, name, description, price, cost, barcode, currency, ivaPercent, stock, minStock, active },
     include: { suppliers: { include: { supplier: { select: { id: true, name: true } } } } },
   })
   res.json(product)

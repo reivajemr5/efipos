@@ -7,6 +7,8 @@ interface Product {
   name: string
   description: string | null
   price: number
+  cost: number | null
+  barcode: string | null
   currency: string
   ivaPercent: number
   stock: number
@@ -25,7 +27,7 @@ export default function Products() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
-  const [form, setForm] = useState({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] as number[] })
+  const [form, setForm] = useState({ code: '', name: '', description: '', barcode: '', cost: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] as number[] })
 
   async function load() {
     const [prods, sups] = await Promise.all([
@@ -49,7 +51,7 @@ export default function Products() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    const data = { ...form, price: Number(form.price), currency: form.currency, ivaPercent: Number(form.ivaPercent), stock: Number(form.stock), minStock: Number(form.minStock) }
+    const data = { ...form, price: Number(form.price), cost: form.cost ? Number(form.cost) : 0, barcode: form.barcode || null, currency: form.currency, ivaPercent: Number(form.ivaPercent), stock: Number(form.stock), minStock: Number(form.minStock) }
     if (editing) {
       await api.products.update(editing.id, data)
     } else {
@@ -57,7 +59,7 @@ export default function Products() {
     }
     setShowForm(false)
     setEditing(null)
-    setForm({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] })
+    setForm({ code: '', name: '', description: '', barcode: '', cost: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] })
     load()
   }
 
@@ -67,6 +69,8 @@ export default function Products() {
       code: p.code,
       name: p.name,
       description: p.description || '',
+      barcode: p.barcode || '',
+      cost: p.cost ? String(p.cost) : '',
       price: String(p.price),
       currency: p.currency,
       ivaPercent: String(p.ivaPercent),
@@ -87,10 +91,10 @@ export default function Products() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-800">Productos</h2>
-        <button onClick={() => { setEditing(null); setForm({ code: '', name: '', description: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] }); setShowForm(true) }}
+        <button onClick={() => { setEditing(null); setForm({ code: '', name: '', description: '', barcode: '', cost: '', price: '', currency: 'bs', ivaPercent: '16', stock: '0', minStock: '5', supplierIds: [] }); setShowForm(true) }}
           className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800">+ Nuevo</button>
       </div>
-      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre o código..."
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, código o código de barras..."
         className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" />
 
       {showForm && (
@@ -98,11 +102,13 @@ export default function Products() {
           <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">{editing ? 'Editar' : 'Nuevo'} Producto</h3>
             <form onSubmit={save} className="space-y-3">
-              <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Código" className="w-full px-3 py-2 border rounded-lg" required />
+              <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Código interno" className="w-full px-3 py-2 border rounded-lg" required />
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nombre" className="w-full px-3 py-2 border rounded-lg" required />
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción" className="w-full px-3 py-2 border rounded-lg" />
+              <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="Código de barras" className="w-full px-3 py-2 border rounded-lg" />
               <div className="flex gap-2">
-                <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} type="number" step="0.01" placeholder="Precio" className="flex-1 px-3 py-2 border rounded-lg" required />
+                <input value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} type="number" step="0.01" placeholder="Costo" className="flex-1 px-3 py-2 border rounded-lg" />
+                <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} type="number" step="0.01" placeholder="Precio venta" className="flex-1 px-3 py-2 border rounded-lg" required />
                 <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} className="px-3 py-2 border rounded-lg">
                   <option value="bs">Bs</option><option value="usd">$</option>
                 </select>

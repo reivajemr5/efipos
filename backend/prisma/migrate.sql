@@ -131,9 +131,22 @@ CREATE TABLE "cash_closes" (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TYPE "PurchaseStatus" AS ENUM ('pedido', 'recibido', 'pagada', 'anulada');
+-- 2026-07-20: Add barcode and cost to products
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS barcode TEXT UNIQUE;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS cost DECIMAL(12,2);
 
-CREATE TABLE "purchase_invoices" (
+-- 2026-07-20: Add PurchaseStatus enum and purchase tables
+DO $$ BEGIN CREATE TYPE "PurchaseStatus" AS ENUM ('pedido', 'recibido', 'pagada', 'anulada'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE TABLE IF NOT EXISTS "product_suppliers" (
+    product_id INTEGER NOT NULL REFERENCES "products"(id) ON DELETE CASCADE,
+    supplier_id INTEGER NOT NULL REFERENCES "suppliers"(id) ON DELETE CASCADE,
+    price DECIMAL(12,2),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (product_id, supplier_id)
+);
+
+CREATE TABLE IF NOT EXISTS "purchase_invoices" (
     id SERIAL PRIMARY KEY,
     number TEXT NOT NULL UNIQUE,
     supplier_id INTEGER NOT NULL REFERENCES "suppliers"(id),
@@ -152,7 +165,7 @@ CREATE TABLE "purchase_invoices" (
     cancelled_at TIMESTAMP
 );
 
-CREATE TABLE "purchase_invoice_items" (
+CREATE TABLE IF NOT EXISTS "purchase_invoice_items" (
     id SERIAL PRIMARY KEY,
     purchase_invoice_id INTEGER NOT NULL REFERENCES "purchase_invoices"(id) ON DELETE CASCADE,
     product_id INTEGER NOT NULL REFERENCES "products"(id),

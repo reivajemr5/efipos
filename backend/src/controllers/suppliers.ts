@@ -3,7 +3,16 @@ import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 
 export async function list(req: AuthRequest, res: Response) {
-  const suppliers = await prisma.supplier.findMany({ orderBy: { name: 'asc' } })
+  const { q } = req.query
+  const where = q
+    ? {
+        OR: [
+          { name: { contains: String(q), mode: 'insensitive' as const } },
+          { documentNumber: { contains: String(q) } },
+        ],
+      }
+    : {}
+  const suppliers = await prisma.supplier.findMany({ where, orderBy: { name: 'asc' } })
   res.json(suppliers)
 }
 

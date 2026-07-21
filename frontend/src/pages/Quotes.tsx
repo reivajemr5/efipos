@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 
 interface Product {
@@ -47,6 +47,10 @@ export default function Quotes() {
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [newClientForm, setNewClientForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [clientPickIdx, setClientPickIdx] = useState(0)
+  const [productPickIdx, setProductPickIdx] = useState(0)
+  const clientSearchRef = useRef<HTMLInputElement>(null)
+  const productSearchRef = useRef<HTMLInputElement>(null)
 
   async function load() {
     const [q, c, p] = await Promise.all([api.quotes.list(), api.clients.list(), api.products.list()])
@@ -150,13 +154,31 @@ export default function Quotes() {
               </div>
             ) : (
               <div className="relative mb-2">
-                <input value={searchClient} onChange={(e) => setSearchClient(e.target.value)} placeholder="Buscar cliente..."
-                  className="w-full px-3 py-2 border rounded-lg" onFocus={() => setShowClientPicker(true)} />
+                <input ref={clientSearchRef} value={searchClient} onChange={(e) => { setSearchClient(e.target.value); setClientPickIdx(0) }}
+                  placeholder="Buscar cliente (nombre o cédula)..."
+                  className="w-full px-3 py-2 border rounded-lg"
+                  onFocus={() => { setShowClientPicker(true); setClientPickIdx(0) }}
+                  onKeyDown={(e) => {
+                    const filtered = clients.filter((c) =>
+                      c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
+                      c.documentNumber.includes(searchClient))
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setClientPickIdx((i) => Math.min(i + 1, filtered.length - 1)) }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); setClientPickIdx((i) => Math.max(i - 1, 0)) }
+                    if (e.key === 'Enter' && filtered[clientPickIdx]) {
+                      setSelectedClient(filtered[clientPickIdx]); setShowClientPicker(false); setSearchClient('')
+                    }
+                    if (e.key === 'Escape') setShowClientPicker(false)
+                  }} />
                 {showClientPicker && (
                   <div className="absolute top-full left-0 right-0 bg-white border rounded-lg mt-1 max-h-40 overflow-y-auto z-10 shadow">
-                    {clients.filter((c) => c.name.toLowerCase().includes(searchClient.toLowerCase())).map((c) => (
+                    {clients.filter((c) =>
+                      c.name.toLowerCase().includes(searchClient.toLowerCase()) ||
+                      c.documentNumber.includes(searchClient)
+                    ).map((c, i) => (
                       <button key={c.id} onClick={() => { setSelectedClient(c); setShowClientPicker(false); setSearchClient('') }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm">{c.name} - {c.documentType}{c.documentNumber}</button>
+                        className={`w-full text-left px-3 py-2 text-sm ${i === clientPickIdx ? 'bg-blue-100' : 'hover:bg-gray-100'}`}>
+                        {c.name} - {c.documentType}{c.documentNumber}
+                      </button>
                     ))}
                     <button onClick={() => { setShowNewClientForm(true); setShowClientPicker(false) }}
                       className="w-full text-left px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium border-t">+ Nuevo cliente</button>
@@ -188,18 +210,33 @@ export default function Quotes() {
 
             {showProductPicker && (
               <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
-                {products.filter((p) => p.name.toLowerCase().includes(searchProduct.toLowerCase())).map((p) => (
-                  <button key={p.id} onClick={() => { addItem(p.id) }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm flex justify-between">
+                {products.filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase())
+                ).map((p, i) => (
+                  <button key={p.id} onClick={() => { addItem(p.id); setSearchProduct(''); setShowProductPicker(false) }}
+                    className={`w-full text-left px-3 py-2 text-sm flex justify-between ${i === productPickIdx ? 'bg-blue-100' : 'hover:bg-gray-100'}`}>
                     <span>{p.name}</span>
                     <span className="text-gray-500">${Number(p.price).toFixed(2)} (stock: {p.stock})</span>
                   </button>
                 ))}
               </div>
             )}
-            <input value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Buscar y agregar productos..."
-              className="w-full px-3 py-2 border rounded-lg mb-3" onFocus={() => setShowProductPicker(true)}
-              onBlur={() => setTimeout(() => setShowProductPicker(false), 200)} />
+            <input ref={productSearchRef} value={searchProduct} onChange={(e) => { setSearchProduct(e.target.value); setProductPickIdx(0) }}
+              placeholder="Buscar por nombre o código..."
+              className="w-full px-3 py-2 border rounded-lg mb-3"
+              onFocus={() => { setShowProductPicker(true); setProductPickIdx(0) }}
+              onKeyDown={(e) => {
+                const filtered = products.filter((p) =>
+                  p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
+                  p.code.toLowerCase().includes(searchProduct.toLowerCase()))
+                if (e.key === 'ArrowDown') { e.preventDefault(); setProductPickIdx((i) => Math.min(i + 1, filtered.length - 1)) }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setProductPickIdx((i) => Math.max(i - 1, 0)) }
+                if (e.key === 'Enter' && filtered[productPickIdx]) {
+                  addItem(filtered[productPickIdx].id); setSearchProduct(''); setShowProductPicker(false)
+                }
+                if (e.key === 'Escape') setShowProductPicker(false)
+              }} />
 
             <div className="border-t pt-3 text-right space-y-1">
               <p className="text-sm text-gray-600">Subtotal: <span className="font-mono">${calcSubtotal().toFixed(2)}</span></p>
