@@ -101,10 +101,26 @@ export async function create(req: AuthRequest, res: Response) {
     },
   })
 
+  const stockMap = new Map(products.map((p) => [p.id, p.stock]))
   for (const item of invoiceItems) {
+    const stockBefore = stockMap.get(item.productId) ?? 0
+    const stockAfter = stockBefore - item.quantity
+    stockMap.set(item.productId, stockAfter)
     await prisma.product.update({
       where: { id: item.productId },
-      data: { stock: { decrement: item.quantity } },
+      data: { stock: stockAfter },
+    })
+    await prisma.stockMovement.create({
+      data: {
+        productId: item.productId,
+        type: 'sale',
+        quantity: -item.quantity,
+        stockBefore,
+        stockAfter,
+        reference: number,
+        notes: `Venta #${number}`,
+        userId: req.user!.id,
+      },
     })
   }
 

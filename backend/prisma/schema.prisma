@@ -49,6 +49,7 @@ model User {
   quotes           Quote[]
   cashCloses       CashClose[]
   purchaseInvoices PurchaseInvoice[]
+  stockMovements   StockMovement[]
 
   @@map("users")
 }
@@ -125,6 +126,7 @@ model Product {
   invoiceItems          InvoiceItem[]
   quoteItems            QuoteItem[]
   purchaseInvoiceItems  PurchaseInvoiceItem[]
+  stockMovements        StockMovement[]
 
   @@map("products")
 }
@@ -261,6 +263,23 @@ model PurchaseInvoiceItem {
   product           Product          @relation(fields: [productId], references: [id])
 
   @@map("purchase_invoice_items")
+}
+
+model StockMovement {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  type      String
+  quantity  Int
+  stockBefore Int   @map("stock_before")
+  stockAfter  Int   @map("stock_after")
+  reference  String?
+  notes      String?
+  userId     Int?    @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  product    Product  @relation(fields: [productId], references: [id])
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@map("stock_movements")
 }
 
 model CashClose {

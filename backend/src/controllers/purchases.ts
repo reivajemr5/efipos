@@ -162,9 +162,23 @@ export async function receive(req: AuthRequest, res: Response) {
         })
       }
 
+      const stockBefore = product.stock
+      const stockAfter = stockBefore + ri.quantity
       await prisma.product.update({
         where: { id: ri.productId },
-        data: { stock: { increment: ri.quantity } },
+        data: { stock: stockAfter },
+      })
+      await prisma.stockMovement.create({
+        data: {
+          productId: ri.productId,
+          type: 'purchase',
+          quantity: ri.quantity,
+          stockBefore,
+          stockAfter,
+          reference: purchase.number,
+          notes: `Recepción de compra #${purchase.number}`,
+          userId: req.user!.id,
+        },
       })
     }
 
@@ -184,9 +198,27 @@ export async function receive(req: AuthRequest, res: Response) {
     })
 
     for (const item of purchase.items) {
+      const stockBefore = item.productId // We need stock before update
+      // Re-fetch the product to get current stock
+      const product = await prisma.product.findUnique({ where: { id: item.productId } })
+      if (!product) continue
+      const stockBeforeVal = product.stock
+      const stockAfter = stockBeforeVal + item.quantity
       await prisma.product.update({
         where: { id: item.productId },
-        data: { stock: { increment: item.quantity } },
+        data: { stock: stockAfter },
+      })
+      await prisma.stockMovement.create({
+        data: {
+          productId: item.productId,
+          type: 'purchase',
+          quantity: item.quantity,
+          stockBefore: stockBeforeVal,
+          stockAfter,
+          reference: purchase.number,
+          notes: `Recepción de compra #${purchase.number}`,
+          userId: req.user!.id,
+        },
       })
     }
   }
