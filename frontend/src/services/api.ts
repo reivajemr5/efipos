@@ -76,6 +76,11 @@ export const api = {
     update: (id: number, data: any) => request(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/categories/${id}`, { method: 'DELETE' }),
   },
+  inventory: {
+    movements: (params?: string) => request(`/inventory/movements${params ? `?${params}` : ''}`),
+    adjust: (data: any) => request('/inventory/adjust', { method: 'POST', body: JSON.stringify(data) }),
+    history: (productId: number) => request(`/inventory/history/${productId}`),
+  },
   accounts: {
     receivable: () => request('/accounts/receivable'),
     payable: () => request('/accounts/payable'),

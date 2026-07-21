@@ -14,6 +14,7 @@ import Settings from './pages/Settings'
 import AccountsReceivable from './pages/AccountsReceivable'
 import AccountsPayable from './pages/AccountsPayable'
 import Categories from './pages/Categories'
+import Inventory from './pages/Inventory'
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
           <Route path="clients" element={<Clients />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="categories" element={<Categories />} />
+          <Route path="inventory" element={<Inventory />} />
           <Route path="accounts/receivable" element={<AccountsReceivable />} />
           <Route path="accounts/payable" element={<AccountsPayable />} />
           <Route path="reports" element={<Reports />} />
