@@ -340,6 +340,7 @@ export default function Purchases() {
               placeholder="Buscar por nombre o código..."
               onCreateNew={() => setShowNewProductForm(true)}
               createNewLabel="+ Nuevo producto"
+              onAdvancedSearch={() => setShowProductTable(true)}
               className="mb-3"
             />
 
@@ -441,8 +442,12 @@ export default function Purchases() {
         columns={[
           { key: 'code', label: 'Código', render: (p: any) => p.code },
           { key: 'name', label: 'Nombre', render: (p: any) => p.name },
-          { key: 'price', label: 'Precio', render: (p: any) => `$${Number(p.price).toFixed(2)}` },
-          { key: 'stock', label: 'Stock', render: (p: any) => p.stock },
+          { key: 'price', label: 'Precio', render: (p: any) => `${p.currency === 'usd' ? '$' : 'Bs.'}${Number(p.price).toFixed(2)}` },
+          { key: 'stock', label: 'Stock', render: (p: any) => p.stock <= 0 ? <span className="text-red-500">{p.stock}</span> : p.stock },
+        ]}
+        filters={[
+          { key: 'currency', label: 'Moneda', options: [{ value: 'usd', label: '$ USD' }, { value: 'bs', label: 'Bs' }], filter: (p: any, v: string) => p.currency === v },
+          { key: 'stock', label: 'Stock', options: [{ value: 'yes', label: 'Con stock' }, { value: 'no', label: 'Sin stock' }], filter: (p: any, v: string) => v === 'yes' ? p.stock > 0 : p.stock <= 0 },
         ]}
         filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
         onSelect={(p: any) => { addItem(p.id); setShowProductTable(false) }}

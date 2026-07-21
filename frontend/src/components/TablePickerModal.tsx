@@ -7,6 +7,13 @@ interface Column<T> {
   className?: string
 }
 
+interface FilterDef<T> {
+  key: string
+  label: string
+  options: { value: string; label: string }[]
+  filter: (item: T, value: string) => boolean
+}
+
 interface TablePickerModalProps<T> {
   open: boolean
   onClose: () => void
@@ -15,22 +22,31 @@ interface TablePickerModalProps<T> {
   columns: Column<T>[]
   onSelect: (item: T) => void
   filterFn?: (item: T, query: string) => boolean
+  filters?: FilterDef<T>[]
   searchPlaceholder?: string
   emptyText?: string
 }
 
 export default function TablePickerModal<T>({
   open, onClose, title, items, columns, onSelect,
-  filterFn,
+  filterFn, filters,
   searchPlaceholder = 'Buscar...',
   emptyText = 'Sin resultados',
 }: TablePickerModalProps<T>) {
   const [query, setQuery] = useState('')
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({})
 
   const filtered = useMemo(() => {
-    if (!query || !filterFn) return items
-    return items.filter((item) => filterFn(item, query))
-  }, [items, query, filterFn])
+    let result = items
+    if (query && filterFn) result = result.filter((item) => filterFn(item, query))
+    if (filters) {
+      for (const f of filters) {
+        const val = filterValues[f.key]
+        if (val) result = result.filter((item) => f.filter(item, val))
+      }
+    }
+    return result
+  }, [items, query, filterFn, filters, filterValues])
 
   if (!open) return null
 
@@ -41,6 +57,25 @@ export default function TablePickerModal<T>({
           <h3 className="text-lg font-bold">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
+
+        {filters && filters.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {filters.map((f) => (
+              <select key={f.key} value={filterValues[f.key] || ''}
+                onChange={(e) => setFilterValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-xl text-sm">
+                <option value="">{f.label}</option>
+                {f.options.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ))}
+            {Object.values(filterValues).some(Boolean) && (
+              <button onClick={() => setFilterValues({})}
+                className="text-xs text-blue-600 hover:text-blue-800 underline">Limpiar filtros</button>
+            )}
+          </div>
+        )}
 
         <input
           value={query}
