@@ -8,7 +8,7 @@ import Suppliers from './pages/Suppliers'
 import Products from './pages/Products'
 import Purchases from './pages/Purchases'
 import Quotes from './pages/Quotes'
-import Invoices from './pages/Invoices'
+import POSPage from './pages/POSPage'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import AccountsReceivable from './pages/AccountsReceivable'
@@ -31,7 +31,7 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="invoices" element={<Invoices />} />
+          <Route path="invoices" element={<POSPage />} />
           <Route path="quotes" element={<Quotes />} />
           <Route path="products" element={<Products />} />
           <Route path="purchases" element={<Purchases />} />

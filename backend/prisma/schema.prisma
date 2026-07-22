@@ -55,6 +55,16 @@ model User {
   @@map("users")
 }
 
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  products  Product[]
+
+  @@map("categories")
+}
+
 model Client {
   id             Int       @id @default(autoincrement())
   name           String
@@ -81,16 +91,6 @@ model Supplier {
   purchaseInvoices PurchaseInvoice[]
 
   @@map("suppliers")
-}
-
-model Category {
-  id        Int       @id @default(autoincrement())
-  name      String
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @map("created_at")
-  products  Product[]
-
-  @@map("categories")
 }
 
 model Brand {
@@ -129,11 +129,12 @@ model Product {
   stock       Int       @default(0)
   minStock    Int       @default(5) @map("min_stock")
   active      Boolean   @default(true)
+  imageUrl    String?   @map("image_url")
   categoryId  Int?      @map("category_id")
+  category    Category? @relation(fields: [categoryId], references: [id])
   variations  Json?     @default("[]")
   createdAt   DateTime  @default(now()) @map("created_at")
-  category    Category?                @relation(fields: [categoryId], references: [id])
-  brand       Brand?                   @relation(fields: [brandId], references: [id])
+  brand       Brand?    @relation(fields: [brandId], references: [id])
   barcodes    ProductBarcode[]
   suppliers   ProductSupplier[]
   invoiceItems          InvoiceItem[]

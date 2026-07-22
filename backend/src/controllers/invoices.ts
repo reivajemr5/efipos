@@ -40,8 +40,8 @@ export async function getById(req: AuthRequest, res: Response) {
 export async function create(req: AuthRequest, res: Response) {
   const { clientId, quoteId, paymentMethod, currency, exchangeRate, items } = req.body
 
-  if (!clientId || !items?.length) {
-    res.status(400).json({ error: 'Cliente y productos requeridos' })
+  if (!items?.length) {
+    res.status(400).json({ error: 'Productos requeridos' })
     return
   }
 
@@ -80,10 +80,19 @@ export async function create(req: AuthRequest, res: Response) {
   const count = await prisma.invoice.count()
   const number = `FACT-${String(count + 1).padStart(4, '0')}`
 
+  let finalClientId = clientId
+  if (!finalClientId) {
+    let walkIn = await prisma.client.findFirst({ where: { documentNumber: '00000000' } })
+    if (!walkIn) {
+      walkIn = await prisma.client.create({ data: { name: 'Consumidor Final', documentType: 'V', documentNumber: '00000000' } })
+    }
+    finalClientId = walkIn.id
+  }
+
   const invoice = await prisma.invoice.create({
     data: {
       number,
-      clientId,
+      clientId: finalClientId,
       userId: req.user!.id,
       quoteId: quoteId || null,
       currency: invCurrency,

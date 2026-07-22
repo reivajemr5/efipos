@@ -6,6 +6,7 @@ import authRoutes from './routes/auth'
 import clientRoutes from './routes/clients'
 import supplierRoutes from './routes/suppliers'
 import productRoutes from './routes/products'
+import categoryRoutes from './routes/categories'
 import quoteRoutes from './routes/quotes'
 import invoiceRoutes from './routes/invoices'
 import purchaseRoutes from './routes/purchases'
@@ -39,6 +40,7 @@ app.use('/api/v1/products', productRoutes)
 app.use('/api/v1/quotes', quoteRoutes)
 app.use('/api/v1/invoices', invoiceRoutes)
 app.use('/api/v1/reports', reportRoutes)
+app.use('/api/v1/categories', categoryRoutes)
 app.use('/api/v1/exchange-rate', exchangeRateRoutes)
 app.use('/api/v1/purchases', purchaseRoutes)
 app.use('/api/v1/accounts', accountRoutes)
