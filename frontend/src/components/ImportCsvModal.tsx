@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import type { ParseResult } from 'papaparse'
 import Papa from 'papaparse'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
@@ -55,13 +56,12 @@ const TIPO_OPTIONS = ['simple', 'compuesto', 'servicio']
 const MONEDA_OPTIONS = ['usd', 'bs']
 
 function parseCSV(text: string): Promise<CsvRow[]> {
-  return new Promise((resolve, reject) => {
+  return new Promise<CsvRow[]>((resolve, reject) => {
     Papa.parse<CsvRow>(text, {
       header: true,
       skipEmptyLines: true,
-      bom: true,
-      transformHeader: (h) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'),
-      complete: (results) => resolve(results.data.filter(r => r.nombre?.trim())),
+      transformHeader: (h: string) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'),
+      complete: (results: ParseResult<CsvRow>) => resolve(results.data.filter((r: CsvRow) => r.nombre?.trim())),
       error: reject,
     })
   })
@@ -74,7 +74,6 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
   const [brands, setBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
-  const [columnMap, setColumnMap] = useState<Record<string, string>>({})
   const inputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore((s) => s.addToast)
 
