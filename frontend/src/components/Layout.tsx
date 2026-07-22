@@ -66,11 +66,13 @@ export default function Layout() {
     return () => clearInterval(interval)
   }, [])
 
+  const isPOS = location.pathname === '/invoices'
+
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className={`min-h-screen bg-gray-100 flex flex-col ${isPOS ? 'h-screen overflow-hidden' : ''}`}>
       <OfflineIndicator />
-      <div className="flex flex-1">
-        <aside className="w-64 bg-white shadow-md hidden md:flex flex-col">
+      <div className={`flex flex-1 ${isPOS ? 'h-full' : ''}`}>
+        <aside className={`w-64 bg-white shadow-md flex-col ${isPOS ? 'hidden' : 'hidden md:flex'}`}>
           <div className="p-4 border-b">
             <h1 className="text-xl font-bold text-blue-900">Efi- Pos</h1>
             <div className="flex items-center justify-between mt-1">
@@ -115,12 +117,13 @@ export default function Layout() {
             </button>
           </div>
         </aside>
-        <main className="flex-1 p-4 md:p-6 overflow-auto pb-20 md:pb-6">
+        <main className={`flex-1 overflow-auto ${isPOS ? 'p-0' : 'p-4 md:p-6 pb-20 md:pb-6'}`}>
           <Outlet />
         </main>
       </div>
 
       {/* Mobile bottom nav */}
+      {!isPOS && (
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 flex safe-area-bottom">
         {mobileNavItems.map((item) => {
           const isMore = item.to === '/more'
@@ -139,6 +142,7 @@ export default function Layout() {
           )
         })}
       </nav>
+      )}
 
       {/* Mobile menu drawer */}
       {mobileMenuOpen && (

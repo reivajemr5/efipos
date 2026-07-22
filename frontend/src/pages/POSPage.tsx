@@ -262,11 +262,15 @@ export default function POSPage() {
     )
   }
 
+  const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
+  const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0) + cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
+  const [showCartMobile, setShowCartMobile] = useState(false)
+
   return (
     <div className="flex flex-col h-full">
       <POSHeader mode={mode} onModeChange={setMode} search={search} onSearchChange={setSearch} onToggleHistory={() => setShowingHistory(true)} showingHistory={false} />
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-2/5 flex flex-col">
+        <div className="hidden md:flex w-2/5 flex-col">
           <TicketPanel
             items={cart}
             currency="usd"
@@ -279,7 +283,7 @@ export default function POSPage() {
             onNotes={() => setShowNotes(true)}
           />
         </div>
-        <div className="w-3/5 flex flex-col">
+        <div className={`flex-1 flex flex-col ${showCartMobile ? 'hidden md:flex' : ''}`}>
           <ProductGrid
             products={filteredProducts}
             categories={categories}
@@ -289,6 +293,42 @@ export default function POSPage() {
           />
         </div>
       </div>
+
+      {cartItemCount > 0 && (
+        <button
+          onClick={() => setShowCartMobile(true)}
+          className="md:hidden fixed bottom-4 right-4 z-40 bg-blue-900 text-white rounded-full shadow-lg flex items-center gap-2 px-4 py-3 touch-manipulation"
+        >
+          <span className="bg-white text-blue-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{cartItemCount}</span>
+          <span className="font-bold">${cartTotal.toFixed(2)}</span>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+        </button>
+      )}
+
+      {showCartMobile && (
+        <div className="fixed inset-0 z-50 md:hidden flex flex-col" onClick={() => setShowCartMobile(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative mt-auto bg-white rounded-t-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+              <h2 className="font-semibold text-gray-800">Ticket de Venta</h2>
+              <button onClick={() => setShowCartMobile(false)} className="text-gray-400 p-1">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <TicketPanel
+              items={cart}
+              currency="usd"
+              onUpdateQuantity={handleUpdateQuantity}
+              onRemove={handleRemove}
+              onCheckout={handleCheckout}
+              onCancel={() => { handleCancel(); setShowCartMobile(false) }}
+              onSaveDraft={handleCheckout}
+              onDiscount={() => setShowDiscount(true)}
+              onNotes={() => setShowNotes(true)}
+            />
+          </div>
+        </div>
+      )}
 
       {checkoutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
