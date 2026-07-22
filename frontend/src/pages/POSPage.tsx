@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/api'
 import { db } from '../services/db'
-import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import POSHeader from '../components/pos/POSHeader'
 import TicketPanel from '../components/pos/TicketPanel'
 import type { CartItem } from '../components/pos/TicketPanel'
@@ -39,7 +38,6 @@ interface Invoice {
 }
 
 export default function POSPage() {
-  const isOnline = useOnlineStatus()
   const [mode, setMode] = useState<'quick' | 'walkin'>('quick')
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
@@ -130,9 +128,6 @@ export default function POSPage() {
 
   async function confirmCheckout() {
     setLoading(true)
-    const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-    const ivaTotal = cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
-    const total = Math.max(0, subtotal + ivaTotal - discount)
 
     try {
       const invoice = await api.invoices.create({

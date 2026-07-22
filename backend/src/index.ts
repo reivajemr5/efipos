@@ -14,7 +14,6 @@ import reportRoutes from './routes/reports'
 import exchangeRateRoutes from './routes/exchangeRate'
 import accountRoutes from './routes/accounts'
 import searchRoutes from './routes/search'
-import categoryRoutes from './routes/categories'
 import inventoryRoutes from './routes/inventory'
 import paymentRoutes from './routes/payments'
 import attributeTemplateRoutes from './routes/attributeTemplates'
@@ -45,7 +44,6 @@ app.use('/api/v1/exchange-rate', exchangeRateRoutes)
 app.use('/api/v1/purchases', purchaseRoutes)
 app.use('/api/v1/accounts', accountRoutes)
 app.use('/api/v1/search', searchRoutes)
-app.use('/api/v1/categories', categoryRoutes)
 app.use('/api/v1/inventory', inventoryRoutes)
 app.use('/api/v1/payments', paymentRoutes)
 app.use('/api/v1/attribute-templates', attributeTemplateRoutes)

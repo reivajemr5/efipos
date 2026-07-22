@@ -8,9 +8,11 @@ interface Category {
 
 interface ProductGridProduct {
   id: number
+  code: string
   name: string
   price: number
   currency: string
+  ivaPercent: number
   imageUrl?: string | null
   stock: number
   category?: { id: number; name: string } | null
