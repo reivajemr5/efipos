@@ -10,22 +10,19 @@ export default function Payments() {
   const [payments, setPayments] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<'invoices' | 'purchases'>('invoices')
   const [showForm, setShowForm] = useState(false)
-  const [totals, setTotals] = useState<any>(null)
   const [form, setForm] = useState({ entityId: 0, amount: '', method: 'efectivo', reference: '', notes: '' })
   const toast = useToastStore((s: any) => s.addToast)
 
   useEffect(() => { load() }, [])
   async function load() {
-    const [p, invs, pchs, t] = await Promise.all([
+    const [p, invs, pchs] = await Promise.all([
       api.payments.list(),
       api.invoices.list('status=activa'),
       api.purchases.list(),
-      api.payments.totals('group=entity'),
     ])
     setPayments(p)
     setInvoices(invs)
     setPurchases(pchs)
-    setTotals(t)
   }
 
   async function handleSubmit(e: React.FormEvent) {
