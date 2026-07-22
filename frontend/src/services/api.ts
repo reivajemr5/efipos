@@ -48,6 +48,7 @@ export const api = {
     update: (id: number, data: any) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/products/${id}`, { method: 'DELETE' }),
     import: (data: { products: any[] }) => request('/products/import', { method: 'POST', body: JSON.stringify(data) }),
+
     importCsv: (file: File) => {
       const formData = new FormData()
       formData.append('file', file)
