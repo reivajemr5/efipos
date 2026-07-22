@@ -221,10 +221,10 @@ export default function Purchases() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-800">Compras</h2>
-        <button onClick={() => setShowForm(true)} className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800">+ Nueva</button>
+    <div className="page-container">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-800">Compras</h1>
+        <button onClick={() => setShowForm(true)} className="btn-primary">+ Nueva</button>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -237,8 +237,8 @@ export default function Purchases() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
-          <div className="bg-white p-6 rounded-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+          <div className="modal-card p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">Nueva Compra</h3>
 
             <label className="block text-sm font-medium mb-1">Proveedor</label>
@@ -526,7 +526,7 @@ export default function Purchases() {
 
       <div className="space-y-2">
         {purchases.map((p) => (
-          <div key={p.id} onClick={() => setShowDetail(p)} className="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
+          <div key={p.id} onClick={() => setShowDetail(p)} className="card p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
             <div>
               <p className="font-semibold text-gray-800">{p.number} {statusBadge(p.status)}</p>
               <p className="text-sm text-gray-500">{p.supplier.name} · {new Date(p.createdAt).toLocaleDateString()}</p>

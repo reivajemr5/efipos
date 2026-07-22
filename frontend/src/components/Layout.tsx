@@ -7,29 +7,24 @@ import OfflineIndicator from './OfflineIndicator'
 import GlobalSearch from './GlobalSearch'
 import ToastContainer from './ToastContainer'
 
-const sidebarItems = [
+const navItems = [
   { to: '/', label: 'Dashboard', icon: '🏠' },
-  { to: '/invoices', label: 'Facturación', icon: '🧾' },
-  { to: '/quotes', label: 'Cotizaciones', icon: '📋' },
-  { to: '/purchases', label: 'Compras', icon: '📥' },
+  { to: '/invoices', label: 'Ventas', icon: '🧾' },
   { to: '/products', label: 'Productos', icon: '📦' },
-  { to: '/inventory', label: 'Inventario', icon: '📊' },
-  { to: '/categories', label: 'Categorías', icon: '🏷️' },
   { to: '/clients', label: 'Clientes', icon: '👥' },
+  { to: '/purchases', label: 'Compras', icon: '📥' },
+  { to: '/quotes', label: 'Cotizaciones', icon: '📋' },
+  { to: '/reports', label: 'Reportes', icon: '📊' },
+]
+
+const moreItems = [
   { to: '/suppliers', label: 'Proveedores', icon: '🏭' },
+  { to: '/categories', label: 'Categorías', icon: '🏷️' },
+  { to: '/inventory', label: 'Inventario', icon: '📊' },
   { to: '/accounts/receivable', label: 'CxC', icon: '💰' },
   { to: '/accounts/payable', label: 'CxP', icon: '💳' },
   { to: '/payments', label: 'Pagos', icon: '💵' },
-  { to: '/reports', label: 'Reportes', icon: '📊' },
   { to: '/settings', label: 'Config.', icon: '⚙️' },
-]
-
-const mobileNavItems = [
-  { to: '/', label: 'Inicio', icon: '🏠' },
-  { to: '/invoices', label: 'Ventas', icon: '🧾' },
-  { to: '/products', label: 'Prod.', icon: '📦' },
-  { to: '/clients', label: 'Clientes', icon: '👥' },
-  { to: '/more', label: 'Más', icon: '☰' },
 ]
 
 export default function Layout() {
@@ -38,7 +33,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
   const [searchOpen, setSearchOpen] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -46,7 +41,7 @@ export default function Layout() {
         e.preventDefault()
         setSearchOpen((o) => !o)
       }
-      if (e.key === 'Escape') setSearchOpen(false)
+      if (e.key === 'Escape') { setSearchOpen(false); setDrawerOpen(false) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -69,100 +64,122 @@ export default function Layout() {
   const isPOS = location.pathname === '/invoices'
 
   return (
-    <div className={`min-h-screen bg-gray-100 flex flex-col ${isPOS ? 'h-screen overflow-hidden' : ''}`}>
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       <OfflineIndicator />
-      <div className={`flex flex-1 ${isPOS ? 'h-full' : ''}`}>
-        <aside className={`w-64 bg-white shadow-md flex-col ${isPOS ? 'hidden' : 'hidden md:flex'}`}>
-          <div className="p-4 border-b">
-            <h1 className="text-xl font-bold text-blue-900">Efi- Pos</h1>
-            <div className="flex items-center justify-between mt-1">
-              {user && (
-                <p className="text-sm text-gray-500">
-                  {user.name} · {user.role}
-                </p>
-              )}
-              <button onClick={() => setSearchOpen(true)}
-                className="text-xs text-gray-400 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-lg transition-colors flex items-center gap-1">
-                🔍 <kbd className="font-mono text-gray-500">Ctrl+K</kbd>
-              </button>
-            </div>
-          </div>
-          <nav className="flex-1 p-2">
-            {sidebarItems.map((item) => (
+
+      {/* Top header bar */}
+      <header className="bg-blue-900 text-white shrink-0">
+        <div className="flex items-center h-14 px-3 gap-2">
+          <button onClick={() => setDrawerOpen(true)} className="p-2 hover:bg-blue-800 rounded-lg touch-manipulation shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
+
+          <Link to="/" className="text-lg font-bold tracking-tight shrink-0">Efi-Pos</Link>
+
+          <nav className="hidden md:flex items-center gap-0.5 ml-4 overflow-x-auto scrollbar-hide">
+            {navItems.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-1 transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors whitespace-nowrap ${
                   location.pathname === item.to
-                    ? 'bg-blue-900 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'bg-white/20 text-white font-medium'
+                    : 'text-blue-100 hover:bg-blue-800 hover:text-white'
                 }`}
               >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+                <span className="text-base">{item.icon}</span>
+                <span className="hidden lg:inline">{item.label}</span>
               </Link>
             ))}
           </nav>
-          <div className="p-4 border-t">
-            <div className="flex items-center gap-2 mb-2 text-xs text-gray-400">
-              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-amber-500'}`} />
-              {isOnline ? 'En línea' : 'Offline'}
+
+          <div className="flex-1" />
+
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="p-2 hover:bg-blue-800 rounded-lg touch-manipulation text-blue-100 hover:text-white"
+            title="Buscar (Ctrl+K)"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </button>
+
+          {user && (
+            <div className="hidden sm:flex items-center gap-2 ml-1">
+              <span className="text-xs text-blue-200">{user.name}</span>
+              <button onClick={logout} className="p-1.5 hover:bg-blue-800 rounded-lg text-blue-100 hover:text-white touch-manipulation" title="Cerrar sesión">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              </button>
             </div>
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors w-full"
+          )}
+        </div>
+
+        {/* Mobile nav bar */}
+        <nav className="md:hidden flex items-center gap-1 px-2 pb-2 overflow-x-auto scrollbar-hide">
+          {navItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                location.pathname === item.to
+                  ? 'bg-white/20 text-white font-medium'
+                  : 'text-blue-100 hover:bg-blue-800'
+              }`}
             >
-              <span>🚪</span>
-              <span>Cerrar Sesión</span>
-            </button>
-          </div>
-        </aside>
-        <main className={`flex-1 overflow-auto ${isPOS ? 'p-0' : 'p-4 md:p-6 pb-20 md:pb-6'}`}>
-          <Outlet />
-        </main>
-      </div>
-
-      {/* Mobile bottom nav */}
-      {!isPOS && (
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 flex safe-area-bottom">
-        {mobileNavItems.map((item) => {
-          const isMore = item.to === '/more'
-          return (
-            <button key={item.label}
-              onClick={() => {
-                if (isMore) setMobileMenuOpen(true)
-                else navigate(item.to)
-              }}
-              className={`flex-1 flex flex-col items-center py-2 text-xs transition-colors ${
-                !isMore && location.pathname === item.to ? 'text-blue-900 font-semibold' : 'text-gray-500'
-              }`}>
-              <span className="text-lg">{item.icon}</span>
+              <span>{item.icon}</span>
               <span>{item.label}</span>
-            </button>
-          )
-        })}
-      </nav>
-      )}
+            </Link>
+          ))}
+        </nav>
+      </header>
 
-      {/* Mobile menu drawer */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
-          <div className="fixed inset-0 bg-black/40" />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 pb-8 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Navegación</p>
-            <div className="grid grid-cols-3 gap-3">
-              {sidebarItems.filter((i) => !mobileNavItems.some((m) => m.to === i.to) && i.to !== '/').map((item) => (
-                <button key={item.to} onClick={() => { navigate(item.to); setMobileMenuOpen(false) }}
-                  className="flex flex-col items-center gap-1 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <span className="text-2xl">{item.icon}</span>
-                  <span className="text-xs text-gray-600">{item.label}</span>
-                </button>
+      {/* Navigation drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50" onClick={() => setDrawerOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute top-0 left-0 bottom-0 w-72 bg-white shadow-2xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-800">Efi-Pos</h2>
+              <button onClick={() => setDrawerOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-3 space-y-0.5">
+              {[...navItems, ...moreItems].map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setDrawerOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
+                    location.pathname === item.to
+                      ? 'bg-blue-50 text-blue-900 font-semibold'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-xl">{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
               ))}
+            </div>
+            <div className="border-t border-gray-100 p-4">
+              <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-amber-500'}`} />
+                {isOnline ? 'En línea' : 'Offline'}
+              </div>
+              <button onClick={logout} className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors text-sm w-full">
+                <span>🚪</span>
+                <span>Cerrar Sesión</span>
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Main content */}
+      <main className={`flex-1 overflow-auto ${isPOS ? '' : 'p-4 md:p-6'}`}>
+        <div className={isPOS ? '' : 'max-w-7xl mx-auto'}>
+          <Outlet />
+        </div>
+      </main>
 
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
       <ToastContainer />

@@ -50,21 +50,19 @@ export default function Products() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-container">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">Productos</h2>
-        <button onClick={openNew}
-          className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors text-sm">+ Nuevo</button>
+        <h1 className="text-2xl font-bold text-gray-800">Productos</h1>
+        <button onClick={openNew} className="btn-primary">+ Nuevo</button>
       </div>
 
       <div className="flex gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1 max-w-md">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, código o código de barras..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            className="input pl-9" />
         </div>
-        <button onClick={() => setScannerOpen(true)}
-          className="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-3 rounded-xl transition-colors text-sm text-gray-600 flex items-center gap-1">📷 Escanear</button>
+        <button onClick={() => setScannerOpen(true)} className="btn-secondary">📷 Escanear</button>
       </div>
 
       <ProductFormModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }}
@@ -79,7 +77,7 @@ export default function Products() {
           const components = isComposite && Array.isArray(p.variations) ? p.variations as any[] : []
           const hasVariations = !isComposite && Array.isArray(p.variations) && p.variations.length > 0
           return (
-            <div key={p.id} className={`bg-white rounded-2xl border ${lowStock ? 'border-amber-200' : 'border-gray-100'} shadow-sm hover:shadow-md transition-shadow`}>
+            <div key={p.id} className={`card ${lowStock ? 'border-amber-200' : ''} hover:shadow-md transition-shadow`}>
               <div className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">

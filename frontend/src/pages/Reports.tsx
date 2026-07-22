@@ -1,158 +1,140 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { api } from '../services/api'
 
 export default function Reports() {
-  const today = new Date().toISOString().split('T')[0]
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
-
-  const [dateFrom, setDateFrom] = useState(weekAgo)
-  const [dateTo, setDateTo] = useState(today)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [sales, setSales] = useState<any>(null)
   const [topProducts, setTopProducts] = useState<any[]>([])
   const [cashClose, setCashClose] = useState<any>(null)
   const [declaredAmount, setDeclaredAmount] = useState('')
   const [saving, setSaving] = useState(false)
 
-  async function load() {
-    const [s, tp, cc] = await Promise.all([
-      api.reports.sales(dateFrom, dateTo),
-      api.reports.topProducts(dateFrom, dateTo),
-      api.reports.cashClose(today),
+  async function searchSales() {
+    const [s, t, c] = await Promise.all([
+      api.reports.sales(dateFrom || undefined, dateTo || undefined),
+      api.reports.topProducts(dateFrom || undefined, dateTo || undefined),
+      api.reports.cashClose(),
     ])
     setSales(s)
-    setTopProducts(tp)
-    setCashClose(cc)
+    setTopProducts(t)
+    setCashClose(c)
   }
 
-  useEffect(() => { load() }, [dateFrom, dateTo])
-
   async function handleCashClose() {
-    if (!declaredAmount || isNaN(Number(declaredAmount))) return
+    if (!declaredAmount) return
     setSaving(true)
-    await api.reports.saveCashClose(Number(declaredAmount), today)
-    setDeclaredAmount('')
-    setSaving(false)
-    load()
+    try { await api.reports.saveCashClose(Number(declaredAmount)); setDeclaredAmount(''); searchSales() }
+    catch (e: any) { alert(e.message) }
+    finally { setSaving(false) }
   }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">Reportes</h2>
+    <div className="page-container">
+      <h1 className="text-2xl font-bold text-gray-800">Reportes</h1>
 
-      <div className="flex gap-2 items-center">
-        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm" />
-        <span className="text-gray-500">a</span>
-        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-sm text-gray-500">Ventas totales</p>
-          <p className="text-2xl font-bold font-mono">${sales ? Number(sales.totalSales).toFixed(2) : '0.00'}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-sm text-gray-500">Facturas emitidas</p>
-          <p className="text-2xl font-bold">{sales?.totalInvoices || 0}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-sm text-gray-500">Ticket promedio</p>
-          <p className="text-2xl font-bold font-mono">${sales ? Number(sales.averageTicket).toFixed(2) : '0.00'}</p>
-        </div>
-      </div>
-
-      {sales?.byPaymentMethod && Object.keys(sales.byPaymentMethod).length > 0 && (
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-2">Formas de pago</h3>
-          <div className="space-y-2">
-            {Object.entries(sales.byPaymentMethod).map(([method, total]) => (
-              <div key={method} className="flex items-center justify-between text-sm">
-                <span className="capitalize">{method}</span>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 bg-blue-900 rounded-full"
-                    style={{ width: `${(Number(total) / sales.totalSales) * 100}%`, minWidth: 20 }} />
-                  <span className="font-mono w-24 text-right">${Number(total).toFixed(2)}</span>
-                </div>
-              </div>
-            ))}
+      <div className="card p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label">Desde</label>
+            <input type="date" className="input" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
+          <div>
+            <label className="label">Hasta</label>
+            <input type="date" className="input" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
+          <button onClick={searchSales} className="btn-primary">Buscar</button>
         </div>
-      )}
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-2">Productos más vendidos</h3>
-          {topProducts.length === 0 ? (
-            <p className="text-sm text-gray-400">Sin datos</p>
-          ) : (
-            <div className="space-y-2">
-              {topProducts.map((p, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="flex-1 truncate">{i + 1}. {p.name}</span>
-                  <span className="text-gray-500 mx-2">{p.quantity} uds</span>
-                  <span className="font-mono">${Number(p.total).toFixed(2)}</span>
-                </div>
-              ))}
+      {sales && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wider text-gray-500">Ventas Totales</p>
+              <p className="text-2xl font-bold text-gray-800 mt-1">${Number(sales.totalSales).toFixed(2)}</p>
             </div>
-          )}
-        </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wider text-gray-500">Facturas</p>
+              <p className="text-2xl font-bold text-gray-800 mt-1">{sales.totalInvoices}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wider text-gray-500">Ticket Promedio</p>
+              <p className="text-2xl font-bold text-gray-800 mt-1">${Number(sales.averageTicket).toFixed(2)}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wider text-gray-500">Métodos de Pago</p>
+              <div className="mt-1 space-y-0.5">
+                {Object.entries(sales.byPaymentMethod || {}).map(([method, total]) => (
+                  <p key={method} className="text-sm text-gray-600 font-medium">
+                    {method}: <span className="font-mono">${Number(total).toFixed(2)}</span>
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
 
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-2">Cierre de caja - {today}</h3>
-          {cashClose ? (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Facturas del día:</span>
-                <span className="font-semibold">{cashClose.invoiceCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Esperado:</span>
-                <span className="font-mono">${Number(cashClose.expectedTotal).toFixed(2)}</span>
-              </div>
-              {cashClose.isClosed ? (
-                <>
-                  <div className="flex justify-between">
-                    <span>Declarado:</span>
-                    <span className="font-mono">${Number(cashClose.declaredTotal).toFixed(2)}</span>
-                  </div>
-                  <div className={`flex justify-between font-semibold ${Number(cashClose.difference) !== 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    <span>Diferencia:</span>
-                    <span className="font-mono">${Number(cashClose.difference).toFixed(2)}</span>
-                  </div>
-                </>
+          <div className="card overflow-hidden">
+            <div className="card-header"><h3 className="font-semibold text-gray-700">Facturas del período</h3></div>
+            <table className="table-modern">
+              <thead>
+                <tr>
+                  <th>N°</th>
+                  <th>Cliente</th>
+                  <th>Monto</th>
+                  <th>Método</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(sales.invoices || []).length === 0 ? (
+                  <tr><td colSpan={5} className="text-center text-gray-400 py-8">Sin resultados</td></tr>
+                ) : sales.invoices.map((inv: any) => (
+                  <tr key={inv.id}>
+                    <td className="font-medium">{inv.number}</td>
+                    <td>{inv.client?.name}</td>
+                    <td className="font-mono">${Number(inv.total).toFixed(2)}</td>
+                    <td className="capitalize">{inv.paymentMethod}</td>
+                    <td className="text-gray-500">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="card p-5">
+              <h3 className="font-semibold text-gray-700 mb-3">Top Productos</h3>
+              {topProducts.length === 0 ? (
+                <p className="text-sm text-gray-400">Sin datos</p>
               ) : (
-                <div className="pt-2 space-y-2">
-                  <input type="number" step="0.01" value={declaredAmount}
-                    onChange={(e) => setDeclaredAmount(e.target.value)}
-                    placeholder="Monto declarado..."
-                    className="w-full px-3 py-2 border rounded-lg text-sm" />
-                  <button onClick={handleCashClose} disabled={saving || !declaredAmount}
-                    className="w-full bg-blue-900 text-white py-2 rounded-lg text-sm disabled:opacity-50">
-                    {saving ? 'Guardando...' : 'Cerrar Caja'}
-                  </button>
+                <div className="space-y-2">
+                  {topProducts.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700">{p.name}</span>
+                      <span className="font-mono text-gray-600">{p.quantity} uds · ${Number(p.total).toFixed(2)}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          ) : (
-            <p className="text-sm text-gray-400">Cargando...</p>
-          )}
-        </div>
-      </div>
 
-      {sales?.dailyBreakdown && sales.dailyBreakdown.length > 0 && (
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-2">Ventas por día</h3>
-          <div className="space-y-1">
-            {sales.dailyBreakdown.map((d: any) => (
-              <div key={d.date} className="flex items-center justify-between text-sm">
-                <span>{new Date(d.date).toLocaleDateString()}</span>
-                <span className="text-gray-500">{d.count} facturas</span>
-                <span className="font-mono">${Number(d.total).toFixed(2)}</span>
+            <div className="card p-5">
+              <h3 className="font-semibold text-gray-700 mb-3">Cierre de Caja</h3>
+              {cashClose && (
+                <div className="space-y-2 text-sm mb-4">
+                  <div className="flex justify-between"><span className="text-gray-600">Esperado:</span><span className="font-mono font-medium">${Number(cashClose.expectedTotal).toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Declarado:</span><span className="font-mono font-medium">{cashClose.declaredTotal ? `$${Number(cashClose.declaredTotal).toFixed(2)}` : '—'}</span></div>
+                  {cashClose.isClosed && <p className="text-green-600 font-medium text-xs">✓ Cierre completado</p>}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input type="number" step="0.01" className="input flex-1" placeholder="Monto declarado..." value={declaredAmount} onChange={(e) => setDeclaredAmount(e.target.value)} />
+                <button onClick={handleCashClose} disabled={saving || !declaredAmount} className="btn-primary">{saving ? '...' : 'Cerrar'}</button>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

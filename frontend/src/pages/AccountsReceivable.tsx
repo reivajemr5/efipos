@@ -6,51 +6,59 @@ export default function AccountsReceivable() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.accounts.receivable().then(setData).finally(() => setLoading(false))
+    api.accounts.receivable().then(setData).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-900 border-t-transparent rounded-full" /></div>
 
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">Cuentas por Cobrar</h2>
+  const invoices = data?.invoices || []
 
-      <div className="bg-gradient-to-br from-rose-600 to-rose-800 text-white p-5 rounded-2xl shadow-lg">
-        <p className="text-rose-100 text-xs uppercase tracking-wider">Total Pendiente</p>
-        <p className="text-3xl font-bold mt-1 font-mono">${Number(data.totalPending).toFixed(2)}</p>
-        <p className="text-rose-200 text-xs mt-1">{data.totalCount} facturas por cobrar</p>
+  return (
+    <div className="page-container">
+      <h1 className="text-2xl font-bold text-gray-800">Cuentas por Cobrar</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="card p-5">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Total Pendiente</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">${Number(data?.totalPending || 0).toFixed(2)}</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Facturas</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">{invoices.length}</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Promedio</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">${invoices.length ? Number(data.totalPending / invoices.length).toFixed(2) : '0.00'}</p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">N° Factura</th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Cliente</th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">RIF/CI</th>
-                <th className="text-right px-4 py-3 text-gray-500 font-medium">Monto</th>
-                <th className="text-right px-4 py-3 text-gray-500 font-medium">Fecha</th>
-                <th className="text-right px-4 py-3 text-gray-500 font-medium">Vendedor</th>
+      <div className="card overflow-hidden">
+        <table className="table-modern">
+          <thead>
+            <tr>
+              <th>N° Factura</th>
+              <th>Cliente</th>
+              <th>RIF/CI</th>
+              <th>Monto</th>
+              <th>Fecha</th>
+              <th>Vendedor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.length === 0 ? (
+              <tr><td colSpan={6} className="text-center text-gray-400 py-8">Sin cuentas por cobrar</td></tr>
+            ) : invoices.map((inv: any) => (
+              <tr key={inv.id}>
+                <td className="font-medium">{inv.number}</td>
+                <td>{inv.client?.name}</td>
+                <td className="text-gray-500 font-mono text-xs">{inv.client?.documentType}-{inv.client?.documentNumber}</td>
+                <td className="font-mono font-medium">${Number(inv.total).toFixed(2)}</td>
+                <td className="text-gray-500">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                <td className="text-gray-500">{inv.user?.name || '-'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.invoices.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-8 text-gray-400">No hay facturas pendientes</td></tr>
-              )}
-              {data.invoices.map((inv: any) => (
-                <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-700">{inv.number}</td>
-                  <td className="px-4 py-3">{inv.client?.name || 'Consumidor final'}</td>
-                  <td className="px-4 py-3 text-gray-500 font-mono">{inv.client?.documentNumber || '-'}</td>
-                  <td className="px-4 py-3 text-right font-mono font-medium">${Number(inv.total).toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{new Date(inv.createdAt).toLocaleDateString('es-VE')}</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{inv.user?.name}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
