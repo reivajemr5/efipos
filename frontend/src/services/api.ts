@@ -47,6 +47,21 @@ export const api = {
     create: (data: any) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/products/${id}`, { method: 'DELETE' }),
+    import: (data: { products: any[] }) => request('/products/import', { method: 'POST', body: JSON.stringify(data) }),
+    importCsv: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const token = localStorage.getItem('token')
+      return fetch(`${API_URL}/products/import-csv`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      }).then(async (res) => {
+        if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/login' }
+        if (!res.ok) { const err = await res.json().catch(() => ({ error: 'Error de conexión' })); throw new Error(err.error || 'Error desconocido') }
+        return res.json()
+      })
+    },
   },
   quotes: {
     list: () => request('/quotes'),

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import BarcodeScanner from '../components/BarcodeScanner'
 import ProductFormModal from '../components/ProductFormModal'
+import ImportCsvModal from '../components/ImportCsvModal'
 import { useToastStore } from '../store/toast'
 
 interface Category { id: number; name: string }
@@ -28,6 +29,7 @@ export default function Products() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const addToast = useToastStore((s) => s.addToast)
 
   async function load() {
@@ -53,7 +55,10 @@ export default function Products() {
     <div className="page-container">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Productos</h1>
-        <button onClick={openNew} className="btn-primary">+ Nuevo</button>
+        <div className="flex gap-2">
+          <button onClick={() => setImportOpen(true)} className="btn-secondary">📥 Importar CSV</button>
+          <button onClick={openNew} className="btn-primary">+ Nuevo</button>
+        </div>
       </div>
 
       <div className="flex gap-2">
@@ -155,6 +160,7 @@ export default function Products() {
         })}
       </div>
 
+      <ImportCsvModal open={importOpen} onClose={() => setImportOpen(false)} onDone={load} />
       {scannerOpen && <BarcodeScanner onScan={(barcode) => setSearch(barcode)} onClose={() => setScannerOpen(false)} />}
     </div>
   )

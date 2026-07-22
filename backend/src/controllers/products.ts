@@ -127,3 +127,153 @@ export async function remove(req: AuthRequest, res: Response) {
   await prisma.product.update({ where: { id }, data: { active: false } })
   res.status(204).send()
 }
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function parseDecimal(val: string | undefined | null): number {
+  if (!val) return 0
+  const cleaned = val.trim().replace(/[^\d.,-]/g, '').replace(',', '.')
+  const num = parseFloat(cleaned)
+  return isNaN(num) ? 0 : num
+}
+
+export async function importCsv(req: AuthRequest, res: Response) {
+  const file = req.file
+  if (!file) { res.status(400).json({ error: 'Archivo CSV requerido' }); return }
+
+  // Ensure csv-parse is imported
+  const { parse } = require('csv-parse/sync')
+  const content = file.buffer.toString('utf-8')
+  let rows: any[]
+  try {
+    rows = parse(content, { columns: true, skip_empty_lines: true, bom: true, delimiter: [',', ';', '\t'] })
+  } catch {
+    res.status(400).json({ error: 'Error al parsear el CSV. Verifica el formato.' })
+    return
+  }
+
+  // Resolve "General" category
+  let generalCategory = await prisma.category.findFirst({ where: { name: 'General' } })
+  if (!generalCategory) {
+    generalCategory = await prisma.category.create({ data: { name: 'General' } })
+  }
+
+  const existingCategories = await prisma.category.findMany({ where: { active: true } })
+  const categoryMap = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]))
+
+  let created = 0
+  let skipped = 0
+  let errors: { row: number; name: string; error: string }[] = []
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const name = row.nombre?.trim()
+    if (!name) { skipped++; continue }
+
+    const price = parseDecimal(row.precio)
+    const stock = parseDecimal(row.stock)
+    const cost = parseDecimal(row.costo)
+    const iva = parseDecimal(row.iva || '16')
+    const barcode = row.codigo_barra?.trim() || undefined
+    const description = row.descripcion?.trim() || undefined
+
+    const normalizedName = toTitleCase(name)
+    const code = `IMP-${String(i + 1).padStart(5, '0')}`
+
+    let categoryId: number | null = null
+    const catName = row.categoria?.trim()
+    if (catName) {
+      const key = catName.toLowerCase()
+      if (categoryMap.has(key)) {
+        categoryId = categoryMap.get(key)!
+      } else {
+        const newCat = await prisma.category.create({ data: { name: toTitleCase(catName) } })
+        categoryMap.set(key, newCat.id)
+        categoryId = newCat.id
+      }
+    }
+
+    try {
+      await prisma.product.create({
+        data: {
+          code,
+          name: normalizedName,
+          description,
+          price,
+          cost: cost || 0,
+          currency: 'usd',
+          stock,
+          active: price > 0,
+          ivaPercent: iva || 0,
+          barcode,
+          categoryId: categoryId || generalCategory.id,
+        },
+      })
+      created++
+    } catch (e) {
+      errors.push({ row: i + 2, name: normalizedName, error: e instanceof Error ? e.message : 'Error desconocido' })
+    }
+  }
+
+  res.json({ total: rows.length, created, skipped, errors })
+}
+
+interface BulkProductInput {
+  name: string
+  price: number
+  cost?: number
+  stock?: number
+  ivaPercent?: number
+  currency?: string
+  barcode?: string
+  description?: string
+  categoryId?: number | null
+  code?: string
+}
+
+export async function bulkImport(req: AuthRequest, res: Response) {
+  const products: BulkProductInput[] = req.body.products
+  if (!Array.isArray(products) || products.length === 0) {
+    res.status(400).json({ error: 'Se requiere un array de productos' })
+    return
+  }
+
+  let created = 0
+  let errors: { row: number; name: string; error: string }[] = []
+
+  let generalCategory = await prisma.category.findFirst({ where: { name: 'General' } })
+  if (!generalCategory) {
+    generalCategory = await prisma.category.create({ data: { name: 'General' } })
+  }
+
+  for (let i = 0; i < products.length; i++) {
+    const p = products[i]
+    if (!p.name || !p.name.trim()) { errors.push({ row: i + 1, name: '', error: 'Nombre requerido' }); continue }
+    if (p.price === undefined || p.price === null) { errors.push({ row: i + 1, name: p.name, error: 'Precio requerido' }); continue }
+
+    try {
+      await prisma.product.create({
+        data: {
+          code: p.code || `IMP-${String(Date.now() + i).slice(-6)}`,
+          name: p.name.trim(),
+          description: p.description || null,
+          price: p.price,
+          cost: p.cost || 0,
+          currency: (p.currency as any) || 'usd',
+          stock: p.stock || 0,
+          active: p.price > 0,
+          ivaPercent: p.ivaPercent ?? 16,
+          barcode: p.barcode || null,
+          categoryId: p.categoryId || generalCategory!.id,
+        },
+      })
+      created++
+    } catch (e) {
+      errors.push({ row: i + 1, name: p.name, error: e instanceof Error ? e.message : 'Error desconocido' })
+    }
+  }
+
+  res.json({ total: products.length, created, errors })
+}
