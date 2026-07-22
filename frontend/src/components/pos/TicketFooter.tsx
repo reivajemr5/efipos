@@ -30,7 +30,7 @@ export default function TicketFooter({ subtotal, ivaTotal, total, currency, onCh
       <button
         onClick={onCheckout}
         disabled={itemCount === 0}
-        className="w-full py-4 bg-secondary text-white text-lg font-bold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
+        className="w-full py-4 bg-green-600 text-white text-lg font-bold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
       >
         Cobrar {symbol} {total.toFixed(2)}
       </button>

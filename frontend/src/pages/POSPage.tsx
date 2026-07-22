@@ -365,7 +365,7 @@ export default function POSPage() {
               <button
                 onClick={confirmCheckout}
                 disabled={loading}
-                className="flex-1 py-3 bg-secondary text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
+                className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
               >
                 {loading ? 'Procesando...' : `Cobrar $${total.toFixed(2)}`}
               </button>

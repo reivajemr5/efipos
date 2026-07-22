@@ -11,7 +11,7 @@ export default function QuickActions({ onCancel, onSaveDraft, onDiscount, onNote
     <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
       <button
         onClick={onCancel}
-        className="flex-1 py-2.5 px-3 rounded-lg bg-danger text-white text-sm font-medium hover:bg-red-700 transition-colors touch-manipulation"
+        className="flex-1 py-2.5 px-3 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors touch-manipulation"
       >
         Cancelar
       </button>
