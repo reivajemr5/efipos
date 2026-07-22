@@ -52,8 +52,10 @@ export default function POSPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [showCartMobile, setShowCartMobile] = useState(false)
+  const [search, setSearch] = useState('')
   const [showProductSearch, setShowProductSearch] = useState(false)
-  const [productSearch, setProductSearch] = useState('')
+  const [modalSearch, setModalSearch] = useState('')
+  const [modalCategory, setModalCategory] = useState<number | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -73,11 +75,17 @@ export default function POSPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const filteredProducts = selectedCategory ? products.filter((p) => p.categoryId === selectedCategory) : products
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase())
+    const matchesCategory = !selectedCategory || p.categoryId === selectedCategory
+    return matchesSearch && matchesCategory
+  })
 
-  const searchResults = productSearch
-    ? products.filter((p) => p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.code.toLowerCase().includes(productSearch.toLowerCase()))
-    : products
+  const modalResults = products.filter((p) => {
+    const matchesSearch = !modalSearch || p.name.toLowerCase().includes(modalSearch.toLowerCase()) || p.code.toLowerCase().includes(modalSearch.toLowerCase())
+    const matchesCategory = !modalCategory || p.categoryId === modalCategory
+    return matchesSearch && matchesCategory
+  })
 
   function handleSelectProduct(product: Product) {
     if (product.stock <= 0) return
@@ -211,7 +219,15 @@ export default function POSPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <POSHeader clientName={selectedClient.name} onClientClick={() => setShowClientModal(true)} onSearchClick={() => setShowProductSearch(true)} />
+      <POSHeader
+        clientSearch={clientSearch}
+        onClientSearchChange={setClientSearch}
+        onClientSearchModal={() => setShowClientModal(true)}
+        onClientAdd={() => setShowNewClientForm(true)}
+        productSearch={search}
+        onProductSearchChange={setSearch}
+        onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
+      />
       <div className="flex-1 flex overflow-hidden">
         <div className="hidden md:flex w-2/5 flex-col">
           <TicketPanel
@@ -399,12 +415,12 @@ export default function POSPage() {
       <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} />
 
       {showProductSearch && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowProductSearch(false); setProductSearch('') }}>
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-3">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowProductSearch(false); setModalSearch(''); setModalCategory(null) }}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-200 space-y-3">
+              <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-gray-800">Buscar Productos</h3>
-                <button onClick={() => { setShowProductSearch(false); setProductSearch('') }} className="text-gray-400 p-1">
+                <button onClick={() => { setShowProductSearch(false); setModalSearch(''); setModalCategory(null) }} className="text-gray-400 p-1">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -413,39 +429,63 @@ export default function POSPage() {
                 <input
                   type="text"
                   placeholder="Buscar por nombre o código..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
+                  value={modalSearch}
+                  onChange={(e) => setModalSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   autoFocus
                 />
               </div>
+              <div className="flex gap-1 flex-wrap">
+                <button onClick={() => setModalCategory(null)} className={`px-3 py-1 rounded-lg text-xs font-medium touch-manipulation ${!modalCategory ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todas</button>
+                {categories.map((c) => (
+                  <button key={c.id} onClick={() => setModalCategory(c.id)} className={`px-3 py-1 rounded-lg text-xs font-medium touch-manipulation ${modalCategory === c.id ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{c.name}</button>
+                ))}
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {searchResults.length === 0 ? (
-                <p className="text-gray-400 text-center py-8 text-sm">Sin resultados</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {searchResults.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => { handleSelectProduct(p); setShowProductSearch(false); setProductSearch('') }}
-                      disabled={p.stock <= 0}
-                      className="bg-white border border-gray-200 rounded-xl p-3 text-left hover:border-blue-400 hover:shadow-sm transition-all touch-manipulation disabled:opacity-40"
-                    >
-                      <div className="aspect-square bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-gray-400 text-xs overflow-hidden">
-                        {p.imageUrl ? (
-                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                        )}
-                      </div>
-                      <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-tight">{p.name}</p>
-                      <p className="text-xs font-bold text-blue-700 mt-1">${Number(p.price).toFixed(2)}</p>
-                      {p.stock <= 0 && <p className="text-[10px] text-red-500 font-medium mt-0.5">Sin stock</p>}
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr className="text-left text-gray-500 text-xs uppercase">
+                    <th className="px-4 py-2 font-medium">Producto</th>
+                    <th className="px-4 py-2 font-medium">Código</th>
+                    <th className="px-4 py-2 font-medium text-right">Precio</th>
+                    <th className="px-4 py-2 font-medium text-right">Stock</th>
+                    <th className="px-4 py-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {modalResults.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-8 text-gray-400">Sin resultados</td></tr>
+                  ) : (
+                    modalResults.map((p) => (
+                      <tr key={p.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs overflow-hidden shrink-0">
+                              {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
+                            </div>
+                            <span className="font-medium text-gray-800">{p.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-500">{p.code}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-gray-800">${Number(p.price).toFixed(2)}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className={`text-xs font-medium ${p.stock <= 0 ? 'text-red-500' : 'text-green-600'}`}>{p.stock}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button
+                            onClick={() => { handleSelectProduct(p); setShowProductSearch(false); setModalSearch(''); setModalCategory(null) }}
+                            disabled={p.stock <= 0}
+                            className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation disabled:opacity-40"
+                          >
+                            + Agregar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
