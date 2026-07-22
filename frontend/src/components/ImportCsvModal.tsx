@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import type { ParseResult } from 'papaparse'
 import Papa from 'papaparse'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
@@ -93,7 +92,7 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
     setProgress(0)
   }, [open])
 
-  const handleFile = useRef(async (file: File) => {
+  async function handleFile(file: File) {
     if (!file.name.endsWith('.csv')) { addToast('Solo archivos .csv', 'error'); return }
     const text = await file.text()
     const result = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true })
@@ -110,7 +109,7 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
     }
     setColumnMapping(mapping)
     setStep('mapping')
-  }, [])
+  }
 
   const mappedRows = useMemo(() => {
     return rawRows.map((r) => {
@@ -248,12 +247,12 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
               className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all w-full max-w-lg"
               onClick={() => inputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={async (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile.current(f) }}
+              onDrop={async (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
             >
               <div className="text-4xl mb-3 text-gray-300">📂</div>
               <p className="text-gray-600 font-medium mb-1">Haz clic o arrastra el archivo</p>
               <p className="text-xs text-gray-400">Archivo CSV con tus productos</p>
-              <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile.current(f) }} />
+              <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
             </div>
           </div>
         )}
