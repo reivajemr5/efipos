@@ -55,12 +55,39 @@ function toTitleCase(str: string): string {
 const TIPO_OPTIONS = ['simple', 'compuesto', 'servicio']
 const MONEDA_OPTIONS = ['usd', 'bs']
 
+const COLUMN_MAP: Record<string, string> = {
+  nombre: 'nombre', name: 'nombre', producto: 'nombre',
+  precio: 'precio', 'precio unitario': 'precio', price: 'precio',
+  costo: 'costo', 'costo unitario': 'costo', cost: 'costo',
+  stock: 'stock', cantidad: 'stock', cant: 'stock', existencias: 'stock',
+  iva: 'iva',
+  'codigo de barra': 'codigo_barra', 'codigo de barras': 'codigo_barra', barcode: 'codigo_barra',
+  categoria: 'categoria', category: 'categoria',
+  marca: 'marca', brand: 'marca',
+  descripcion: 'descripcion', description: 'descripcion',
+  notas: 'notas', notes: 'notas',
+  tipo: 'tipo', type: 'tipo',
+  moneda: 'moneda', currency: 'moneda',
+  precio2: 'precio2', 'precio 2': 'precio2',
+  'stock minimo': 'stock_minimo', 'stock minim': 'stock_minimo', minstock: 'stock_minimo',
+}
+
+function normalizeHeader(h: string): string {
+  const cleaned = h.trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+    .replace(/[\s-]+/g, ' ')
+    .replace(/[^a-z0-9 ]/g, '') // remove dots and special chars
+    .trim()
+  return COLUMN_MAP[cleaned] || cleaned.replace(/ /g, '_')
+}
+
 function parseCSV(text: string): Promise<CsvRow[]> {
   return new Promise<CsvRow[]>((resolve, reject) => {
     Papa.parse<CsvRow>(text, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (h: string) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'),
+      transformHeader: normalizeHeader,
       complete: (results: ParseResult<CsvRow>) => resolve(results.data.filter((r: CsvRow) => r.nombre?.trim())),
       error: reject,
     })
