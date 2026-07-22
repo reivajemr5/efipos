@@ -248,32 +248,34 @@ export async function bulkImport(req: AuthRequest, res: Response) {
     generalCategory = await prisma.category.create({ data: { name: 'General' } })
   }
 
-  for (let i = 0; i < products.length; i++) {
-    const p = products[i]
-    if (!p.name || !p.name.trim()) { errors.push({ row: i + 1, name: '', error: 'Nombre requerido' }); continue }
-    if (p.price === undefined || p.price === null) { errors.push({ row: i + 1, name: p.name, error: 'Precio requerido' }); continue }
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i]
+      if (!p.name || !p.name.trim()) { errors.push({ row: i + 1, name: '', error: 'Nombre requerido' }); continue }
+      if (p.price === undefined || p.price === null) { errors.push({ row: i + 1, name: p.name, error: 'Precio requerido' }); continue }
 
-    try {
-      await prisma.product.create({
-        data: {
-          code: p.code || `IMP-${String(Date.now() + i).slice(-6)}`,
-          name: p.name.trim(),
-          description: p.description || null,
-          price: p.price,
-          cost: p.cost || 0,
-          currency: (p.currency as any) || 'usd',
-          stock: p.stock || 0,
-          active: p.price > 0,
-          ivaPercent: p.ivaPercent ?? 16,
-          barcode: p.barcode || null,
-          categoryId: p.categoryId || generalCategory!.id,
-        },
-      })
-      created++
-    } catch (e) {
-      errors.push({ row: i + 1, name: p.name, error: e instanceof Error ? e.message : 'Error desconocido' })
+      try {
+        await tx.product.create({
+          data: {
+            code: p.code || `IMP-${String(Date.now() + i).slice(-6)}`,
+            name: p.name.trim(),
+            description: p.description || null,
+            price: p.price,
+            cost: p.cost || 0,
+            currency: (p.currency as any) || 'usd',
+            stock: p.stock || 0,
+            active: p.price > 0,
+            ivaPercent: p.ivaPercent ?? 16,
+            barcode: p.barcode || null,
+            categoryId: p.categoryId || generalCategory!.id,
+          },
+        })
+        created++
+      } catch (e) {
+        errors.push({ row: i + 1, name: p.name, error: e instanceof Error ? e.message : 'Error desconocido' })
+      }
     }
-  }
+  })
 
   res.json({ total: products.length, created, errors })
 }
