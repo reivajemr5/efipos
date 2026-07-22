@@ -224,6 +224,8 @@ export default function POSPage() {
         onClientSearchChange={setClientSearch}
         onClientSearchModal={() => setShowClientModal(true)}
         onClientAdd={() => setShowNewClientForm(true)}
+        clients={clients}
+        onSelectClient={handleSelectClient}
         productSearch={search}
         onProductSearchChange={setSearch}
         onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
