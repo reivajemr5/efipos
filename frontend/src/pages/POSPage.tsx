@@ -5,6 +5,12 @@ import POSHeader from '../components/pos/POSHeader'
 import TicketPanel from '../components/pos/TicketPanel'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
+import ClientFormModal from '../components/ClientFormModal'
+
+interface Client {
+  id: number; name: string; documentType: string; documentNumber: string
+  phone: string | null; address: string | null
+}
 
 interface Product {
   id: number
@@ -25,28 +31,13 @@ interface Category {
   name: string
 }
 
-interface Invoice {
-  id: number
-  number: string
-  client: { id: number; name: string }
-  total: number
-  totalBs?: number | null
-  currency: string
-  status: string
-  paymentMethod: string
-  createdAt: string
-}
+const DEFAULT_CLIENT: Client = { id: 0, name: 'Consumidor Final', documentType: 'V', documentNumber: '0', phone: null, address: null }
 
 export default function POSPage() {
-  const [mode, setMode] = useState<'quick' | 'walkin'>('quick')
-  const [search, setSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
-  const [showingHistory, setShowingHistory] = useState(false)
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [invoiceFilter, setInvoiceFilter] = useState<string>('all')
   const [checkoutModal, setCheckoutModal] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('efectivo')
   const [successSale, setSuccessSale] = useState<{ number: string; id: number } | null>(null)
@@ -55,39 +46,38 @@ export default function POSPage() {
   const [notes, setNotes] = useState('')
   const [showDiscount, setShowDiscount] = useState(false)
   const [discount, setDiscount] = useState(0)
+  const [selectedClient, setSelectedClient] = useState<Client>(DEFAULT_CLIENT)
+  const [showClientModal, setShowClientModal] = useState(false)
+  const [clientSearch, setClientSearch] = useState('')
+  const [clients, setClients] = useState<Client[]>([])
+  const [showNewClientForm, setShowNewClientForm] = useState(false)
+  const [showCartMobile, setShowCartMobile] = useState(false)
+  const [showProductSearch, setShowProductSearch] = useState(false)
+  const [productSearch, setProductSearch] = useState('')
 
   const loadData = useCallback(async () => {
     try {
-      const [prods, cats] = await Promise.all([
+      const [prods, cats, clis] = await Promise.all([
         api.products.list(),
         api.categories.list(),
+        api.clients.list(),
       ])
       setProducts(prods.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
       setCategories(cats)
+      setClients(clis)
     } catch {
       const cached = await db.products.toArray()
       setProducts(cached.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
     }
   }, [])
 
-  const loadInvoices = useCallback(async () => {
-    try {
-      const params = invoiceFilter !== 'all' ? `status=${invoiceFilter}` : ''
-      const data = await api.invoices.list(params)
-      setInvoices(data)
-    } catch {
-      // ignore
-    }
-  }, [invoiceFilter])
-
   useEffect(() => { loadData() }, [loadData])
-  useEffect(() => { if (showingHistory) loadInvoices() }, [showingHistory, loadInvoices])
 
-  const filteredProducts = products.filter((p) => {
-    const matchesSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = !selectedCategory || p.categoryId === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  const filteredProducts = selectedCategory ? products.filter((p) => p.categoryId === selectedCategory) : products
+
+  const searchResults = productSearch
+    ? products.filter((p) => p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.code.toLowerCase().includes(productSearch.toLowerCase()))
+    : products
 
   function handleSelectProduct(product: Product) {
     if (product.stock <= 0) return
@@ -131,6 +121,7 @@ export default function POSPage() {
 
     try {
       const invoice = await api.invoices.create({
+        clientId: selectedClient.id || undefined,
         paymentMethod,
         currency: 'usd',
         items: cart.map((i) => ({
@@ -144,7 +135,6 @@ export default function POSPage() {
       setDiscount(0)
       setNotes('')
       setCheckoutModal(false)
-      if (showingHistory) loadInvoices()
     } catch (err: any) {
       alert('Error al crear factura: ' + err.message)
     } finally {
@@ -152,14 +142,24 @@ export default function POSPage() {
     }
   }
 
-  async function handleCancelInvoice(id: number) {
-    if (!confirm('¿Anular esta factura?')) return
+  async function loadClients(q?: string) {
     try {
-      await api.invoices.cancel(id)
-      loadInvoices()
-    } catch (err: any) {
-      alert(err.message)
-    }
+      const data = await api.clients.list(q)
+      setClients(data)
+    } catch { }
+  }
+
+  function handleSelectClient(c: Client) {
+    setSelectedClient(c)
+    setShowClientModal(false)
+    setClientSearch('')
+  }
+
+  function handleClientCreated(c: Client) {
+    setSelectedClient(c)
+    setShowNewClientForm(false)
+    setShowClientModal(false)
+    setClientSearch('')
   }
 
   async function handlePrint(id: number) {
@@ -171,7 +171,6 @@ export default function POSPage() {
     setCart([])
     setDiscount(0)
     setNotes('')
-    setMode('quick')
   }
 
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -207,68 +206,12 @@ export default function POSPage() {
     )
   }
 
-  if (showingHistory) {
-    return (
-      <div className="flex flex-col h-full">
-        <POSHeader mode={mode} onModeChange={setMode} search={search} onSearchChange={setSearch} onToggleHistory={() => setShowingHistory(false)} showingHistory={true} />
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-800">Historial de Facturas</h2>
-            <div className="flex gap-2">
-              {['all', 'activa', 'anulada'].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setInvoiceFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium touch-manipulation ${
-                    invoiceFilter === s ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {s === 'all' ? 'Todas' : s === 'activa' ? 'Activas' : 'Anuladas'}
-                </button>
-              ))}
-            </div>
-          </div>
-          {invoices.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No hay facturas</p>
-          ) : (
-            <div className="space-y-2">
-              {invoices.map((inv) => (
-                <div key={inv.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-800">{inv.number}</p>
-                    <p className="text-sm text-gray-500">{inv.client.name}</p>
-                    <p className="text-xs text-gray-400">{new Date(inv.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-gray-800">${Number(inv.total).toFixed(2)}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      inv.status === 'activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {inv.status === 'activa' ? 'Activa' : 'Anulada'}
-                    </span>
-                    <div className="flex gap-1 mt-1">
-                      {inv.status === 'activa' && (
-                        <button onClick={() => handleCancelInvoice(inv.id)} className="text-xs text-red-600 hover:underline touch-manipulation">Anular</button>
-                      )}
-                      <button onClick={() => handlePrint(inv.id)} className="text-xs text-blue-600 hover:underline touch-manipulation">Imprimir</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
   const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0) + cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
-  const [showCartMobile, setShowCartMobile] = useState(false)
 
   return (
     <div className="flex flex-col h-full">
-      <POSHeader mode={mode} onModeChange={setMode} search={search} onSearchChange={setSearch} onToggleHistory={() => setShowingHistory(true)} showingHistory={false} />
+      <POSHeader clientName={selectedClient.name} onClientClick={() => setShowClientModal(true)} onSearchClick={() => setShowProductSearch(true)} />
       <div className="flex-1 flex overflow-hidden">
         <div className="hidden md:flex w-2/5 flex-col">
           <TicketPanel
@@ -291,16 +234,7 @@ export default function POSPage() {
             onSelectCategory={setSelectedCategory}
             onSelectProduct={handleSelectProduct}
           />
-          <div className="md:hidden relative px-3 py-2 bg-white border-t border-gray-200 shrink-0">
-            <svg className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input
-              type="text"
-              placeholder="Buscar productos..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-          </div>
+
         </div>
       </div>
 
@@ -400,6 +334,119 @@ export default function POSPage() {
             >
               Cerrar
             </button>
+          </div>
+        </div>
+      )}
+
+      {showClientModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowClientModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold text-gray-800">Seleccionar Cliente</h3>
+                <button onClick={() => setShowClientModal(false)} className="text-gray-400 p-1">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar cliente..."
+                value={clientSearch}
+                onChange={(e) => { setClientSearch(e.target.value); loadClients(e.target.value || undefined) }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              <button
+                onClick={() => handleSelectClient(DEFAULT_CLIENT)}
+                className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-100 flex items-center gap-2"
+              >
+                <span className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm font-bold text-gray-500">CF</span>
+                <div>
+                  <p className="font-medium text-gray-800 text-sm">Consumidor Final</p>
+                  <p className="text-xs text-gray-400">Venta sin identificación</p>
+                </div>
+              </button>
+              <div className="border-t border-gray-100 my-1" />
+              {clients.filter((c) => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.documentNumber.includes(clientSearch)).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => handleSelectClient(c)}
+                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <span className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-700">
+                    {c.name.charAt(0).toUpperCase()}
+                  </span>
+                  <div>
+                    <p className="font-medium text-gray-800 text-sm">{c.name}</p>
+                    <p className="text-xs text-gray-400">{c.documentType}-{c.documentNumber}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="p-3 border-t border-gray-200">
+              <button
+                onClick={() => { setShowNewClientForm(true) }}
+                className="w-full py-2.5 bg-blue-900 text-white rounded-lg font-medium text-sm hover:bg-blue-800 touch-manipulation"
+              >
+                + Nuevo Cliente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} />
+
+      {showProductSearch && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowProductSearch(false); setProductSearch('') }}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold text-gray-800">Buscar Productos</h3>
+                <button onClick={() => { setShowProductSearch(false); setProductSearch('') }} className="text-gray-400 p-1">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o código..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {searchResults.length === 0 ? (
+                <p className="text-gray-400 text-center py-8 text-sm">Sin resultados</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {searchResults.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { handleSelectProduct(p); setShowProductSearch(false); setProductSearch('') }}
+                      disabled={p.stock <= 0}
+                      className="bg-white border border-gray-200 rounded-xl p-3 text-left hover:border-blue-400 hover:shadow-sm transition-all touch-manipulation disabled:opacity-40"
+                    >
+                      <div className="aspect-square bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-gray-400 text-xs overflow-hidden">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                        )}
+                      </div>
+                      <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-tight">{p.name}</p>
+                      <p className="text-xs font-bold text-blue-700 mt-1">${Number(p.price).toFixed(2)}</p>
+                      {p.stock <= 0 && <p className="text-[10px] text-red-500 font-medium mt-0.5">Sin stock</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
