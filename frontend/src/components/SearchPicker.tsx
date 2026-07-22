@@ -127,7 +127,7 @@ export default function SearchPicker<T>({
       />
       {onAdvancedSearch && (
         <button type="button" onClick={onAdvancedSearch}
-          className="ml-1.5 px-2 py-2 border rounded-lg bg-gray-50 hover:bg-gray-200 text-gray-500 text-xs shrink-0 whitespace-nowrap"
+          className="ml-1.5 px-2.5 py-2 border border-gray-300 rounded-lg bg-white hover:bg-blue-50 text-blue-700 text-sm shrink-0 whitespace-nowrap font-medium"
           title="Búsqueda avanzada">Tabla</button>
       )}
     </div>
