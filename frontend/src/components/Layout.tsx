@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { syncCatalogs, processPendingChanges } from '../services/sync'
@@ -27,12 +27,23 @@ const moreItems = [
   { to: '/settings', label: 'Config.', icon: '⚙️' },
 ]
 
+const mobileNav = [
+  { to: '/', label: 'Inicio', icon: '🏠' },
+  { to: '/invoices', label: 'Ventas', icon: '🧾' },
+  { to: '/products', label: 'Productos', icon: '📦' },
+  { to: '/clients', label: 'Clientes', icon: '👥' },
+  { to: '/more', label: 'Más', icon: '☰' },
+]
+
 export default function Layout() {
   const { user, logout } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const isOnline = useOnlineStatus()
   const [searchOpen, setSearchOpen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [navCompact, setNavCompact] = useState(false)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -40,7 +51,7 @@ export default function Layout() {
         e.preventDefault()
         setSearchOpen((o) => !o)
       }
-      if (e.key === 'Escape') { setSearchOpen(false); setDrawerOpen(false) }
+      if (e.key === 'Escape') { setSearchOpen(false); setDrawerOpen(false); setMobileMenuOpen(false) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -68,29 +79,42 @@ export default function Layout() {
 
       {/* Top header bar */}
       <header className="bg-blue-900 text-white shrink-0">
-        <div className="flex items-center h-14 px-3 gap-2">
+        <div className="flex items-center h-14 px-3 gap-1">
           <button onClick={() => setDrawerOpen(true)} className="p-2 hover:bg-blue-800 rounded-lg touch-manipulation shrink-0">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
 
-          <Link to="/" className="text-lg font-bold tracking-tight shrink-0">Efi-Pos</Link>
+          <Link to="/" className="text-lg font-bold tracking-tight shrink-0 mr-2">Efi-Pos</Link>
 
-          <nav className="hidden md:flex items-center gap-0.5 ml-4 overflow-x-auto scrollbar-hide">
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
             {navItems.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 rounded-lg transition-colors whitespace-nowrap ${
+                  navCompact ? 'px-2 py-1.5' : 'px-4 py-2'
+                } ${
                   location.pathname === item.to
                     ? 'bg-white/20 text-white font-medium'
                     : 'text-blue-100 hover:bg-blue-800 hover:text-white'
                 }`}
+                title={navCompact ? item.label : undefined}
               >
-                <span className="text-base">{item.icon}</span>
-                <span className="hidden lg:inline">{item.label}</span>
+                <span className={navCompact ? 'text-lg' : 'text-xl'}>{item.icon}</span>
+                {!navCompact && <span className="text-sm">{item.label}</span>}
               </Link>
             ))}
           </nav>
+
+          {/* Nav toggle */}
+          <button
+            onClick={() => setNavCompact(!navCompact)}
+            className="hidden md:flex p-1.5 hover:bg-blue-800 rounded-lg text-blue-300 hover:text-white touch-manipulation shrink-0"
+            title={navCompact ? 'Expandir menú' : 'Compactar menú'}
+          >
+            <svg className={`w-4 h-4 transition-transform ${navCompact ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>
+          </button>
 
           <div className="flex-1" />
 
@@ -104,31 +128,13 @@ export default function Layout() {
 
           {user && (
             <div className="hidden sm:flex items-center gap-2 ml-1">
-              <span className="text-xs text-blue-200">{user.name}</span>
+              <span className="text-xs text-blue-200 hidden lg:inline">{user.name}</span>
               <button onClick={logout} className="p-1.5 hover:bg-blue-800 rounded-lg text-blue-100 hover:text-white touch-manipulation" title="Cerrar sesión">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               </button>
             </div>
           )}
         </div>
-
-        {/* Mobile nav bar */}
-        <nav className="md:hidden flex items-center gap-1 px-2 pb-2 overflow-x-auto scrollbar-hide">
-          {navItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors ${
-                location.pathname === item.to
-                  ? 'bg-white/20 text-white font-medium'
-                  : 'text-blue-100 hover:bg-blue-800'
-              }`}
-            >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
       </header>
 
       {/* Navigation drawer */}
@@ -174,11 +180,53 @@ export default function Layout() {
       )}
 
       {/* Main content */}
-      <main className={`flex-1 overflow-auto ${isPOS ? '' : 'p-4 md:p-6'}`}>
+      <main className={`flex-1 overflow-auto ${isPOS ? '' : 'p-4 md:p-6 pb-20 md:pb-6'}`}>
         <div className={isPOS ? '' : 'max-w-7xl mx-auto'}>
           <Outlet />
         </div>
       </main>
+
+      {/* Mobile bottom nav */}
+      {!isPOS && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 flex safe-area-bottom">
+          {mobileNav.map((item) => {
+            const isMore = item.to === '/more'
+            return (
+              <button key={item.label}
+                onClick={() => {
+                  if (isMore) setMobileMenuOpen(true)
+                  else navigate(item.to)
+                }}
+                className={`flex-1 flex flex-col items-center py-2 text-xs transition-colors ${
+                  !isMore && location.pathname === item.to ? 'text-blue-900 font-semibold' : 'text-gray-500'
+                }`}>
+                <span className="text-lg">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+      )}
+
+      {/* Mobile menu drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <div className="fixed inset-0 bg-black/40" />
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 pb-8 max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Navegación</p>
+            <div className="grid grid-cols-3 gap-3">
+              {[...navItems, ...moreItems].filter((i) => !mobileNav.some((m) => m.to === i.to) && i.to !== '/').map((item) => (
+                <button key={item.to} onClick={() => { navigate(item.to); setMobileMenuOpen(false) }}
+                  className="flex flex-col items-center gap-1 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <span className="text-2xl">{item.icon}</span>
+                  <span className="text-xs text-gray-600">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
       <ToastContainer />
