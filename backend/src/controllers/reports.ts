@@ -147,7 +147,7 @@ export async function dashboard(req: AuthRequest, res: Response) {
       where: { invoice: { createdAt: { gte: todayStart, lte: todayEnd }, status: 'activa' } },
     }),
     prisma.product.findMany({
-      where: { active: true, stock: { lte: prisma.product.fields.minStock } },
+      where: { active: true, stock: { lte: 5 } },
       orderBy: { stock: 'asc' },
       take: 10,
     }),

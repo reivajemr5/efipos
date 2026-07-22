@@ -162,7 +162,7 @@ export async function receive(req: AuthRequest, res: Response) {
         })
       }
 
-      const stockBefore = product.stock
+      const stockBefore = Number(product.stock)
       const stockAfter = stockBefore + ri.quantity
       await prisma.product.update({
         where: { id: ri.productId },
@@ -202,7 +202,7 @@ export async function receive(req: AuthRequest, res: Response) {
       // Re-fetch the product to get current stock
       const product = await prisma.product.findUnique({ where: { id: item.productId } })
       if (!product) continue
-      const stockBeforeVal = product.stock
+      const stockBeforeVal = Number(product.stock)
       const stockAfter = stockBeforeVal + item.quantity
       await prisma.product.update({
         where: { id: item.productId },

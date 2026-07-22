@@ -30,7 +30,7 @@ export async function adjust(req: AuthRequest, res: Response) {
   const product = await prisma.product.findUnique({ where: { id: productId } })
   if (!product) { res.status(404).json({ error: 'Producto no encontrado' }); return }
 
-  const stockBefore = product.stock
+  const stockBefore = Number(product.stock)
   const stockAfter = type === 'adjustment' ? quantity : stockBefore + quantity
 
   const [movement] = await prisma.$transaction([
