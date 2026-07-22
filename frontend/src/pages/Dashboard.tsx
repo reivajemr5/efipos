@@ -24,6 +24,7 @@ export default function Dashboard() {
   const maxDaily = data ? Math.max(...data.dailySales.map((d: any) => d.total), 1) : 1
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-900 border-t-transparent rounded-full" /></div>
+  if (!data) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No se pudieron cargar los datos</div>
 
   return (
     <div className="space-y-6">
