@@ -9,6 +9,7 @@ import Products from './pages/Products'
 import Purchases from './pages/Purchases'
 import Quotes from './pages/Quotes'
 import POSPage from './pages/POSPage'
+import InvoicePrint from './pages/InvoicePrint'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import AccountsReceivable from './pages/AccountsReceivable'
@@ -22,6 +23,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/invoices/print/:id" element={<InvoicePrint />} />
         <Route
           path="/"
           element={

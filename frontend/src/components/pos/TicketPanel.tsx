@@ -13,6 +13,7 @@ export interface CartItem {
 interface TicketPanelProps {
   items: CartItem[]
   currency: string
+  discount?: number
   onUpdateQuantity: (productId: number, qty: number) => void
   onRemove: (productId: number) => void
   onCheckout: () => void
@@ -23,13 +24,14 @@ interface TicketPanelProps {
 }
 
 export default function TicketPanel({
-  items, currency, onUpdateQuantity, onRemove,
+  items, currency, discount = 0, onUpdateQuantity, onRemove,
   onCheckout, onCancel, onSaveDraft, onDiscount, onNotes,
 }: TicketPanelProps) {
   const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const ivaTotal = items.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
-  const total = subtotal + ivaTotal
+  const total = Math.max(0, subtotal + ivaTotal - discount)
   const itemCount = items.reduce((c, i) => c + i.quantity, 0)
+  const hasDiscount = discount > 0
 
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-200">
@@ -56,22 +58,28 @@ export default function TicketPanel({
         )}
       </div>
 
-      <TicketFooter
-        subtotal={subtotal}
-        ivaTotal={ivaTotal}
-        total={total}
-        currency={currency}
-        onCheckout={onCheckout}
-        itemCount={itemCount}
-      />
+      <div className="shrink-0">
+        <TicketFooter
+          subtotal={subtotal}
+          ivaTotal={ivaTotal}
+          discount={discount}
+          total={total}
+          currency={currency}
+          onCheckout={onCheckout}
+          itemCount={itemCount}
+        />
+      </div>
 
-      <QuickActions
-        onCancel={onCancel}
-        onSaveDraft={onSaveDraft}
-        onDiscount={onDiscount}
-        onNotes={onNotes}
-        itemCount={itemCount}
-      />
+      <div className="shrink-0">
+        <QuickActions
+          onCancel={onCancel}
+          onSaveDraft={onSaveDraft}
+          onDiscount={onDiscount}
+          onNotes={onNotes}
+          itemCount={itemCount}
+          hasDiscount={hasDiscount}
+        />
+      </div>
     </div>
   )
 }

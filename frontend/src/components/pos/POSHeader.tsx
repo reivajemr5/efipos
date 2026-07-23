@@ -12,6 +12,8 @@ interface POSHeaderProps {
   onClientAdd: () => void
   clients: Client[]
   onSelectClient: (c: Client) => void
+  selectedClient: { id: number; name: string; documentType: string; documentNumber: string } | null
+  onClearClient: () => void
   productSearch: string
   onProductSearchChange: (v: string) => void
   onProductSearchModal: () => void
@@ -19,6 +21,7 @@ interface POSHeaderProps {
 
 export default function POSHeader({
   clientSearch, onClientSearchChange, onClientSearchModal, onClientAdd, clients, onSelectClient,
+  selectedClient, onClearClient,
   productSearch, onProductSearchChange, onProductSearchModal,
 }: POSHeaderProps) {
   const ref = useRef<HTMLDivElement>(null)
@@ -40,7 +43,21 @@ export default function POSHeader({
 
   return (
     <header className="bg-blue-900 text-white px-4 py-2 flex items-center gap-2 shrink-0 flex-wrap">
-      <div className="relative min-w-0 flex-1 md:flex-none md:min-w-[200px]" ref={ref}>
+      <div className="relative min-w-0 flex-1 md:flex-none md:min-w-[160px]" ref={ref}>
+        {selectedClient ? (
+          <div className="flex items-center gap-1.5 bg-blue-700 rounded-lg px-2.5 py-1.5">
+            <span className="text-sm shrink-0">👤</span>
+            <span className="text-sm font-medium truncate min-w-0 flex-1">
+              {selectedClient.name}
+            </span>
+            <button onClick={onClientSearchModal} className="p-0.5 hover:bg-blue-600 rounded touch-manipulation shrink-0" title="Cambiar cliente">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </button>
+            <button onClick={onClearClient} className="p-0.5 hover:bg-blue-600 rounded touch-manipulation shrink-0" title="Quitar cliente">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        ) : (
         <div className="flex items-center gap-1 bg-blue-800 rounded-lg px-2 py-1">
           <span className="text-sm shrink-0">👤</span>
           <input
@@ -57,6 +74,7 @@ export default function POSHeader({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           </button>
         </div>
+        )}
 
         {showDropdown && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">

@@ -4,9 +4,10 @@ interface QuickActionsProps {
   onDiscount: () => void
   onNotes: () => void
   itemCount: number
+  hasDiscount?: boolean
 }
 
-export default function QuickActions({ onCancel, onSaveDraft, onDiscount, onNotes, itemCount }: QuickActionsProps) {
+export default function QuickActions({ onCancel, onSaveDraft, onDiscount, onNotes, itemCount, hasDiscount }: QuickActionsProps) {
   return (
     <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
       <button
@@ -31,9 +32,13 @@ export default function QuickActions({ onCancel, onSaveDraft, onDiscount, onNote
       <button
         onClick={onDiscount}
         disabled={itemCount === 0}
-        className="flex-1 py-2.5 px-3 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
+        className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-colors touch-manipulation ${
+          hasDiscount
+            ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+            : 'bg-amber-500 text-white hover:bg-amber-600'
+        } disabled:opacity-40 disabled:cursor-not-allowed`}
       >
-        Descto.
+        {hasDiscount ? 'Descto. ✓' : 'Descto.'}
       </button>
     </div>
   )

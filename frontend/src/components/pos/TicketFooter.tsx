@@ -1,13 +1,14 @@
 interface TicketFooterProps {
   subtotal: number
   ivaTotal: number
+  discount: number
   total: number
   currency: string
   onCheckout: () => void
   itemCount: number
 }
 
-export default function TicketFooter({ subtotal, ivaTotal, total, currency, onCheckout, itemCount }: TicketFooterProps) {
+export default function TicketFooter({ subtotal, ivaTotal, discount, total, currency, onCheckout, itemCount }: TicketFooterProps) {
   const symbol = currency === 'bs' ? 'Bs.' : '$'
 
   return (
@@ -21,6 +22,12 @@ export default function TicketFooter({ subtotal, ivaTotal, total, currency, onCh
           <span>IVA</span>
           <span>{symbol} {ivaTotal.toFixed(2)}</span>
         </div>
+        {discount > 0 && (
+          <div className="flex justify-between text-sm text-amber-600">
+            <span>Descuento</span>
+            <span>-{symbol} {discount.toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
           <span>Total</span>
           <span>{symbol} {total.toFixed(2)}</span>

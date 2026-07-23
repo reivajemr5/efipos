@@ -180,7 +180,7 @@ export default function Layout() {
       )}
 
       {/* Main content */}
-      <main className={`flex-1 overflow-auto ${isPOS ? '' : 'p-4 md:p-6 pb-20 md:pb-6'}`}>
+      <main className={`flex-1 ${isPOS ? 'overflow-hidden' : 'overflow-auto p-4 md:p-6 pb-20 md:pb-6'}`}>
         <div className={isPOS ? '' : 'max-w-7xl mx-auto'}>
           <Outlet />
         </div>

@@ -38,7 +38,8 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { clientId, quoteId, paymentMethod, currency, exchangeRate, items } = req.body
+  const { clientId, quoteId, paymentMethod, currency, exchangeRate, items, payments, status } = req.body
+  const isDraft = status === 'borrador'
 
   if (!items?.length) {
     res.status(400).json({ error: 'Productos requeridos' })
@@ -102,16 +103,78 @@ export async function create(req: AuthRequest, res: Response) {
       total,
       totalBs,
       paymentMethod: paymentMethod || 'efectivo',
+      status: isDraft ? 'borrador' : undefined,
       items: { create: invoiceItems },
+      payments: payments?.length ? {
+        create: payments.map((p: any) => ({
+          amount: p.amount,
+          method: p.method,
+          reference: p.reference || null,
+          userId: req.user!.id,
+        })),
+      } : undefined,
     },
     include: {
       client: { select: { id: true, name: true } },
       items: { include: { product: { select: { id: true, name: true } } } },
+      payments: true,
     },
   })
 
-  for (const item of invoiceItems) {
-    const product = productMap.get(item.productId)!
+  if (!isDraft) {
+    for (const item of invoiceItems) {
+      const product = productMap.get(item.productId)!
+      const stockBefore = Number(product.stock)
+      const stockAfter = stockBefore - item.quantity
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: { stock: stockAfter },
+      })
+      await prisma.stockMovement.create({
+        data: {
+          productId: item.productId,
+          type: 'sale',
+          quantity: -item.quantity,
+          stockBefore,
+          stockAfter,
+          reference: number,
+          notes: `Venta #${number}`,
+          userId: req.user!.id,
+        },
+      })
+    }
+  }
+
+  res.status(201).json(invoice)
+}
+
+export async function listDrafts(req: AuthRequest, res: Response) {
+  const drafts = await prisma.invoice.findMany({
+    where: { userId: req.user!.id, status: 'borrador' },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      client: { select: { id: true, name: true, documentType: true, documentNumber: true } },
+      items: {
+        include: { product: { select: { id: true, name: true, code: true, price: true } } },
+      },
+    },
+  })
+  res.json(drafts)
+}
+
+export async function completeDraft(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const invoice = await prisma.invoice.findUnique({
+    where: { id },
+    include: { items: true },
+  })
+  if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
+  if (invoice.status !== 'borrador') { res.status(400).json({ error: 'La factura no es un borrador' }); return }
+
+  // Subtract stock
+  for (const item of invoice.items) {
+    const product = await prisma.product.findUnique({ where: { id: item.productId } })
+    if (!product) continue
     const stockBefore = Number(product.stock)
     const stockAfter = stockBefore - item.quantity
     await prisma.product.update({
@@ -125,14 +188,22 @@ export async function create(req: AuthRequest, res: Response) {
         quantity: -item.quantity,
         stockBefore,
         stockAfter,
-        reference: number,
-        notes: `Venta #${number}`,
+        reference: invoice.number,
+        notes: `Venta #${invoice.number}`,
         userId: req.user!.id,
       },
     })
   }
 
-  res.status(201).json(invoice)
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: { status: 'activa' },
+    include: {
+      client: { select: { id: true, name: true } },
+      items: { include: { product: { select: { id: true, name: true } } } },
+    },
+  })
+  res.json(updated)
 }
 
 export async function cancel(req: AuthRequest, res: Response) {

@@ -19,6 +19,7 @@ enum Currency {
 }
 
 enum InvoiceStatus {
+  borrador
   activa
   anulada
 }

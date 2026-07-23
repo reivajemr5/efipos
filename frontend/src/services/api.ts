@@ -85,6 +85,8 @@ export const api = {
     create: (data: any) => request('/invoices', { method: 'POST', body: JSON.stringify(data) }),
     cancel: (id: number) => request(`/invoices/${id}/cancel`, { method: 'POST' }),
     print: (id: number) => request(`/invoices/print/${id}`),
+    drafts: () => request('/invoices/drafts'),
+    complete: (id: number) => request(`/invoices/${id}/complete`, { method: 'PATCH' }),
   },
   categories: {
     list: () => request('/categories'),

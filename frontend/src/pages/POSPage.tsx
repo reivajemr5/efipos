@@ -6,6 +6,7 @@ import TicketPanel from '../components/pos/TicketPanel'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
+import LoadDraftModal from '../components/LoadDraftModal'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
@@ -39,7 +40,8 @@ export default function POSPage() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [checkoutModal, setCheckoutModal] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState('efectivo')
+  const [paymentLines, setPaymentLines] = useState<Array<{ method: string; amount: number; reference: string }>>([])
+  const [receivedAmount, setReceivedAmount] = useState(0)
   const [successSale, setSuccessSale] = useState<{ number: string; id: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
@@ -52,10 +54,12 @@ export default function POSPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [showCartMobile, setShowCartMobile] = useState(false)
+  const [showLoadDraft, setShowLoadDraft] = useState(false)
   const [search, setSearch] = useState('')
   const [showProductSearch, setShowProductSearch] = useState(false)
   const [modalSearch, setModalSearch] = useState('')
   const [modalCategory, setModalCategory] = useState<number | null>(null)
+  const [lastSaleAmount, setLastSaleAmount] = useState(0)
 
   const loadData = useCallback(async () => {
     try {
@@ -119,18 +123,13 @@ export default function POSPage() {
     setNotes('')
   }
 
-  async function handleCheckout() {
+  async function handleSaveDraft() {
     if (cart.length === 0) return
-    setCheckoutModal(true)
-  }
-
-  async function confirmCheckout() {
-    setLoading(true)
-
     try {
-      const invoice = await api.invoices.create({
+      await api.invoices.create({
         clientId: selectedClient.id || undefined,
-        paymentMethod,
+        status: 'borrador',
+        paymentMethod: 'efectivo',
         currency: 'usd',
         items: cart.map((i) => ({
           productId: i.productId,
@@ -138,6 +137,55 @@ export default function POSPage() {
           unitPrice: i.unitPrice,
         })),
       })
+      setCart([])
+      setDiscount(0)
+      setNotes('')
+      setSelectedClient(DEFAULT_CLIENT)
+    } catch (err: any) {
+      alert('Error al guardar borrador: ' + err.message)
+    }
+  }
+
+  function handleLoadDraft(draft: any) {
+    setCart(draft.items.map((i: any) => ({
+      productId: i.productId,
+      name: i.name || i.product?.name || '',
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      ivaPercent: Number(i.ivaPercent),
+    })))
+    if (draft.client) {
+      setSelectedClient({ id: draft.clientId, name: draft.client.name, documentType: draft.client.documentType, documentNumber: draft.client.documentNumber, phone: null, address: null })
+    }
+    setShowLoadDraft(false)
+  }
+
+  async function handleCheckout() {
+    if (cart.length === 0) return
+    const paidTotal = Math.max(0, subtotal + ivaTotal - discount)
+    setPaymentLines([{ method: 'efectivo', amount: paidTotal, reference: '' }])
+    setReceivedAmount(paidTotal)
+    setCheckoutModal(true)
+  }
+
+  async function confirmCheckout() {
+    setLoading(true)
+    const paidTotal = Math.max(0, subtotal + ivaTotal - discount)
+
+    try {
+      const activePayments = paymentLines.filter((p) => p.amount > 0)
+      const invoice = await api.invoices.create({
+        clientId: selectedClient.id || undefined,
+        paymentMethod: activePayments.map((p) => p.method).join('+'),
+        currency: 'usd',
+        items: cart.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+        })),
+        payments: activePayments,
+      })
+      setLastSaleAmount(paidTotal)
       setSuccessSale({ number: invoice.number, id: invoice.id })
       setCart([])
       setDiscount(0)
@@ -194,7 +242,7 @@ export default function POSPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-800 mb-1">Venta Completada</h2>
           <p className="text-gray-500 mb-1">{successSale.number}</p>
-          <p className="text-2xl font-bold text-green-600 mb-6">${total.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-green-600 mb-6">${lastSaleAmount.toFixed(2)}</p>
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => handlePrint(successSale.id)}
@@ -226,6 +274,8 @@ export default function POSPage() {
         onClientAdd={() => setShowNewClientForm(true)}
         clients={clients}
         onSelectClient={handleSelectClient}
+        selectedClient={selectedClient.id ? selectedClient : null}
+        onClearClient={() => setSelectedClient(DEFAULT_CLIENT)}
         productSearch={search}
         onProductSearchChange={setSearch}
         onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
@@ -235,16 +285,28 @@ export default function POSPage() {
           <TicketPanel
             items={cart}
             currency="usd"
+            discount={discount}
             onUpdateQuantity={handleUpdateQuantity}
             onRemove={handleRemove}
             onCheckout={handleCheckout}
             onCancel={handleCancel}
-            onSaveDraft={handleCheckout}
+            onSaveDraft={handleSaveDraft}
             onDiscount={() => setShowDiscount(true)}
             onNotes={() => setShowNotes(true)}
           />
         </div>
         <div className={`flex-1 flex flex-col ${showCartMobile ? 'hidden md:flex' : ''}`}>
+          <div className="flex items-center justify-between px-3 pt-2">
+            <span className="text-xs text-gray-400 font-medium">
+              {filteredProducts.length} productos
+            </span>
+            <button
+              onClick={() => setShowLoadDraft(true)}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium touch-manipulation"
+            >
+              📂 Cargar Borrador
+            </button>
+          </div>
           <ProductGrid
             products={filteredProducts}
             categories={categories}
@@ -280,6 +342,7 @@ export default function POSPage() {
             <TicketPanel
               items={cart}
               currency="usd"
+              discount={discount}
               onUpdateQuantity={handleUpdateQuantity}
               onRemove={handleRemove}
               onCheckout={handleCheckout}
@@ -295,29 +358,97 @@ export default function POSPage() {
       {checkoutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">Confirmar Venta</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Método de pago</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                >
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="tarjeta">Tarjeta</option>
-                  <option value="mixto">Mixto</option>
-                </select>
-              </div>
-              <div className="text-sm text-gray-600 space-y-1">
-                <p>Subtotal: ${subtotal.toFixed(2)}</p>
-                <p>IVA: ${ivaTotal.toFixed(2)}</p>
-                {discount > 0 && <p className="text-amber-600">Descuento: -${discount.toFixed(2)}</p>}
-                <p className="text-lg font-bold text-gray-800">Total: ${total.toFixed(2)}</p>
-              </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Confirmar Venta</h3>
+            <p className="text-sm text-gray-500 mb-4">Total a cobrar: <span className="font-bold text-gray-800">${total.toFixed(2)}</span></p>
+
+            <div className="space-y-2 mb-4">
+              <label className="block text-sm font-medium text-gray-700">Métodos de pago</label>
+              {paymentLines.map((line, i) => {
+                const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
+                const remaining = total - (lineTotal - line.amount)
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      value={line.method}
+                      onChange={(e) => {
+                        const next = [...paymentLines]
+                        next[i] = { ...next[i], method: e.target.value }
+                        setPaymentLines(next)
+                      }}
+                      className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[110px]"
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="transferencia">Transferencia</option>
+                    </select>
+                    <div className="relative flex-1">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.amount || ''}
+                        onChange={(e) => {
+                          const next = [...paymentLines]
+                          next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
+                          setPaymentLines(next)
+                        }}
+                        className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        placeholder={remaining > 0 ? `Restan $${remaining.toFixed(2)}` : '0.00'}
+                      />
+                    </div>
+                    {paymentLines.length > 1 && (
+                      <button
+                        onClick={() => setPaymentLines(paymentLines.filter((_, j) => j !== i))}
+                        className="p-2 text-gray-400 hover:text-red-600 touch-manipulation"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+
+              {paymentLines.some((l) => l.method === 'efectivo') && (
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="text-sm text-gray-600 min-w-[110px]">Recibido $</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={receivedAmount || ''}
+                    onChange={(e) => setReceivedAmount(Math.max(0, Number(e.target.value) || 0))}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+
+              {paymentLines.some((l) => l.method === 'efectivo') && receivedAmount > total && (
+                <p className="text-sm text-green-600 font-medium">
+                  Cambio: ${(receivedAmount - total).toFixed(2)}
+                </p>
+              )}
+
+              <button
+                onClick={() => {
+                  const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
+                  const rest = Math.max(0, total - lineTotal)
+                  setPaymentLines([...paymentLines, { method: 'efectivo', amount: Number(rest.toFixed(2)), reference: '' }])
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium touch-manipulation"
+              >
+                + Agregar otro método
+              </button>
             </div>
-            <div className="flex gap-3 mt-6">
+
+            <div className="text-xs text-gray-500 space-y-1 mb-4">
+              <p>Subtotal: ${subtotal.toFixed(2)}</p>
+              <p>IVA: ${ivaTotal.toFixed(2)}</p>
+              {discount > 0 && <p className="text-amber-600">Descuento: -${discount.toFixed(2)}</p>}
+            </div>
+
+            <div className="flex gap-3">
               <button
                 onClick={() => setCheckoutModal(false)}
                 className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
@@ -326,7 +457,7 @@ export default function POSPage() {
               </button>
               <button
                 onClick={confirmCheckout}
-                disabled={loading}
+                disabled={loading || paymentLines.reduce((s, l) => s + l.amount, 0) < total - 0.01}
                 className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
               >
                 {loading ? 'Procesando...' : `Cobrar $${total.toFixed(2)}`}
@@ -415,6 +546,8 @@ export default function POSPage() {
       )}
 
       <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} />
+
+      <LoadDraftModal open={showLoadDraft} onClose={() => setShowLoadDraft(false)} onLoad={handleLoadDraft} />
 
       {showProductSearch && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowProductSearch(false); setModalSearch(''); setModalCategory(null) }}>
