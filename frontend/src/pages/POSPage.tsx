@@ -267,7 +267,7 @@ export default function POSPage() {
   const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0) + cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <POSHeader
         clientSearch={clientSearch}
         onClientSearchChange={setClientSearch}
@@ -282,8 +282,8 @@ export default function POSPage() {
         onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
         onLoadDraft={() => setShowLoadDraft(true)}
       />
-      <div className="flex-1 flex overflow-hidden">
-        <div className="hidden md:flex w-2/5 flex-col">
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        <div className="hidden md:flex w-2/5 flex-col min-h-0">
           <TicketPanel
             items={cart}
             currency="usd"
@@ -297,7 +297,7 @@ export default function POSPage() {
             onNotes={() => setShowNotes(true)}
           />
         </div>
-        <div className={`flex-1 flex flex-col ${showCartMobile ? 'hidden md:flex' : ''}`}>
+        <div className={`flex-1 flex flex-col min-h-0 ${showCartMobile ? 'hidden md:flex' : ''}`}>
           <ProductGrid
             products={filteredProducts}
             categories={categories}

@@ -34,13 +34,13 @@ export default function TicketPanel({
   const hasDiscount = discount > 0
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200">
+    <div className="flex flex-col min-h-0 bg-white border-r border-gray-200">
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 shrink-0">
         <h2 className="text-sm font-semibold text-gray-700">Ticket de Venta</h2>
         <p className="text-xs text-gray-400">{itemCount} items</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {items.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm px-4 text-center">
             Selecciona productos del catálogo para añadirlos al ticket
