@@ -191,6 +191,7 @@ export default function POSPage() {
       setDiscount(0)
       setNotes('')
       setCheckoutModal(false)
+      setTimeout(() => window.open(`/invoices/print/${invoice.id}`, '_blank'), 500)
     } catch (err: any) {
       alert('Error al crear factura: ' + err.message)
     } finally {
@@ -279,6 +280,7 @@ export default function POSPage() {
         productSearch={search}
         onProductSearchChange={setSearch}
         onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
+        onLoadDraft={() => setShowLoadDraft(true)}
       />
       <div className="flex-1 flex overflow-hidden">
         <div className="hidden md:flex w-2/5 flex-col">
@@ -296,17 +298,6 @@ export default function POSPage() {
           />
         </div>
         <div className={`flex-1 flex flex-col ${showCartMobile ? 'hidden md:flex' : ''}`}>
-          <div className="flex items-center justify-between px-3 pt-2">
-            <span className="text-xs text-gray-400 font-medium">
-              {filteredProducts.length} productos
-            </span>
-            <button
-              onClick={() => setShowLoadDraft(true)}
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium touch-manipulation"
-            >
-              📂 Cargar Borrador
-            </button>
-          </div>
           <ProductGrid
             products={filteredProducts}
             categories={categories}
@@ -347,7 +338,7 @@ export default function POSPage() {
               onRemove={handleRemove}
               onCheckout={handleCheckout}
               onCancel={() => { handleCancel(); setShowCartMobile(false) }}
-              onSaveDraft={handleCheckout}
+              onSaveDraft={handleSaveDraft}
               onDiscount={() => setShowDiscount(true)}
               onNotes={() => setShowNotes(true)}
             />
@@ -378,7 +369,9 @@ export default function POSPage() {
                       className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[110px]"
                     >
                       <option value="efectivo">Efectivo</option>
-                      <option value="tarjeta">Tarjeta</option>
+                      <option value="pago_movil">Pago Móvil</option>
+                      <option value="bio_pago">Bio Pago</option>
+                      <option value="cashea">Cashea</option>
                       <option value="transferencia">Transferencia</option>
                     </select>
                     <div className="relative flex-1">
