@@ -18,12 +18,15 @@ interface POSHeaderProps {
   onProductSearchChange: (v: string) => void
   onProductSearchModal: () => void
   onLoadDraft?: () => void
+  searchInputRef?: React.RefObject<HTMLInputElement | null>
+  onSearchSubmit?: () => void
 }
 
 export default function POSHeader({
   clientSearch, onClientSearchChange, onClientSearchModal, onClientAdd, clients, onSelectClient,
   selectedClient, onClearClient,
   productSearch, onProductSearchChange, onProductSearchModal, onLoadDraft,
+  searchInputRef, onSearchSubmit,
 }: POSHeaderProps) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -113,10 +116,12 @@ export default function POSHeader({
       <div className="flex items-center gap-1 bg-blue-800 rounded-lg px-2 py-1 min-w-0 flex-[2] md:flex-1">
         <svg className="w-4 h-4 shrink-0 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="Buscar productos..."
           value={productSearch}
           onChange={(e) => onProductSearchChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onSearchSubmit?.() }}
           className="flex-1 bg-transparent text-white text-sm placeholder-white/50 outline-none min-w-0"
         />
         <button onClick={onProductSearchModal} className="p-1 hover:bg-blue-700 rounded touch-manipulation shrink-0">
