@@ -30,8 +30,8 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
   const tabsRef = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-gray-50">
-      <div ref={tabsRef} className="flex gap-1 p-3 pb-2 overflow-x-auto shrink-0">
+    <div className="bg-gray-50">
+      <div ref={tabsRef} className="flex gap-1 p-3 pb-2 overflow-x-auto shrink-0 sticky top-0 bg-gray-50 z-10">
         <button
           onClick={() => onSelectCategory(null)}
           className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors touch-manipulation ${
@@ -57,9 +57,9 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 pb-3 min-h-0">
+      <div className="px-3 pb-3">
         {products.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+          <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
             No hay productos en esta categoría
           </div>
         ) : (
