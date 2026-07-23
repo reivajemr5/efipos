@@ -283,7 +283,7 @@ export default function POSPage() {
         onLoadDraft={() => setShowLoadDraft(true)}
       />
       <div className="grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
-        <div className="hidden md:flex flex-col min-h-0">
+        <div className="hidden md:flex flex-col min-h-0 h-full">
           <TicketPanel
             items={cart}
             currency="usd"
