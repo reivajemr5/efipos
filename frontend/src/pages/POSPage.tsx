@@ -283,15 +283,6 @@ export default function POSPage() {
         onLoadDraft={() => setShowLoadDraft(true)}
       />
       <div className="grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
-        <div className={`overflow-y-auto min-h-0 ${showCartMobile ? 'hidden md:block' : ''}`}>
-          <ProductGrid
-            products={filteredProducts}
-            categories={categories}
-            selectedCategoryId={selectedCategory}
-            onSelectCategory={setSelectedCategory}
-            onSelectProduct={handleSelectProduct}
-          />
-        </div>
         <div className="hidden md:flex flex-col min-h-0">
           <TicketPanel
             items={cart}
@@ -304,6 +295,15 @@ export default function POSPage() {
             onSaveDraft={handleSaveDraft}
             onDiscount={() => setShowDiscount(true)}
             onNotes={() => setShowNotes(true)}
+          />
+        </div>
+        <div className={`overflow-y-auto min-h-0 ${showCartMobile ? 'hidden md:block' : ''}`}>
+          <ProductGrid
+            products={filteredProducts}
+            categories={categories}
+            selectedCategoryId={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            onSelectProduct={handleSelectProduct}
           />
         </div>
       </div>
