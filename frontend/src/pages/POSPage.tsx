@@ -578,7 +578,7 @@ export default function POSPage() {
           </div>
         )}
 
-        <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} initialQuery={clientSearch} />
+        <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} initialQuery={clientSearch} existingClients={clients} />
 
         <LoadDraftModal open={showLoadDraft} onClose={() => setShowLoadDraft(false)} onLoad={handleLoadDraft} />
 

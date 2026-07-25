@@ -11,9 +11,10 @@ interface Props {
   onClose: () => void
   onSaved: (client: Client) => void
   initialQuery?: string
+  existingClients?: Client[]
 }
 
-export default function ClientFormModal({ open, onClose, onSaved, initialQuery }: Props) {
+export default function ClientFormModal({ open, onClose, onSaved, initialQuery, existingClients }: Props) {
   const nameRef = useRef<HTMLInputElement>(null)
   const docRef = useRef<HTMLInputElement>(null)
 
@@ -26,9 +27,11 @@ export default function ClientFormModal({ open, onClose, onSaved, initialQuery }
     phone: '',
     address: '',
   })
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open) return
+    setError('')
     setForm({
       name: isDoc ? '' : (initialQuery?.trim() || ''),
       documentType: 'V',
@@ -46,6 +49,14 @@ export default function ClientFormModal({ open, onClose, onSaved, initialQuery }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const dup = existingClients?.find(
+      (c) => c.documentNumber === form.documentNumber.trim() && c.documentType === form.documentType
+    )
+    if (dup) {
+      setError(`Ya existe un cliente con ${form.documentType}-${form.documentNumber}: ${dup.name}`)
+      return
+    }
+    setError('')
     try {
       const client = await api.clients.create(form)
       onSaved(client)
@@ -73,6 +84,9 @@ export default function ClientFormModal({ open, onClose, onSaved, initialQuery }
             className="w-full px-3 py-2 border rounded-lg" />
           <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Dirección"
             className="w-full px-3 py-2 border rounded-lg" />
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          )}
           <div className="flex gap-2 pt-2">
             <button type="submit"
               className="flex-1 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800">Crear y seleccionar</button>
