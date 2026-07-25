@@ -14,25 +14,33 @@ interface Props {
 }
 
 export default function ClientFormModal({ open, onClose, onSaved, initialQuery }: Props) {
+  const nameRef = useRef<HTMLInputElement>(null)
+  const docRef = useRef<HTMLInputElement>(null)
+
   const isDoc = /^\d[\d\s.-]*$/.test(initialQuery?.trim() || '')
+
   const [form, setForm] = useState({
-    name: isDoc ? '' : (initialQuery?.trim() || ''),
-    documentType: 'V',
-    documentNumber: isDoc ? (initialQuery?.trim() || '') : '',
+    name: '',
+    documentType: 'V' as string,
+    documentNumber: '',
     phone: '',
     address: '',
   })
 
-  const nameRef = useRef<HTMLInputElement>(null)
-  const docRef = useRef<HTMLInputElement>(null)
-
   useEffect(() => {
     if (!open) return
+    setForm({
+      name: isDoc ? '' : (initialQuery?.trim() || ''),
+      documentType: 'V',
+      documentNumber: isDoc ? (initialQuery?.trim() || '') : '',
+      phone: '',
+      address: '',
+    })
     setTimeout(() => {
       if (isDoc) docRef.current?.focus()
       else nameRef.current?.focus()
     }, 100)
-  }, [open, isDoc])
+  }, [open])
 
   if (!open) return null
 
