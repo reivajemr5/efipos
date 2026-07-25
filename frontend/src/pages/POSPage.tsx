@@ -209,7 +209,7 @@ export default function POSPage() {
       ivaPercent: Number(i.ivaPercent),
     })))
     if (draft.client) {
-      setSelectedClient({ id: draft.clientId, name: draft.client.name, documentType: draft.client.documentType, documentNumber: draft.client.documentNumber, phone: null, address: null })
+      setSelectedClient({ id: draft.clientId, name: draft.client.name, documentType: draft.client.documentType, documentNumber: draft.client.documentNumber, phone: draft.client.phone, address: draft.client.address })
     }
     setShowLoadDraft(false)
   }
@@ -312,7 +312,7 @@ export default function POSPage() {
           onClientAdd={() => setShowNewClientForm(true)}
           clients={clients}
           onSelectClient={handleSelectClient}
-          selectedClient={selectedClient.id ? selectedClient : null}
+          selectedClient={selectedClient.id ? { id: selectedClient.id, name: selectedClient.name, documentType: selectedClient.documentType, documentNumber: selectedClient.documentNumber, phone: selectedClient.phone, address: selectedClient.address } : null}
           onClearClient={() => setSelectedClient(DEFAULT_CLIENT)}
           productSearch={search}
           onProductSearchChange={setSearch}

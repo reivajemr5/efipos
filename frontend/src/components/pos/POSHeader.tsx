@@ -12,7 +12,7 @@ interface POSHeaderProps {
   onClientAdd: () => void
   clients: Client[]
   onSelectClient: (c: Client) => void
-  selectedClient: { id: number; name: string; documentType: string; documentNumber: string } | null
+  selectedClient: { id: number; name: string; documentType: string; documentNumber: string; phone: string | null; address: string | null } | null
   onClearClient: () => void
   productSearch: string
   onProductSearchChange: (v: string) => void
@@ -49,17 +49,21 @@ export default function POSHeader({
 
   return (
     <header className="bg-blue-900 text-white px-4 py-2 flex items-center gap-2 shrink-0 flex-wrap">
-      <div className="relative min-w-0 flex-1 md:flex-none md:min-w-[160px]" ref={ref}>
+      <div className="relative min-w-0 flex-1 md:flex-none md:min-w-[200px]" ref={ref}>
         {selectedClient ? (
-          <div className="flex items-center gap-1.5 bg-blue-700 rounded-lg px-2.5 py-1.5">
-            <span className="text-sm shrink-0">👤</span>
-            <span className="text-sm font-medium truncate min-w-0 flex-1">
-              {selectedClient.name}
-            </span>
-            <button onClick={onClientSearchModal} className="p-0.5 hover:bg-blue-600 rounded touch-manipulation shrink-0" title="Cambiar cliente">
+          <div className="flex items-start gap-1.5 bg-blue-700 rounded-lg px-2.5 py-1.5">
+            <span className="text-sm mt-0.5 shrink-0">👤</span>
+            <div className="min-w-0 flex-1 text-[11px] leading-tight">
+              <p className="font-medium truncate">{selectedClient.name}</p>
+              <p className="text-blue-200/80">{selectedClient.documentType}-{selectedClient.documentNumber}</p>
+              {selectedClient.address && (
+                <p className="text-blue-200/60 truncate">{selectedClient.address}</p>
+              )}
+            </div>
+            <button onClick={onClientSearchModal} className="p-0.5 hover:bg-blue-600 rounded touch-manipulation shrink-0 mt-0.5" title="Cambiar cliente">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </button>
-            <button onClick={onClearClient} className="p-0.5 hover:bg-blue-600 rounded touch-manipulation shrink-0" title="Quitar cliente">
+            <button onClick={onClearClient} className="p-0.5 hover:bg-blue-600 rounded touch-manipulation shrink-0 mt-0.5" title="Quitar cliente">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
