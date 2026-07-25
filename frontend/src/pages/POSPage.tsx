@@ -82,6 +82,7 @@ export default function POSPage() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement
       if (e.key === 'Escape') {
         if (checkoutModal) { setCheckoutModal(false); return }
         if (successSale) { setSuccessSale(null); return }
@@ -92,7 +93,7 @@ export default function POSPage() {
         if (showCartMobile) { setShowCartMobile(false); return }
         return
       }
-      if (e.key === 'n' && successSale && !e.ctrlKey && !e.metaKey) {
+      if (e.key === 'n' && !isInput && successSale && !e.ctrlKey && !e.metaKey) {
         startNewSale()
         return
       }
