@@ -25,9 +25,10 @@ interface ProductGridProps {
   onSelectCategory: (id: number | null) => void
   onSelectProduct: (product: ProductGridProduct) => void
   onSelectProductQuantity?: (product: ProductGridProduct) => void
+  onArrowUpFromFirst?: () => void
 }
 
-export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity }: ProductGridProps) {
+export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity, onArrowUpFromFirst }: ProductGridProps) {
   const tabsRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -49,6 +50,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
       const cols = gridRef.current ? Math.floor(gridRef.current.clientWidth / 160) : 3
       nextIdx = currentIdx < 0 ? 0 : Math.min(currentIdx + cols, buttons.length - 1)
     } else if (e.key === 'ArrowUp') {
+      if (currentIdx === 0) { onArrowUpFromFirst?.(); return }
       const cols = gridRef.current ? Math.floor(gridRef.current.clientWidth / 160) : 3
       nextIdx = currentIdx < 0 ? 0 : Math.max(currentIdx - cols, 0)
     }

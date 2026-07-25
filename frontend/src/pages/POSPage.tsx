@@ -321,7 +321,11 @@ export default function POSPage() {
           onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
           onLoadDraft={() => setShowLoadDraft(true)}
           searchInputRef={searchInputRef}
-          onSearchSubmit={handleSearchSubmit}
+           onSearchSubmit={handleSearchSubmit}
+           onSearchArrowDown={() => {
+             const firstCard = document.querySelector<HTMLButtonElement>('.product-card-btn')
+             firstCard?.focus()
+           }}
           clientInputRef={clientInputRef}
           onClientSubmit={handleClientSubmit}
         />
@@ -348,6 +352,7 @@ export default function POSPage() {
               onSelectCategory={setSelectedCategory}
                onSelectProduct={handleSelectProduct}
                onSelectProductQuantity={(p) => { setQtyModalProduct(p); setQtyValue(1) }}
+               onArrowUpFromFirst={() => searchInputRef.current?.focus()}
             />
           </div>
         </div>
