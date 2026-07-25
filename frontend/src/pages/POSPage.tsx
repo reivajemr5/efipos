@@ -407,6 +407,7 @@ export default function POSPage() {
                   return (
                     <div key={i} className="flex items-center gap-2">
                       <select
+                        autoFocus={i === 0}
                         value={line.method}
                         onChange={(e) => {
                           const next = [...paymentLines]
@@ -433,6 +434,27 @@ export default function POSPage() {
                             next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
                             setPaymentLines(next)
                           }}
+                          onBlur={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0)
+                            const next = [...paymentLines]
+                            next[i] = { ...next[i], amount: Math.round(val * 100) / 100 }
+                            setPaymentLines(next)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return
+                            e.preventDefault()
+                            const val = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
+                            const next = [...paymentLines]
+                            next[i] = { ...next[i], amount: Math.round(val * 100) / 100 }
+                            setPaymentLines(next)
+                            const newSum = next.reduce((s, l) => s + l.amount, 0)
+                            if (newSum >= total - 0.01) {
+                              confirmCheckout()
+                            } else {
+                              const rest = Math.max(0, total - newSum)
+                              setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
+                            }
+                          }}
                           className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                           placeholder={remaining > 0 ? `Restan $${remaining.toFixed(2)}` : '0.00'}
                         />
@@ -458,23 +480,28 @@ export default function POSPage() {
                       step="0.01"
                       value={receivedAmount || ''}
                       onChange={(e) => setReceivedAmount(Math.max(0, Number(e.target.value) || 0))}
+                      onBlur={(e) => setReceivedAmount(Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                       placeholder="0.00"
                     />
                   </div>
                 )}
 
-                {paymentLines.some((l) => l.method === 'efectivo') && receivedAmount > total && (
-                  <p className="text-sm text-green-600 font-medium">
-                    Cambio: ${(receivedAmount - total).toFixed(2)}
-                  </p>
-                )}
+                {(() => {
+                  const cashLine = paymentLines.find((l) => l.method === 'efectivo')
+                  const cashAmount = cashLine ? cashLine.amount : 0
+                  return cashLine && receivedAmount > cashAmount && (
+                    <p className="text-sm text-green-600 font-medium">
+                      Cambio: ${(receivedAmount - cashAmount).toFixed(2)}
+                    </p>
+                  )
+                })()}
 
                 <button
                   onClick={() => {
                     const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
                     const rest = Math.max(0, total - lineTotal)
-                    setPaymentLines([...paymentLines, { method: 'efectivo', amount: Number(rest.toFixed(2)), reference: '' }])
+                    setPaymentLines([...paymentLines, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
                   }}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium touch-manipulation"
                 >
