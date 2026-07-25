@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useCallback } from 'react'
 import ProductCard from './ProductCard'
 
 interface Category {
@@ -24,10 +24,36 @@ interface ProductGridProps {
   selectedCategoryId: number | null
   onSelectCategory: (id: number | null) => void
   onSelectProduct: (product: ProductGridProduct) => void
+  onSelectProductQuantity?: (product: ProductGridProduct) => void
 }
 
-export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct }: ProductGridProps) {
+export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity }: ProductGridProps) {
   const tabsRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  const getCardButtons = useCallback(() => {
+    if (!gridRef.current) return []
+    return Array.from(gridRef.current.querySelectorAll<HTMLButtonElement>('.product-card-btn'))
+  }, [])
+
+  function handleGridKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const buttons = getCardButtons()
+    if (buttons.length === 0) return
+    const currentIdx = buttons.findIndex((b) => b === document.activeElement)
+    let nextIdx = currentIdx
+    if (e.key === 'ArrowRight') nextIdx = currentIdx < buttons.length - 1 ? currentIdx + 1 : 0
+    else if (e.key === 'ArrowLeft') nextIdx = currentIdx > 0 ? currentIdx - 1 : buttons.length - 1
+    else if (e.key === 'ArrowDown') {
+      const cols = gridRef.current ? Math.floor(gridRef.current.clientWidth / 160) : 3
+      nextIdx = currentIdx < 0 ? 0 : Math.min(currentIdx + cols, buttons.length - 1)
+    } else if (e.key === 'ArrowUp') {
+      const cols = gridRef.current ? Math.floor(gridRef.current.clientWidth / 160) : 3
+      nextIdx = currentIdx < 0 ? 0 : Math.max(currentIdx - cols, 0)
+    }
+    buttons[nextIdx]?.focus()
+  }
 
   return (
     <div className="bg-gray-50">
@@ -63,9 +89,19 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
             No hay productos en esta categoría
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          <div
+            ref={gridRef}
+            tabIndex={-1}
+            onKeyDown={handleGridKeyDown}
+            className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2"
+          >
             {products.map((product) => (
-              <ProductCard key={product.id} product={product} onSelect={onSelectProduct} />
+              <ProductCard
+                key={product.id}
+                product={{ ...product, currency: product.currency || 'usd' }}
+                onSelect={onSelectProduct}
+                onSelectQuantity={onSelectProductQuantity}
+              />
             ))}
           </div>
         )}
