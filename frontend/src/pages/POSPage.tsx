@@ -80,6 +80,8 @@ export default function POSPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  useEffect(() => { searchInputRef.current?.focus() }, [])
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement
