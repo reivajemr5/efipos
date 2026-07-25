@@ -10,10 +10,11 @@ interface Props {
   open: boolean
   onClose: () => void
   onSaved: (client: Client) => void
+  initialName?: string
 }
 
-export default function ClientFormModal({ open, onClose, onSaved }: Props) {
-  const [form, setForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
+export default function ClientFormModal({ open, onClose, onSaved, initialName }: Props) {
+  const [form, setForm] = useState({ name: initialName || '', documentType: 'V', documentNumber: '', phone: '', address: '' })
 
   if (!open) return null
 

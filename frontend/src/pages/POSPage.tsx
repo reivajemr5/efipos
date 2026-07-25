@@ -152,6 +152,8 @@ export default function POSPage() {
         c.documentNumber.includes(clientSearch)
       )
       if (match) { handleSelectClient(match); return }
+      setShowNewClientForm(true)
+      return
     }
     handleSelectClient(DEFAULT_CLIENT)
   }
@@ -576,7 +578,7 @@ export default function POSPage() {
           </div>
         )}
 
-        <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} />
+        <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} initialName={clientSearch} />
 
         <LoadDraftModal open={showLoadDraft} onClose={() => setShowLoadDraft(false)} onLoad={handleLoadDraft} />
 
