@@ -143,7 +143,6 @@ export default function POSPage() {
     if (filteredProducts.length > 0) {
       setQtyModalProduct(filteredProducts[0])
       setQtyValue(1)
-      setSearch('')
     }
   }
 
