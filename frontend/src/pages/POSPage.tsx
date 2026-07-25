@@ -435,7 +435,7 @@ export default function POSPage() {
                             setPaymentLines(next)
                           }}
                           onBlur={(e) => {
-                            const val = Math.max(0, Number(e.target.value) || 0)
+                            const val = Math.min(remaining, Math.max(0, Number(e.target.value) || 0))
                             const next = [...paymentLines]
                             next[i] = { ...next[i], amount: Math.round(val * 100) / 100 }
                             setPaymentLines(next)
@@ -443,7 +443,7 @@ export default function POSPage() {
                           onKeyDown={(e) => {
                             if (e.key !== 'Enter') return
                             e.preventDefault()
-                            const val = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
+                            const val = Math.min(remaining, Math.max(0, Number((e.target as HTMLInputElement).value) || 0))
                             const next = [...paymentLines]
                             next[i] = { ...next[i], amount: Math.round(val * 100) / 100 }
                             setPaymentLines(next)
