@@ -42,6 +42,7 @@ export default function POSPage() {
   const [checkoutModal, setCheckoutModal] = useState(false)
   const [paymentLines, setPaymentLines] = useState<Array<{ method: string; amount: number; reference: string }>>([])
   const [receivedAmount, setReceivedAmount] = useState(0)
+
   const [successSale, setSuccessSale] = useState<{ number: string; id: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
@@ -405,69 +406,83 @@ export default function POSPage() {
                   const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
                   const remaining = total - (lineTotal - line.amount)
                   return (
-                    <div key={i} className="flex items-center gap-2">
-                      <select
-                        autoFocus={i === 0}
-                        value={line.method}
-                        onChange={(e) => {
-                          const next = [...paymentLines]
-                          next[i] = { ...next[i], method: e.target.value }
-                          setPaymentLines(next)
-                        }}
-                        className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[110px]"
-                      >
-                        <option value="efectivo">Efectivo</option>
-                        <option value="pago_movil">Pago Móvil</option>
-                        <option value="bio_pago">Bio Pago</option>
-                        <option value="cashea">Cashea</option>
-                        <option value="transferencia">Transferencia</option>
-                      </select>
-                      <div className="relative flex-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={line.amount || ''}
+                    <div key={i}>
+                      <div className="flex items-center gap-2">
+                        <select
+                          autoFocus={i === 0}
+                          value={line.method}
                           onChange={(e) => {
                             const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
+                            next[i] = { ...next[i], method: e.target.value }
                             setPaymentLines(next)
                           }}
-                          onBlur={(e) => {
-                            const raw = Math.max(0, Number(e.target.value) || 0)
-                            const val = line.method === 'efectivo' ? raw : Math.min(remaining, raw)
-                            const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: Math.round(val * 100) / 100 }
-                            setPaymentLines(next)
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter') return
-                            e.preventDefault()
-                            const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
-                            const val = line.method === 'efectivo' ? raw : Math.min(remaining, raw)
-                            const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: Math.round(val * 100) / 100 }
-                            setPaymentLines(next)
-                            const newSum = next.reduce((s, l) => s + l.amount, 0)
-                            if (newSum >= total - 0.01) {
-                              confirmCheckout()
-                            } else {
-                              const rest = Math.max(0, total - newSum)
-                              setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
-                            }
-                          }}
-                          className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                          placeholder={remaining > 0 ? `Restan $${remaining.toFixed(2)}` : '0.00'}
-                        />
-                      </div>
-                      {paymentLines.length > 1 && (
-                        <button
-                          onClick={() => setPaymentLines(paymentLines.filter((_, j) => j !== i))}
-                          className="p-2 text-gray-400 hover:text-red-600 touch-manipulation"
+                          className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[110px]"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
+                          <option value="efectivo">Efectivo</option>
+                          <option value="pago_movil">Pago Móvil</option>
+                          <option value="bio_pago">Bio Pago</option>
+                          <option value="cashea">Cashea</option>
+                          <option value="transferencia">Transferencia</option>
+                        </select>
+                        <div className="relative flex-1">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.amount || ''}
+                            onChange={(e) => {
+                              const next = [...paymentLines]
+                              next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
+                              setPaymentLines(next)
+                            }}
+                            onBlur={(e) => {
+                              const raw = Math.max(0, Number(e.target.value) || 0)
+                              const next = [...paymentLines]
+                              next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
+                              setPaymentLines(next)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return
+                              e.preventDefault()
+                              const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
+                              const next = [...paymentLines]
+                              next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
+                              setPaymentLines(next)
+                              if (line.method !== 'efectivo' && raw > remaining + 0.01) return
+                              const newSum = next.reduce((s, l) => s + l.amount, 0)
+                              if (newSum >= total - 0.01) {
+                                confirmCheckout()
+                              } else {
+                                const rest = Math.max(0, total - newSum)
+                                setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
+                              }
+                            }}
+                            className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder={remaining > 0 ? `Restan $${remaining.toFixed(2)}` : '0.00'}
+                          />
+                        </div>
+                        {paymentLines.length > 1 && (
+                          <button
+                            onClick={() => setPaymentLines(paymentLines.filter((_, j) => j !== i))}
+                            className="p-2 text-gray-400 hover:text-red-600 touch-manipulation"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      {line.method !== 'efectivo' && line.amount > remaining + 0.01 && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
+                          <span>Monto excede los ${remaining.toFixed(2)} restantes</span>
+                          <button
+                            onClick={() => {
+                              const next = [...paymentLines]
+                              next[i] = { ...next[i], amount: Math.round(remaining * 100) / 100 }
+                              setPaymentLines(next)
+                            }}
+                            className="ml-auto px-2 py-1 bg-amber-600 text-white rounded-md font-medium hover:bg-amber-700 touch-manipulation"
+                          >Ajustar</button>
+                        </div>
                       )}
                     </div>
                   )
@@ -526,7 +541,12 @@ export default function POSPage() {
                 </button>
                 <button
                   onClick={confirmCheckout}
-                  disabled={loading || paymentLines.reduce((s, l) => s + l.amount, 0) < total - 0.01}
+                  disabled={loading || paymentLines.reduce((s, l) => s + l.amount, 0) < total - 0.01 || paymentLines.some((l, idx) => {
+                    if (l.method === 'efectivo') return false
+                    const others = [...paymentLines]; others.splice(idx, 1)
+                    const paid = others.reduce((s, o) => s + o.amount, 0)
+                    return l.amount > total - paid + 0.01
+                  })}
                   className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
                 >
                   {loading ? 'Procesando...' : `Cobrar $${total.toFixed(2)}`}
