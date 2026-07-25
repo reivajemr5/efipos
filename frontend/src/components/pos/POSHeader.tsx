@@ -20,13 +20,15 @@ interface POSHeaderProps {
   onLoadDraft?: () => void
   searchInputRef?: React.RefObject<HTMLInputElement | null>
   onSearchSubmit?: () => void
+  clientInputRef?: React.RefObject<HTMLInputElement | null>
+  onClientSubmit?: () => void
 }
 
 export default function POSHeader({
   clientSearch, onClientSearchChange, onClientSearchModal, onClientAdd, clients, onSelectClient,
   selectedClient, onClearClient,
   productSearch, onProductSearchChange, onProductSearchModal, onLoadDraft,
-  searchInputRef, onSearchSubmit,
+  searchInputRef, onSearchSubmit, clientInputRef, onClientSubmit,
 }: POSHeaderProps) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -65,10 +67,12 @@ export default function POSHeader({
         <div className="flex items-center gap-1 bg-blue-800 rounded-lg px-2 py-1">
           <span className="text-sm shrink-0">👤</span>
           <input
+            ref={clientInputRef}
             type="text"
             placeholder="Buscar cliente..."
             value={clientSearch}
             onChange={(e) => onClientSearchChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onClientSubmit?.() }}
             className="flex-1 bg-transparent text-white text-sm placeholder-white/50 outline-none min-w-0"
           />
           <button onClick={onClientSearchModal} className="p-1 hover:bg-blue-700 rounded touch-manipulation shrink-0">

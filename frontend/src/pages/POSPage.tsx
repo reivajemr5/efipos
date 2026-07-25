@@ -61,6 +61,7 @@ export default function POSPage() {
   const [modalCategory, setModalCategory] = useState<number | null>(null)
   const [lastSaleAmount, setLastSaleAmount] = useState(0)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const clientInputRef = useRef<HTMLInputElement>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -80,7 +81,7 @@ export default function POSPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  useEffect(() => { searchInputRef.current?.focus() }, [])
+  useEffect(() => { clientInputRef.current?.focus() }, [])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -142,6 +143,17 @@ export default function POSPage() {
       setSearch('')
       setTimeout(() => searchInputRef.current?.focus(), 0)
     }
+  }
+
+  function handleClientSubmit() {
+    if (clientSearch.trim()) {
+      const match = clients.find((c) =>
+        c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+        c.documentNumber.includes(clientSearch)
+      )
+      if (match) { handleSelectClient(match); return }
+    }
+    handleSelectClient(DEFAULT_CLIENT)
   }
 
   function handleUpdateQuantity(productId: number, qty: number) {
@@ -253,6 +265,7 @@ export default function POSPage() {
     setSelectedClient(c)
     setShowClientModal(false)
     setClientSearch('')
+    setTimeout(() => searchInputRef.current?.focus(), 0)
   }
 
   function handleClientCreated(c: Client) {
@@ -260,6 +273,7 @@ export default function POSPage() {
     setShowNewClientForm(false)
     setShowClientModal(false)
     setClientSearch('')
+    setTimeout(() => searchInputRef.current?.focus(), 0)
   }
 
   function startNewSale() {
@@ -304,6 +318,8 @@ export default function POSPage() {
           onLoadDraft={() => setShowLoadDraft(true)}
           searchInputRef={searchInputRef}
           onSearchSubmit={handleSearchSubmit}
+          clientInputRef={clientInputRef}
+          onClientSubmit={handleClientSubmit}
         />
         <div className="grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
           <div className="hidden md:flex flex-col min-h-0 h-full">
