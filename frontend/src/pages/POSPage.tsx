@@ -141,9 +141,9 @@ export default function POSPage() {
 
   function handleSearchSubmit() {
     if (filteredProducts.length > 0) {
-      handleSelectProduct(filteredProducts[0])
+      setQtyModalProduct(filteredProducts[0])
+      setQtyValue(1)
       setSearch('')
-      setTimeout(() => searchInputRef.current?.focus(), 0)
     }
   }
 
@@ -696,7 +696,7 @@ export default function POSPage() {
         )}
 
         {qtyModalProduct && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setQtyModalProduct(null)}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setQtyModalProduct(null); setTimeout(() => searchInputRef.current?.focus(), 0) }}>
             <div className="bg-white rounded-2xl w-full max-w-xs p-6" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-gray-800 mb-1">{qtyModalProduct.name}</h3>
               <p className="text-sm text-gray-500 mb-4">${Number(qtyModalProduct.price).toFixed(2)} c/u</p>
@@ -706,12 +706,19 @@ export default function POSPage() {
                   className="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold hover:bg-gray-300 touch-manipulation"
                 >−</button>
                 <input
+                  autoFocus
                   type="number"
                   min="1"
                   max={qtyModalProduct.stock}
                   value={qtyValue}
                   onChange={(e) => setQtyValue(Math.max(1, Math.min(qtyModalProduct.stock, Number(e.target.value) || 1)))}
                   onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => { if (e.key === 'Enter') {
+                    for (let i = 0; i < qtyValue; i++) handleSelectProduct(qtyModalProduct)
+                    setQtyModalProduct(null)
+                    setQtyValue(1)
+                    setTimeout(() => searchInputRef.current?.focus(), 0)
+                  }}}
                   className="flex-1 text-center border border-gray-300 rounded-lg py-2 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 <button
@@ -719,9 +726,10 @@ export default function POSPage() {
                   className="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold hover:bg-gray-300 touch-manipulation"
                 >+</button>
               </div>
+              <p className="text-xs text-gray-400 text-center mb-4">Stock: {qtyModalProduct.stock}</p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setQtyModalProduct(null)}
+                  onClick={() => { setQtyModalProduct(null); setTimeout(() => searchInputRef.current?.focus(), 0) }}
                   className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
                 >Cancelar</button>
                 <button
@@ -730,6 +738,7 @@ export default function POSPage() {
                     for (let i = 0; i < qtyValue; i++) handleSelectProduct(qtyModalProduct)
                     setQtyModalProduct(null)
                     setQtyValue(1)
+                    setTimeout(() => searchInputRef.current?.focus(), 0)
                   }}
                   className="flex-1 py-3 bg-blue-900 text-white rounded-lg font-bold touch-manipulation"
                 >Agregar ({qtyValue})</button>
