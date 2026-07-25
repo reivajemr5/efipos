@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
@@ -42,10 +42,37 @@ export default function POSHeader({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [onClientSearchChange])
 
+  const [highlightedIdx, setHighlightedIdx] = useState(-1)
+
   const showDropdown = clientSearch.length >= 3
   const filtered = clients.filter(
     (c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()) || c.documentNumber.includes(clientSearch)
   )
+
+  useEffect(() => { setHighlightedIdx(-1) }, [clientSearch])
+
+  function handleClientKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (!showDropdown || filtered.length === 0) return
+      setHighlightedIdx((prev) => (prev < filtered.length - 1 ? prev + 1 : 0))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (!showDropdown || filtered.length === 0) return
+      setHighlightedIdx((prev) => (prev > 0 ? prev - 1 : filtered.length - 1))
+      return
+    }
+    if (e.key === 'Enter') {
+      if (showDropdown && highlightedIdx >= 0 && filtered[highlightedIdx]) {
+        onSelectClient(filtered[highlightedIdx])
+        onClientSearchChange('')
+        return
+      }
+      onClientSubmit?.()
+    }
+  }
 
   return (
     <header className="bg-blue-900 text-white px-3 flex items-center gap-2 shrink-0 h-10">
@@ -74,7 +101,7 @@ export default function POSHeader({
             placeholder="Cliente..."
             value={clientSearch}
             onChange={(e) => onClientSearchChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') onClientSubmit?.() }}
+            onKeyDown={handleClientKeyDown}
             className="flex-1 bg-transparent text-white text-xs placeholder-white/50 outline-none min-w-0"
           />
           <button onClick={onClientSearchModal} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation shrink-0">
@@ -99,11 +126,14 @@ export default function POSHeader({
                 </button>
               </div>
             ) : (
-              filtered.map((c) => (
+              filtered.map((c, i) => (
                 <button
                   key={c.id}
+                  onMouseEnter={() => setHighlightedIdx(i)}
                   onClick={() => { onSelectClient(c); onClientSearchChange('') }}
-                  className="w-full text-left px-3 py-2.5 hover:bg-gray-100 flex items-center gap-2 border-b border-gray-50 last:border-0"
+                  className={`w-full text-left px-3 py-2.5 flex items-center gap-2 border-b border-gray-50 last:border-0 ${
+                    i === highlightedIdx ? 'bg-blue-100' : 'hover:bg-gray-100'
+                  }`}
                 >
                   <span className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-700 shrink-0">
                     {c.name.charAt(0).toUpperCase()}
