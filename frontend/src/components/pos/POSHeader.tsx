@@ -158,6 +158,7 @@ export default function POSHeader({
           placeholder="Producto..."
           value={productSearch}
           onChange={(e) => onProductSearchChange(e.target.value)}
+          onFocus={(e) => e.target.select()}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onSearchSubmit?.()
             if (e.key === 'ArrowDown') { e.preventDefault(); onSearchArrowDown?.() }
