@@ -65,6 +65,7 @@ export default function POSPage() {
   const [qtyValue, setQtyValue] = useState(1)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const clientInputRef = useRef<HTMLInputElement>(null)
+  const cobrarRef = useRef<HTMLButtonElement>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -460,7 +461,7 @@ export default function POSPage() {
                               if (line.method !== 'efectivo' && raw > remaining + 0.01) return
                               const newSum = next.reduce((s, l) => s + l.amount, 0)
                               if (newSum >= total - 0.01) {
-                                confirmCheckout()
+                                setTimeout(() => cobrarRef.current?.focus(), 0)
                               } else {
                                 const rest = Math.max(0, total - newSum)
                                 setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
@@ -548,6 +549,7 @@ export default function POSPage() {
                   Cancelar
                 </button>
                 <button
+                  ref={cobrarRef}
                   onClick={confirmCheckout}
                   disabled={loading || paymentLines.reduce((s, l) => s + l.amount, 0) < total - 0.01 || paymentLines.some((l, idx) => {
                     if (l.method === 'efectivo') return false
