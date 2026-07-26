@@ -62,6 +62,7 @@ export default function POSPage() {
   const [modalSearch, setModalSearch] = useState('')
   const [modalCategory, setModalCategory] = useState<number | null>(null)
   const [lastSaleAmount, setLastSaleAmount] = useState(0)
+  const [exchangeRate, setExchangeRate] = useState(0)
   const [qtyModalProduct, setQtyModalProduct] = useState<Product | null>(null)
   const [qtyValue, setQtyValue] = useState(1)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -70,14 +71,16 @@ export default function POSPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [prods, cats, clis] = await Promise.all([
+      const [prods, cats, clis, rateData] = await Promise.all([
         api.products.list(),
         api.categories.list(),
         api.clients.list(),
+        api.exchangeRate.get().catch(() => ({ rate: 0 })),
       ])
       setProducts(prods.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
       setCategories(cats)
       setClients(clis)
+      if (rateData?.rate) setExchangeRate(Number(rateData.rate))
     } catch {
       const cached = await db.products.toArray()
       setProducts(cached.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
@@ -191,6 +194,7 @@ export default function POSPage() {
         status: 'borrador',
         paymentMethod: 'efectivo',
         currency: 'usd',
+        exchangeRate: exchangeRate || undefined,
         items: cart.map((i) => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -235,6 +239,7 @@ export default function POSPage() {
 
     try {
       const activePayments = paymentLines.filter((p) => p.amount > 0)
+      const rate = exchangeRate > 0 ? exchangeRate : 1
       const invoice = await api.invoices.create({
         clientId: selectedClient.id || undefined,
         paymentMethod: activePayments.map((p) => p.method).join('+'),
@@ -244,7 +249,8 @@ export default function POSPage() {
           quantity: i.quantity,
           unitPrice: i.unitPrice,
         })),
-        payments: activePayments,
+        payments: activePayments.map((p) => ({ ...p, amount: Math.round((p.amount / rate) * 100) / 100 })),
+        exchangeRate: rate,
       })
       setLastSaleAmount(paidTotal)
       setSuccessSale({ number: invoice.number, id: invoice.id })
@@ -340,7 +346,6 @@ export default function POSPage() {
           <div className="hidden md:flex flex-col min-h-0 h-full">
             <TicketPanel
               items={cart}
-              currency="usd"
               discount={discount}
               onUpdateQuantity={handleUpdateQuantity}
               onRemove={handleRemove}
@@ -349,6 +354,7 @@ export default function POSPage() {
               onSaveDraft={handleSaveDraft}
               onDiscount={() => setShowDiscount(true)}
               onNotes={() => setShowNotes(true)}
+              exchangeRate={exchangeRate}
             />
           </div>
           <div className={`overflow-y-auto min-h-0 ${showCartMobile ? 'hidden md:block' : ''}`}>
@@ -360,6 +366,7 @@ export default function POSPage() {
                onSelectProduct={handleSelectProduct}
                onSelectProductQuantity={(p) => { setQtyModalProduct(p); setQtyValue(1) }}
                onArrowUpFromFirst={() => searchInputRef.current?.focus()}
+               exchangeRate={exchangeRate}
             />
           </div>
         </div>
@@ -387,7 +394,6 @@ export default function POSPage() {
               </div>
               <TicketPanel
                 items={cart}
-                currency="usd"
                 discount={discount}
                 onUpdateQuantity={handleUpdateQuantity}
                 onRemove={handleRemove}
@@ -396,6 +402,7 @@ export default function POSPage() {
                 onSaveDraft={handleSaveDraft}
                 onDiscount={() => setShowDiscount(true)}
                 onNotes={() => setShowNotes(true)}
+                exchangeRate={exchangeRate}
               />
             </div>
           </div>
@@ -405,13 +412,21 @@ export default function POSPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl w-full max-w-sm p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-1">Confirmar Venta</h3>
-              <p className="text-sm text-gray-500 mb-4">Total a cobrar: <span className="font-bold text-gray-800">${total.toFixed(2)}</span></p>
+              {exchangeRate > 0 ? (
+                <p className="text-sm text-gray-500 mb-4">
+                  Total a cobrar: <span className="font-bold text-gray-800">Bs.{(total * exchangeRate).toFixed(2)}</span>
+                  <span className="text-gray-400 ml-1">(${total.toFixed(2)})</span>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">Total a cobrar: <span className="font-bold text-gray-800">${total.toFixed(2)}</span></p>
+              )}
 
               <div className="space-y-2 mb-4">
                 <label className="block text-sm font-medium text-gray-700">Métodos de pago</label>
                 {paymentLines.map((line, i) => {
                   const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
-                  const remaining = total - (lineTotal - line.amount)
+                  const remainingBs = exchangeRate > 0 ? (total - (lineTotal - line.amount)) * exchangeRate : total - (lineTotal - line.amount)
+                  const remainingUsd = total - (lineTotal - line.amount)
                   return (
                     <div key={i} data-line={i}>
                       <div className="flex items-center gap-2">
@@ -440,11 +455,11 @@ export default function POSPage() {
                           <option value="transferencia">Transferencia</option>
                         </select>
                         <div className="relative flex-1">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{exchangeRate > 0 ? 'Bs.' : '$'}</span>
                           <input
                             type="number"
                             min="0"
-                            step="0.01"
+                            step={exchangeRate > 0 ? "1" : "0.01"}
                             value={line.amount || ''}
                             onChange={(e) => {
                               const next = [...paymentLines]
@@ -455,7 +470,7 @@ export default function POSPage() {
                           onBlur={(e) => {
                             const raw = Math.max(0, Number(e.target.value) || 0)
                             const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
+                            next[i] = { ...next[i], amount: exchangeRate > 0 ? Math.round(raw) : Math.round(raw * 100) / 100 }
                             setPaymentLines(next)
                           }}
                           onKeyDown={(e) => {
@@ -463,21 +478,29 @@ export default function POSPage() {
                             e.preventDefault()
                             const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
                             const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
+                            next[i] = { ...next[i], amount: exchangeRate > 0 ? Math.round(raw) : Math.round(raw * 100) / 100 }
                             setPaymentLines(next)
+                            const remaining = exchangeRate > 0 ? remainingBs : remainingUsd
                             if (line.method !== 'efectivo' && raw > remaining + 0.01) return
                             const newSum = next.reduce((s, l) => s + l.amount, 0)
-                            if (newSum >= total - 0.01) {
+                            const targetTotal = exchangeRate > 0 ? total * exchangeRate : total
+                            if (newSum >= targetTotal - 0.01) {
                               setTimeout(() => cobrarRef.current?.focus(), 0)
                             } else {
-                              const rest = Math.max(0, total - newSum)
-                              setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
+                              const rest = Math.max(0, targetTotal - newSum)
+                              const restVal = exchangeRate > 0 ? Math.round(rest) : Math.round(rest * 100) / 100
+                              setPaymentLines([...next, { method: 'efectivo', amount: restVal, reference: '' }])
                             }
                           }}
-                            className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                            placeholder={remaining > 0 ? `Restan $${remaining.toFixed(2)}` : '0.00'}
+                            className="w-full pl-9 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder={remainingBs > 0 ? `Restan ${exchangeRate > 0 ? 'Bs.' : '$'}${exchangeRate > 0 ? Math.round(remainingBs) : remainingUsd.toFixed(2)}` : '0'}
                           />
                         </div>
+                        {exchangeRate > 0 && line.amount > 0 && (
+                          <span className="text-[10px] text-gray-400 min-w-[50px] text-right">
+                            ${(line.amount / exchangeRate).toFixed(2)}
+                          </span>
+                        )}
                         {paymentLines.length > 1 && (
                           <button
                             onClick={() => setPaymentLines(paymentLines.filter((_, j) => j !== i))}
@@ -487,13 +510,13 @@ export default function POSPage() {
                           </button>
                         )}
                       </div>
-                      {line.method !== 'efectivo' && line.amount > remaining + 0.01 && (
+                      {line.method !== 'efectivo' && line.amount > remainingBs + (exchangeRate > 0 ? 1 : 0.01) && (
                         <div className="flex items-center gap-2 mt-1 text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
-                          <span>Monto excede los ${remaining.toFixed(2)} restantes</span>
+                          <span>Monto excede los {exchangeRate > 0 ? `Bs.${Math.round(remainingBs)}` : `$${remainingUsd.toFixed(2)}`} restantes</span>
                           <button
                             onClick={() => {
                               const next = [...paymentLines]
-                              next[i] = { ...next[i], amount: Math.round(remaining * 100) / 100 }
+                              next[i] = { ...next[i], amount: exchangeRate > 0 ? Math.round(remainingBs) : Math.round(remainingUsd * 100) / 100 }
                               setPaymentLines(next)
                             }}
                             className="ml-auto px-2 py-1 bg-amber-600 text-white rounded-md font-medium hover:bg-amber-700 touch-manipulation"
@@ -506,16 +529,16 @@ export default function POSPage() {
 
                 {paymentLines.some((l) => l.method === 'efectivo') && (
                   <div className="flex items-center gap-2 pt-1">
-                    <label className="text-sm text-gray-600 min-w-[110px]">Recibido $</label>
+                    <label className="text-sm text-gray-600 min-w-[110px]">{exchangeRate > 0 ? 'Recibido Bs.' : 'Recibido $'}</label>
                     <input
                       type="number"
                       min="0"
-                      step="0.01"
+                      step={exchangeRate > 0 ? '1' : '0.01'}
                       value={receivedAmount || ''}
                       onChange={(e) => setReceivedAmount(Math.max(0, Number(e.target.value) || 0))}
-                      onBlur={(e) => setReceivedAmount(Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
+                      onBlur={(e) => setReceivedAmount(exchangeRate > 0 ? Math.round(Math.max(0, Number(e.target.value) || 0)) : Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      placeholder="0.00"
+                      placeholder="0"
                     />
                   </div>
                 )}
@@ -525,16 +548,18 @@ export default function POSPage() {
                   const cashAmount = cashLine ? cashLine.amount : 0
                   return cashLine && receivedAmount > cashAmount && (
                     <p className="text-sm text-green-600 font-medium">
-                      Cambio: ${(receivedAmount - cashAmount).toFixed(2)}
+                      Cambio: {exchangeRate > 0 ? `Bs.${Math.round(receivedAmount - cashAmount)}` : `$${(receivedAmount - cashAmount).toFixed(2)}`}
                     </p>
                   )
                 })()}
 
                 <button
                   onClick={() => {
-                    const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
-                    const rest = Math.max(0, total - lineTotal)
-                    setPaymentLines([...paymentLines, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
+                    const sum = paymentLines.reduce((s, l) => s + l.amount, 0)
+                    const target = total * (exchangeRate > 0 ? exchangeRate : 1)
+                    const rest = Math.max(0, target - sum)
+                    const val = exchangeRate > 0 ? Math.round(rest) : Math.round(rest * 100) / 100
+                    setPaymentLines([...paymentLines, { method: 'efectivo', amount: val, reference: '' }])
                   }}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium touch-manipulation"
                 >
@@ -543,32 +568,38 @@ export default function POSPage() {
               </div>
 
               <div className="text-xs text-gray-500 space-y-1 mb-4">
-                <p>Subtotal: ${subtotal.toFixed(2)}</p>
-                <p>IVA: ${ivaTotal.toFixed(2)}</p>
-                {discount > 0 && <p className="text-amber-600">Descuento: -${discount.toFixed(2)}</p>}
+                <p>Subtotal: ${subtotal.toFixed(2)} {exchangeRate > 0 && `· Bs.${(subtotal * exchangeRate).toFixed(2)}`}</p>
+                <p>IVA: ${ivaTotal.toFixed(2)} {exchangeRate > 0 && `· Bs.${(ivaTotal * exchangeRate).toFixed(2)}`}</p>
+                {discount > 0 && <p className="text-amber-600">Descuento: -${discount.toFixed(2)} {exchangeRate > 0 && `· -Bs.${(discount * exchangeRate).toFixed(2)}`}</p>}
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setCheckoutModal(false)}
-                  className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
-                >
-                  Cancelar
-                </button>
-                <button
-                  ref={cobrarRef}
-                  onClick={confirmCheckout}
-                  disabled={loading || paymentLines.reduce((s, l) => s + l.amount, 0) < total - 0.01 || paymentLines.some((l, idx) => {
-                    if (l.method === 'efectivo') return false
-                    const others = [...paymentLines]; others.splice(idx, 1)
-                    const paid = others.reduce((s, o) => s + o.amount, 0)
-                    return l.amount > total - paid + 0.01
-                  })}
-                  className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
-                >
-                  {loading ? 'Procesando...' : `Cobrar $${total.toFixed(2)}`}
-                </button>
-              </div>
+              {(() => {
+                const target = total * (exchangeRate > 0 ? exchangeRate : 1)
+                const sumAmt = paymentLines.reduce((s, l) => s + l.amount, 0)
+                return (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setCheckoutModal(false)}
+                      className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      ref={cobrarRef}
+                      onClick={confirmCheckout}
+                      disabled={loading || sumAmt < target - 0.01 || paymentLines.some((l, idx) => {
+                        if (l.method === 'efectivo') return false
+                        const others = [...paymentLines]; others.splice(idx, 1)
+                        const paid = others.reduce((s, o) => s + o.amount, 0)
+                        return l.amount > target - paid + 0.01
+                      })}
+                      className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
+                    >
+                      {loading ? 'Procesando...' : exchangeRate > 0 ? `Cobrar Bs.${Math.round(target)}` : `Cobrar $${total.toFixed(2)}`}
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )}
@@ -709,7 +740,10 @@ export default function POSPage() {
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-gray-500">{p.code}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold text-gray-800">${Number(p.price).toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <span className="font-semibold text-gray-800">${Number(p.price).toFixed(2)}</span>
+                            {exchangeRate > 0 && <span className="block text-[10px] text-gray-400">Bs.{(Number(p.price) * exchangeRate).toFixed(2)}</span>}
+                          </td>
                           <td className="px-4 py-2.5 text-right">
                             <span className={`text-xs font-medium ${p.stock <= 0 ? 'text-red-500' : 'text-green-600'}`}>{p.stock}</span>
                           </td>
@@ -746,6 +780,9 @@ export default function POSPage() {
                   onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
+                {exchangeRate > 0 && discount > 0 && (
+                  <span className="text-xs text-gray-400 min-w-[60px] text-right">Bs.{(discount * exchangeRate).toFixed(2)}</span>
+                )}
               </div>
               <div className="flex gap-3 mt-6">
                 <button
@@ -825,7 +862,12 @@ export default function POSPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-1">Venta Completada</h2>
               <p className="text-gray-500 mb-1">{successSale.number}</p>
-              <p className="text-2xl font-bold text-green-600 mb-4">${lastSaleAmount.toFixed(2)}</p>
+              {exchangeRate > 0 ? (
+                <p className="text-2xl font-bold text-green-600 mb-1">Bs.{(lastSaleAmount * exchangeRate).toFixed(2)}</p>
+              ) : (
+                <p className="text-2xl font-bold text-green-600 mb-1">${lastSaleAmount.toFixed(2)}</p>
+              )}
+              {exchangeRate > 0 && <p className="text-sm text-gray-400 mb-4">${lastSaleAmount.toFixed(2)}</p>}
               <p className="text-xs text-gray-400 mb-6"><kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">Enter</kbd> Imprimir · <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">N</kbd> Nueva Venta · <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">Esc</kbd> Cerrar</p>
               <div className="flex gap-3 justify-center">
                 <button
@@ -852,42 +894,51 @@ export default function POSPage() {
           <p style={{ textAlign: 'center', fontSize: 11, margin: '0 0 8px', color: '#666' }}>
             {successSale?.number || 'Factura'}
           </p>
+          {exchangeRate > 0 && (
+            <p style={{ textAlign: 'center', fontSize: 10, margin: '0 0 4px', color: '#888' }}>
+              Tasa BCV: Bs.{exchangeRate.toFixed(2)}/$
+            </p>
+          )}
           <hr style={{ border: 'none', borderTop: '1px dashed #999' }} />
           <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #999' }}>
                 <th style={{ textAlign: 'left', padding: '2px 0' }}>Prod</th>
                 <th style={{ textAlign: 'center', padding: '2px 0' }}>Qty</th>
-                <th style={{ textAlign: 'right', padding: '2px 0' }}>P/U</th>
-                <th style={{ textAlign: 'right', padding: '2px 0' }}>Total</th>
+                <th style={{ textAlign: 'right', padding: '2px 0' }}>P/U Bs.</th>
+                <th style={{ textAlign: 'right', padding: '2px 0' }}>Total Bs.</th>
               </tr>
             </thead>
             <tbody>
-              {cart.map((item) => (
-                <tr key={item.productId}>
-                  <td style={{ padding: '2px 0' }}>{item.name}</td>
-                  <td style={{ textAlign: 'center', padding: '2px 0' }}>{item.quantity}</td>
-                  <td style={{ textAlign: 'right', padding: '2px 0' }}>${item.unitPrice.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '2px 0' }}>${(item.unitPrice * item.quantity).toFixed(2)}</td>
-                </tr>
-              ))}
+              {cart.map((item) => {
+                const puBs = exchangeRate > 0 ? item.unitPrice * exchangeRate : item.unitPrice
+                const totBs = exchangeRate > 0 ? item.unitPrice * item.quantity * exchangeRate : item.unitPrice * item.quantity
+                return (
+                  <tr key={item.productId}>
+                    <td style={{ padding: '2px 0' }}>{item.name}</td>
+                    <td style={{ textAlign: 'center', padding: '2px 0' }}>{item.quantity}</td>
+                    <td style={{ textAlign: 'right', padding: '2px 0' }}>Bs.{puBs.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', padding: '2px 0' }}>Bs.{totBs.toFixed(2)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           <hr style={{ border: 'none', borderTop: '1px dashed #999' }} />
           <div style={{ fontSize: 11 }}>
             <p style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
-              <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
+              <span>Subtotal</span><span>Bs.{(exchangeRate > 0 ? subtotal * exchangeRate : subtotal).toFixed(2)}</span>
             </p>
             <p style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
-              <span>IVA</span><span>${ivaTotal.toFixed(2)}</span>
+              <span>IVA</span><span>Bs.{(exchangeRate > 0 ? ivaTotal * exchangeRate : ivaTotal).toFixed(2)}</span>
             </p>
             {discount > 0 && (
               <p style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0', color: '#d97706' }}>
-                <span>Descuento</span><span>-${discount.toFixed(2)}</span>
+                <span>Descuento</span><span>-Bs.{(exchangeRate > 0 ? discount * exchangeRate : discount).toFixed(2)}</span>
               </p>
             )}
             <p style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', fontSize: 14, fontWeight: 'bold' }}>
-              <span>Total</span><span>${lastSaleAmount.toFixed(2)}</span>
+              <span>Total Bs.</span><span>Bs.{(exchangeRate > 0 ? lastSaleAmount * exchangeRate : lastSaleAmount).toFixed(2)}</span>
             </p>
           </div>
           <hr style={{ border: 'none', borderTop: '1px dashed #999' }} />

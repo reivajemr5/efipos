@@ -8,20 +8,20 @@ interface CartItem {
 
 interface TicketItemProps {
   item: CartItem
-  currency: string
   onUpdateQuantity: (productId: number, qty: number) => void
   onRemove: (productId: number) => void
+  exchangeRate: number
 }
 
-export default function TicketItem({ item, currency, onUpdateQuantity, onRemove }: TicketItemProps) {
+export default function TicketItem({ item, onUpdateQuantity, onRemove, exchangeRate }: TicketItemProps) {
   const total = item.unitPrice * item.quantity
-  const symbol = currency === 'bs' ? 'Bs.' : '$'
+  const totalBs = exchangeRate > 0 ? total * exchangeRate : 0
 
   return (
     <div className="flex items-center gap-2 py-2 px-3 border-b border-gray-100 last:border-0">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-        <p className="text-xs text-gray-500">{symbol} {item.unitPrice.toFixed(2)}</p>
+        <p className="text-xs text-gray-500">${item.unitPrice.toFixed(2)} {exchangeRate > 0 && `· Bs.{totalBs.toFixed(2)}`}</p>
       </div>
 
       <div className="flex items-center gap-1">
@@ -41,7 +41,8 @@ export default function TicketItem({ item, currency, onUpdateQuantity, onRemove 
       </div>
 
       <div className="text-right min-w-[65px]">
-        <p className="text-sm font-semibold text-gray-800">{symbol} {total.toFixed(2)}</p>
+        <p className="text-sm font-semibold text-gray-800">${total.toFixed(2)}</p>
+        {exchangeRate > 0 && <p className="text-[10px] text-gray-500">Bs.{totalBs.toFixed(2)}</p>}
       </div>
 
       <button

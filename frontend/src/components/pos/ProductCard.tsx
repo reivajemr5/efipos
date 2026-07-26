@@ -16,17 +16,19 @@ interface ProductCardProps {
   product: ProductCardProduct
   onSelect: (product: ProductCardProduct) => void
   onSelectQuantity?: (product: ProductCardProduct) => void
+  exchangeRate: number
 }
 
 const categoryColors: Record<string, string> = {
   default: 'bg-blue-100 text-blue-700',
 }
 
-export default function ProductCard({ product, onSelect, onSelectQuantity }: ProductCardProps) {
+export default function ProductCard({ product, onSelect, onSelectQuantity, exchangeRate }: ProductCardProps) {
   const catName = product.category?.name || ''
   const colorClass = categoryColors[catName] || 'bg-blue-100 text-blue-700'
-  const symbol = product.currency === 'bs' ? 'Bs.' : '$'
   const keyboardSelected = useRef(false)
+
+  const priceBs = exchangeRate > 0 ? product.price * exchangeRate : 0
 
   function handleClick() {
     if (keyboardSelected.current) {
@@ -56,9 +58,16 @@ export default function ProductCard({ product, onSelect, onSelectQuantity }: Pro
         ) : (
           <div className="text-2xl text-gray-300 font-bold">{product.name.charAt(0).toUpperCase()}</div>
         )}
-        <span className="absolute top-1 right-1 bg-blue-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-          {symbol}{product.price.toFixed(2)}
-        </span>
+        <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5">
+          <span className="bg-blue-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+            ${product.price.toFixed(2)}
+          </span>
+          {exchangeRate > 0 && (
+            <span className="bg-green-800 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              Bs.{priceBs.toFixed(2)}
+            </span>
+          )}
+        </div>
         {catName && (
           <span className={`absolute top-1 left-1 text-[10px] font-medium px-1 py-0.5 rounded-full ${colorClass}`}>
             {catName}

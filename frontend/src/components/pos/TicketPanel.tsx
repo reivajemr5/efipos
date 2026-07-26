@@ -12,7 +12,6 @@ export interface CartItem {
 
 interface TicketPanelProps {
   items: CartItem[]
-  currency: string
   discount?: number
   onUpdateQuantity: (productId: number, qty: number) => void
   onRemove: (productId: number) => void
@@ -21,11 +20,12 @@ interface TicketPanelProps {
   onSaveDraft: () => void
   onDiscount: () => void
   onNotes: () => void
+  exchangeRate: number
 }
 
 export default function TicketPanel({
-  items, currency, discount = 0, onUpdateQuantity, onRemove,
-  onCheckout, onCancel, onSaveDraft, onDiscount, onNotes,
+  items, discount = 0, onUpdateQuantity, onRemove,
+  onCheckout, onCancel, onSaveDraft, onDiscount, onNotes, exchangeRate,
 }: TicketPanelProps) {
   const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const ivaTotal = items.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
@@ -50,9 +50,9 @@ export default function TicketPanel({
             <TicketItem
               key={item.productId}
               item={item}
-              currency={currency}
               onUpdateQuantity={onUpdateQuantity}
               onRemove={onRemove}
+              exchangeRate={exchangeRate}
             />
           ))
         )}
@@ -64,9 +64,9 @@ export default function TicketPanel({
           ivaTotal={ivaTotal}
           discount={discount}
           total={total}
-          currency={currency}
           onCheckout={onCheckout}
           itemCount={itemCount}
+          exchangeRate={exchangeRate}
         />
       </div>
 

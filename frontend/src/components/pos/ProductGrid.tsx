@@ -26,9 +26,10 @@ interface ProductGridProps {
   onSelectProduct: (product: ProductGridProduct) => void
   onSelectProductQuantity?: (product: ProductGridProduct) => void
   onArrowUpFromFirst?: () => void
+  exchangeRate: number
 }
 
-export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity, onArrowUpFromFirst }: ProductGridProps) {
+export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity, onArrowUpFromFirst, exchangeRate }: ProductGridProps) {
   const tabsRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -98,11 +99,12 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
             className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2"
           >
             {products.map((product) => (
-              <ProductCard
+               <ProductCard
                 key={product.id}
                 product={{ ...product, currency: product.currency || 'usd' }}
                 onSelect={onSelectProduct}
                 onSelectQuantity={onSelectProductQuantity}
+                exchangeRate={exchangeRate}
               />
             ))}
           </div>
