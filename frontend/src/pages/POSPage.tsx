@@ -411,7 +411,7 @@ export default function POSPage() {
                     <div key={i} data-line={i}>
                       <div className="flex items-center gap-2">
                         <select
-                          autoFocus={i === 0}
+                          autoFocus={i === paymentLines.length - 1}
                           value={line.method}
                           onChange={(e) => {
                             const next = [...paymentLines]
@@ -446,28 +446,29 @@ export default function POSPage() {
                               next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
                               setPaymentLines(next)
                             }}
-                            onBlur={(e) => {
-                              const raw = Math.max(0, Number(e.target.value) || 0)
-                              const next = [...paymentLines]
-                              next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
-                              setPaymentLines(next)
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key !== 'Enter') return
-                              e.preventDefault()
-                              const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
-                              const next = [...paymentLines]
-                              next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
-                              setPaymentLines(next)
-                              if (line.method !== 'efectivo' && raw > remaining + 0.01) return
-                              const newSum = next.reduce((s, l) => s + l.amount, 0)
-                              if (newSum >= total - 0.01) {
-                                setTimeout(() => cobrarRef.current?.focus(), 0)
-                              } else {
-                                const rest = Math.max(0, total - newSum)
-                                setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
-                              }
-                            }}
+                          onFocus={(e) => e.target.select()}
+                          onBlur={(e) => {
+                            const raw = Math.max(0, Number(e.target.value) || 0)
+                            const next = [...paymentLines]
+                            next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
+                            setPaymentLines(next)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return
+                            e.preventDefault()
+                            const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
+                            const next = [...paymentLines]
+                            next[i] = { ...next[i], amount: Math.round(raw * 100) / 100 }
+                            setPaymentLines(next)
+                            if (line.method !== 'efectivo' && raw > remaining + 0.01) return
+                            const newSum = next.reduce((s, l) => s + l.amount, 0)
+                            if (newSum >= total - 0.01) {
+                              setTimeout(() => cobrarRef.current?.focus(), 0)
+                            } else {
+                              const rest = Math.max(0, total - newSum)
+                              setPaymentLines([...next, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
+                            }
+                          }}
                             className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                             placeholder={remaining > 0 ? `Restan $${remaining.toFixed(2)}` : '0.00'}
                           />
