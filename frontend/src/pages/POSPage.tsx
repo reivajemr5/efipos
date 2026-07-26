@@ -260,6 +260,8 @@ export default function POSPage() {
   }
 
   function handlePrint() {
+    const afterPrint = () => { window.removeEventListener('afterprint', afterPrint); startNewSale() }
+    window.addEventListener('afterprint', afterPrint)
     setTimeout(() => window.print(), 300)
   }
 
