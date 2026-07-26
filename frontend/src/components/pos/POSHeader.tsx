@@ -160,7 +160,10 @@ export default function POSHeader({
           onChange={(e) => onProductSearchChange(e.target.value)}
           onFocus={(e) => e.target.select()}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) onSearchSubmit?.()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              if (!e.ctrlKey && !e.metaKey) onSearchSubmit?.()
+            }
             if (e.key === 'ArrowDown') { e.preventDefault(); onSearchArrowDown?.() }
           }}
           className="flex-1 bg-transparent text-white text-xs placeholder-white/50 outline-none min-w-0"

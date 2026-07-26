@@ -219,6 +219,7 @@ export default function POSPage() {
 
   function handleCheckout() {
     if (cart.length === 0) return
+    setQtyModalProduct(null)
     const paidTotal = Math.max(0, subtotal + ivaTotal - discount)
     setPaymentLines([{ method: 'efectivo', amount: paidTotal, reference: '' }])
     setReceivedAmount(paidTotal)
