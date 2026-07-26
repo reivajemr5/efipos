@@ -406,7 +406,7 @@ export default function POSPage() {
                   const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
                   const remaining = total - (lineTotal - line.amount)
                   return (
-                    <div key={i}>
+                    <div key={i} data-line={i}>
                       <div className="flex items-center gap-2">
                         <select
                           autoFocus={i === 0}
@@ -415,6 +415,14 @@ export default function POSPage() {
                             const next = [...paymentLines]
                             next[i] = { ...next[i], method: e.target.value }
                             setPaymentLines(next)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              const container = (e.target as HTMLElement).closest('[data-line]')
+                              const input = container?.querySelector<HTMLInputElement>('input[type="number"]')
+                              input?.focus()
+                            }
                           }}
                           className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[110px]"
                         >
