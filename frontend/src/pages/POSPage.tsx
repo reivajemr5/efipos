@@ -23,6 +23,7 @@ interface Product {
   ivaPercent: number
   stock: number
   imageUrl?: string | null
+  barcode?: string | null
   categoryId?: number | null
   category?: { id: number; name: string } | null
 }
@@ -117,13 +118,15 @@ export default function POSPage() {
   })
 
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase())
+    const q = search.toLowerCase()
+    const matchesSearch = !search || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
     const matchesCategory = !selectedCategory || p.categoryId === selectedCategory
     return matchesSearch && matchesCategory
   })
 
   const modalResults = products.filter((p) => {
-    const matchesSearch = !modalSearch || p.name.toLowerCase().includes(modalSearch.toLowerCase()) || p.code.toLowerCase().includes(modalSearch.toLowerCase())
+    const q = modalSearch.toLowerCase()
+    const matchesSearch = !modalSearch || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
     const matchesCategory = !modalCategory || p.categoryId === modalCategory
     return matchesSearch && matchesCategory
   })
