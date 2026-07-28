@@ -35,6 +35,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
   const tabsRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLElement | null>(null)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   useEffect(() => {
@@ -44,13 +45,16 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
+    if (!scrollRef.current) {
+      scrollRef.current = el.closest('.overflow-y-auto') || null
+    }
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
           setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, products.length))
         }
       },
-      { root: null, rootMargin: '200px' },
+      { root: scrollRef.current, rootMargin: '200px' },
     )
     observer.observe(el)
     return () => observer.disconnect()
