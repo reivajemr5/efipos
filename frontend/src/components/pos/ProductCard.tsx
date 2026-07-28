@@ -52,27 +52,27 @@ export default function ProductCard({ product, onSelect, onSelectQuantity, excha
       onKeyDown={handleKeyDown}
       className="product-card-btn bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md active:scale-[0.97] transition-all touch-manipulation flex flex-col focus:ring-2 focus:ring-blue-400 focus:outline-none"
     >
-      <div className="relative aspect-[4/3] bg-gray-50 flex items-center justify-center">
+      <div className="relative aspect-square bg-gray-50 flex items-center justify-center">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
         ) : (
           <div className="text-2xl text-gray-300 font-bold">{product.name.charAt(0).toUpperCase()}</div>
         )}
-        <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5">
-          <span className="bg-blue-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-            ${product.price.toFixed(2)}
-          </span>
-          {exchangeRate > 0 && (
-            <span className="bg-green-800 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              Bs.{priceBs.toFixed(2)}
-            </span>
-          )}
-        </div>
         {catName && (
           <span className={`absolute top-1 left-1 text-[10px] font-medium px-1 py-0.5 rounded-full ${colorClass}`}>
             {catName}
           </span>
         )}
+        <div className="absolute bottom-1 left-1 right-1 flex gap-1 justify-end">
+          <span className="bg-blue-900/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+            ${product.price.toFixed(2)}
+          </span>
+          {exchangeRate > 0 && (
+            <span className="bg-green-800/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              Bs.{priceBs.toFixed(2)}
+            </span>
+          )}
+        </div>
         {product.stock <= 0 && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
             <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Sin stock</span>

@@ -64,6 +64,7 @@ export default function POSPage() {
   const [modalCategory, setModalCategory] = useState<number | null>(null)
   const [lastSaleAmount, setLastSaleAmount] = useState(0)
   const [exchangeRate, setExchangeRate] = useState(0)
+  const [rateChecked, setRateChecked] = useState(false)
   const [qtyModalProduct, setQtyModalProduct] = useState<Product | null>(null)
   const [qtyValue, setQtyValue] = useState(1)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -86,9 +87,11 @@ export default function POSPage() {
         const auto = await api.exchangeRate.autoUpdate().catch(() => null)
         if (auto?.rate) setExchangeRate(Number(auto.rate))
       }
+      setRateChecked(true)
     } catch {
       const cached = await db.products.toArray()
       setProducts(cached.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
+      setRateChecked(true)
     }
   }, [])
 
@@ -346,9 +349,14 @@ export default function POSPage() {
            }}
           clientInputRef={clientInputRef}
           onClientSubmit={handleClientSubmit}
+          exchangeRate={exchangeRate}
+          onUpdateRate={async () => {
+            const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+            if (auto?.rate) setExchangeRate(Number(auto.rate))
+          }}
         />
 
-        {exchangeRate === 0 && (
+        {rateChecked && exchangeRate === 0 && (
           <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 shrink-0">
             <span>Tasa BCV no disponible. Ingresa la tasa manualmente:</span>
             <div className="flex items-center gap-1">
