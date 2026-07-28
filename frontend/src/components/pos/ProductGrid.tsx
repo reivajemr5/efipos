@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import ProductCard from './ProductCard'
 
 interface Category {
@@ -29,9 +29,35 @@ interface ProductGridProps {
   exchangeRate: number
 }
 
+const PAGE_SIZE = 20
+
 export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity, onArrowUpFromFirst, exchangeRate }: ProductGridProps) {
   const tabsRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [products])
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, products.length))
+        }
+      },
+      { root: null, rootMargin: '200px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [products.length])
+
+  const visibleProducts = products.slice(0, visibleCount)
+  const hasMore = visibleCount < products.length
 
   const getCardButtons = useCallback(() => {
     if (!gridRef.current) return []
@@ -92,22 +118,29 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
             No hay productos en esta categoría
           </div>
         ) : (
-          <div
-            ref={gridRef}
-            tabIndex={-1}
-            onKeyDown={handleGridKeyDown}
-            className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2"
-          >
-            {products.map((product) => (
-               <ProductCard
-                key={product.id}
-                product={{ ...product, currency: product.currency || 'usd' }}
-                onSelect={onSelectProduct}
-                onSelectQuantity={onSelectProductQuantity}
-                exchangeRate={exchangeRate}
-              />
-            ))}
-          </div>
+          <>
+            <div
+              ref={gridRef}
+              tabIndex={-1}
+              onKeyDown={handleGridKeyDown}
+              className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2"
+            >
+              {visibleProducts.map((product) => (
+                 <ProductCard
+                  key={product.id}
+                  product={{ ...product, currency: product.currency || 'usd' }}
+                  onSelect={onSelectProduct}
+                  onSelectQuantity={onSelectProductQuantity}
+                  exchangeRate={exchangeRate}
+                />
+              ))}
+            </div>
+            {hasMore && (
+              <div ref={sentinelRef} className="flex justify-center py-4 text-xs text-gray-400">
+                Cargando más productos...
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
