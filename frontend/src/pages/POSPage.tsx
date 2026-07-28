@@ -73,29 +73,31 @@ export default function POSPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [prods, cats, clis, rateData] = await Promise.all([
+      const [prods, cats, clis] = await Promise.all([
         api.products.list(),
         api.categories.list(),
         api.clients.list(),
-        api.exchangeRate.get().catch(() => ({ rate: 0 })),
       ])
       setProducts(prods.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
       setCategories(cats)
       setClients(clis)
-      if (rateData?.rate) setExchangeRate(Number(rateData.rate))
-      else {
-        const auto = await api.exchangeRate.autoUpdate().catch(() => null)
-        if (auto?.rate) setExchangeRate(Number(auto.rate))
-      }
-      setRateChecked(true)
     } catch {
       const cached = await db.products.toArray()
       setProducts(cached.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
-      setRateChecked(true)
     }
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  const loadRate = useCallback(async () => {
+    const data = await api.exchangeRate.get().catch(() => ({ rate: 0 }))
+    if (data?.rate) setExchangeRate(Number(data.rate))
+    else {
+      const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+      if (auto?.rate) setExchangeRate(Number(auto.rate))
+    }
+    setRateChecked(true)
+  }, [])
+
+  useEffect(() => { loadData(); loadRate() }, [loadData, loadRate])
 
   useEffect(() => { clientInputRef.current?.focus() }, [])
 
