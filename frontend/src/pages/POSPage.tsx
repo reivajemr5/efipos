@@ -43,6 +43,7 @@ export default function POSPage() {
   const [checkoutModal, setCheckoutModal] = useState(false)
   const [paymentLines, setPaymentLines] = useState<Array<{ method: string; amount: number; reference: string }>>([])
   const [receivedAmount, setReceivedAmount] = useState(0)
+  const [manualRate, setManualRate] = useState(0)
 
   const [successSale, setSuccessSale] = useState<{ number: string; id: number } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -81,6 +82,10 @@ export default function POSPage() {
       setCategories(cats)
       setClients(clis)
       if (rateData?.rate) setExchangeRate(Number(rateData.rate))
+      else {
+        const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+        if (auto?.rate) setExchangeRate(Number(auto.rate))
+      }
     } catch {
       const cached = await db.products.toArray()
       setProducts(cached.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
@@ -342,6 +347,36 @@ export default function POSPage() {
           clientInputRef={clientInputRef}
           onClientSubmit={handleClientSubmit}
         />
+
+        {exchangeRate === 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 shrink-0">
+            <span>Tasa BCV no disponible. Ingresa la tasa manualmente:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-amber-600">1$ = Bs.</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={manualRate || ''}
+                onChange={(e) => setManualRate(Number(e.target.value))}
+                onBlur={() => { if (manualRate > 0) { setExchangeRate(manualRate); api.exchangeRate.update(manualRate).catch(() => {}) } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && manualRate > 0) { setExchangeRate(manualRate); api.exchangeRate.update(manualRate).catch(() => {}); (e.target as HTMLInputElement).blur() } }}
+                className="w-24 border border-amber-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                placeholder="46.50"
+              />
+            </div>
+            <button
+              onClick={async () => {
+                const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+                if (auto?.rate) setExchangeRate(Number(auto.rate))
+              }}
+              className="px-2 py-1 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700 touch-manipulation"
+            >
+              Auto
+            </button>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
           <div className="hidden md:flex flex-col min-h-0 h-full">
             <TicketPanel
