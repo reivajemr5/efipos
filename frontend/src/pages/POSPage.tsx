@@ -468,11 +468,10 @@ export default function POSPage() {
                 <label className="block text-sm font-medium text-gray-700">Métodos de pago</label>
                 {paymentLines.map((line, i) => {
                   const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
-                  const remainingBs = exchangeRate > 0 ? (total - (lineTotal - line.amount)) * exchangeRate : total - (lineTotal - line.amount)
-                  const remainingUsd = total - (lineTotal - line.amount)
+                  const remaining = exchangeRate > 0 ? (total - (lineTotal - line.amount)) * exchangeRate : total - (lineTotal - line.amount)
                   return (
                     <div key={i} data-line={i}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <select
                           autoFocus={i === paymentLines.length - 1}
                           value={line.method}
@@ -489,7 +488,7 @@ export default function POSPage() {
                               input?.focus()
                             }
                           }}
-                          className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[110px]"
+                          className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                         >
                           <option value="efectivo">Efectivo</option>
                           <option value="pago_movil">Pago Móvil</option>
@@ -497,72 +496,71 @@ export default function POSPage() {
                           <option value="cashea">Cashea</option>
                           <option value="transferencia">Transferencia</option>
                         </select>
-                        <div className="relative flex-1">
+                        <div className="relative flex-1 min-w-0">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{exchangeRate > 0 ? 'Bs.' : '$'}</span>
                           <input
                             type="number"
                             min="0"
-                            step={exchangeRate > 0 ? "1" : "0.01"}
-                            value={line.amount || ''}
+                            step="0.01"
+                            value={line.amount ? line.amount.toFixed(2) : ''}
                             onChange={(e) => {
                               const next = [...paymentLines]
                               next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
                               setPaymentLines(next)
                             }}
-                          onFocus={(e) => e.target.select()}
-                          onBlur={(e) => {
-                            const raw = Math.max(0, Number(e.target.value) || 0)
-                            const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: exchangeRate > 0 ? Math.round(raw) : Math.round(raw * 100) / 100 }
-                            setPaymentLines(next)
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter') return
-                            e.preventDefault()
-                            const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
-                            const next = [...paymentLines]
-                            next[i] = { ...next[i], amount: exchangeRate > 0 ? Math.round(raw) : Math.round(raw * 100) / 100 }
-                            setPaymentLines(next)
-                            const remaining = exchangeRate > 0 ? remainingBs : remainingUsd
-                            if (line.method !== 'efectivo' && raw > remaining + 0.01) return
-                            const newSum = next.reduce((s, l) => s + l.amount, 0)
-                            const targetTotal = exchangeRate > 0 ? total * exchangeRate : total
-                            if (newSum >= targetTotal - 0.01) {
-                              setTimeout(() => cobrarRef.current?.focus(), 0)
-                            } else {
-                              const rest = Math.max(0, targetTotal - newSum)
-                              const restVal = exchangeRate > 0 ? Math.round(rest) : Math.round(rest * 100) / 100
-                              setPaymentLines([...next, { method: 'efectivo', amount: restVal, reference: '' }])
-                            }
-                          }}
-                            className="w-full pl-9 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                            placeholder={remainingBs > 0 ? `Restan ${exchangeRate > 0 ? 'Bs.' : '$'}${exchangeRate > 0 ? Math.round(remainingBs) : remainingUsd.toFixed(2)}` : '0'}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                              const raw = Math.max(0, Number(e.target.value) || 0)
+                              const amt = Math.round(raw * 100) / 100
+                              const next = [...paymentLines]
+                              next[i] = { ...next[i], amount: amt }
+                              setPaymentLines(next)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return
+                              e.preventDefault()
+                              const raw = Math.max(0, Number((e.target as HTMLInputElement).value) || 0)
+                              const amt = Math.round(raw * 100) / 100
+                              const next = [...paymentLines]
+                              next[i] = { ...next[i], amount: amt }
+                              setPaymentLines(next)
+                              if (line.method !== 'efectivo' && amt > remaining + 0.01) return
+                              const newSum = next.reduce((s, l) => s + l.amount, 0)
+                              const targetTotal = exchangeRate > 0 ? total * exchangeRate : total
+                              if (newSum >= targetTotal - 0.01) {
+                                setTimeout(() => cobrarRef.current?.focus(), 0)
+                              } else {
+                                const rest = Math.max(0, targetTotal - newSum)
+                                const restVal = Math.round(rest * 100) / 100
+                                setPaymentLines([...next, { method: 'efectivo', amount: restVal, reference: '' }])
+                              }
+                            }}
+                            className="w-full pl-8 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder={remaining > 0 ? `${exchangeRate > 0 ? 'Bs.' : '$'}${remaining.toFixed(2)}` : '0.00'}
                           />
                         </div>
                         {exchangeRate > 0 && line.amount > 0 && (
-                          <span className="text-[10px] text-gray-400 min-w-[50px] text-right">
-                            ${(line.amount / exchangeRate).toFixed(2)}
-                          </span>
+                          <span className="text-[11px] text-gray-400 shrink-0 tabular-nums w-[60px] text-right">${(line.amount / exchangeRate).toFixed(2)}</span>
                         )}
                         {paymentLines.length > 1 && (
                           <button
                             onClick={() => setPaymentLines(paymentLines.filter((_, j) => j !== i))}
-                            className="p-2 text-gray-400 hover:text-red-600 touch-manipulation"
+                            className="p-1.5 text-gray-400 hover:text-red-600 touch-manipulation shrink-0"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
                         )}
                       </div>
-                      {line.method !== 'efectivo' && line.amount > remainingBs + (exchangeRate > 0 ? 1 : 0.01) && (
+                      {line.method !== 'efectivo' && line.amount > remaining + 0.01 && (
                         <div className="flex items-center gap-2 mt-1 text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
-                          <span>Monto excede los {exchangeRate > 0 ? `Bs.${Math.round(remainingBs)}` : `$${remainingUsd.toFixed(2)}`} restantes</span>
+                          <span>Excede los {exchangeRate > 0 ? 'Bs.' : '$'}{remaining.toFixed(2)} restantes</span>
                           <button
                             onClick={() => {
                               const next = [...paymentLines]
-                              next[i] = { ...next[i], amount: exchangeRate > 0 ? Math.round(remainingBs) : Math.round(remainingUsd * 100) / 100 }
+                              next[i] = { ...next[i], amount: Math.round(remaining * 100) / 100 }
                               setPaymentLines(next)
                             }}
-                            className="ml-auto px-2 py-1 bg-amber-600 text-white rounded-md font-medium hover:bg-amber-700 touch-manipulation"
+                            className="ml-auto px-2 py-1 bg-amber-600 text-white rounded-md font-medium hover:bg-amber-700 touch-manipulation shrink-0"
                           >Ajustar</button>
                         </div>
                       )}
@@ -571,17 +569,17 @@ export default function POSPage() {
                 })}
 
                 {paymentLines.some((l) => l.method === 'efectivo') && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <label className="text-sm text-gray-600 min-w-[110px]">{exchangeRate > 0 ? 'Recibido Bs.' : 'Recibido $'}</label>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <span className="text-sm text-gray-600 shrink-0">{exchangeRate > 0 ? 'Recibido Bs.' : 'Recibido $'}</span>
                     <input
                       type="number"
                       min="0"
-                      step={exchangeRate > 0 ? '1' : '0.01'}
-                      value={receivedAmount || ''}
+                      step="0.01"
+                      value={receivedAmount ? receivedAmount.toFixed(2) : ''}
                       onChange={(e) => setReceivedAmount(Math.max(0, Number(e.target.value) || 0))}
-                      onBlur={(e) => setReceivedAmount(exchangeRate > 0 ? Math.round(Math.max(0, Number(e.target.value) || 0)) : Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
+                      onBlur={(e) => setReceivedAmount(Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      placeholder="0"
+                      placeholder="0.00"
                     />
                   </div>
                 )}
@@ -591,7 +589,7 @@ export default function POSPage() {
                   const cashAmount = cashLine ? cashLine.amount : 0
                   return cashLine && receivedAmount > cashAmount && (
                     <p className="text-sm text-green-600 font-medium">
-                      Cambio: {exchangeRate > 0 ? `Bs.${Math.round(receivedAmount - cashAmount)}` : `$${(receivedAmount - cashAmount).toFixed(2)}`}
+                      Cambio: {exchangeRate > 0 ? 'Bs.' : '$'}{(receivedAmount - cashAmount).toFixed(2)}
                     </p>
                   )
                 })()}
@@ -601,8 +599,7 @@ export default function POSPage() {
                     const sum = paymentLines.reduce((s, l) => s + l.amount, 0)
                     const target = total * (exchangeRate > 0 ? exchangeRate : 1)
                     const rest = Math.max(0, target - sum)
-                    const val = exchangeRate > 0 ? Math.round(rest) : Math.round(rest * 100) / 100
-                    setPaymentLines([...paymentLines, { method: 'efectivo', amount: val, reference: '' }])
+                    setPaymentLines([...paymentLines, { method: 'efectivo', amount: Math.round(rest * 100) / 100, reference: '' }])
                   }}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium touch-manipulation"
                 >
@@ -638,7 +635,7 @@ export default function POSPage() {
                       })}
                       className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
                     >
-                      {loading ? 'Procesando...' : exchangeRate > 0 ? `Cobrar Bs.${Math.round(target)}` : `Cobrar $${total.toFixed(2)}`}
+                      {loading ? 'Procesando...' : exchangeRate > 0 ? `Cobrar Bs.${target.toFixed(2)}` : `Cobrar $${total.toFixed(2)}`}
                     </button>
                   </div>
                 )
