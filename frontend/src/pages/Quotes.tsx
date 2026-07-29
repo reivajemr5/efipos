@@ -30,6 +30,8 @@ interface Quote {
   subtotal: number
   ivaTotal: number
   total: number
+  totalBs?: number | null
+  exchangeRate?: number | null
   status: string
   validUntil: string
   createdAt: string
@@ -49,6 +51,8 @@ export default function Quotes() {
   const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [showClientTable, setShowClientTable] = useState(false)
   const [showProductTable, setShowProductTable] = useState(false)
+  const [showPrint, setShowPrint] = useState<Quote | null>(null)
+  const [printCurrency, setPrintCurrency] = useState<'usd' | 'bs'>('usd')
 
   async function load() {
     const [q, c, p] = await Promise.all([api.quotes.list(), api.clients.list(), api.products.list()])
@@ -255,8 +259,119 @@ export default function Quotes() {
               {showDetail.status === 'activa' && (
                 <button onClick={() => convert(showDetail)} className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-600">Convertir a Factura</button>
               )}
-              <button onClick={() => { window.print() }} className="flex-1 bg-gray-200 py-2 rounded-lg">Imprimir</button>
+              <button onClick={() => { setShowPrint(showDetail); setPrintCurrency('usd') }} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Imprimir</button>
               <button onClick={() => setShowDetail(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPrint && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPrint(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Imprimir {showPrint.number}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Moneda:</span>
+                <button
+                  onClick={() => setPrintCurrency('usd')}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium ${printCurrency === 'usd' ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'}`}
+                >$ USD</button>
+                <button
+                  onClick={() => setPrintCurrency('bs')}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium ${printCurrency === 'bs' ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'}`}
+                >Bs.</button>
+              </div>
+            </div>
+
+            <div className="border rounded-xl p-4 bg-white" id="quote-print-area" style={{ fontFamily: 'monospace', fontSize: 12 }}>
+              <div className="text-center mb-3">
+                <h2 style={{ fontSize: 16, fontWeight: 'bold', margin: 0 }}>EfiPOS</h2>
+                <p style={{ fontSize: 11, color: '#666', margin: '2px 0' }}>RIF: J-12345678-9</p>
+                <p style={{ fontSize: 11, color: '#666', margin: '2px 0' }}>Av. Principal, Local 1 - 0412-1234567</p>
+                <p style={{ fontSize: 14, fontWeight: 'bold', margin: '8px 0 2px' }}>PRESUPUESTO</p>
+                <p style={{ fontSize: 11, color: '#888', margin: '0 0 4px' }}>{showPrint.number}</p>
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
+              <div style={{ fontSize: 11, margin: '6px 0' }}>
+                <p style={{ margin: '1px 0' }}><strong>Cliente:</strong> {showPrint.client?.name}</p>
+                <p style={{ margin: '1px 0' }}><strong>Fecha:</strong> {new Date(showPrint.createdAt).toLocaleDateString('es')}</p>
+                <p style={{ margin: '1px 0' }}><strong>Válido hasta:</strong> {new Date(showPrint.validUntil).toLocaleDateString('es')}</p>
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
+              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse', margin: '6px 0' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #999' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 4px' }}>Producto</th>
+                    <th style={{ textAlign: 'center', padding: '2px 4px' }}>Cant</th>
+                    <th style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? 'P/U $' : 'P/U Bs.'}</th>
+                    <th style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? 'Total $' : 'Total Bs.'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {showPrint.items.map((item, i) => {
+                    const rate = showPrint.exchangeRate || 1
+                    const pu = printCurrency === 'usd' ? item.unitPrice : item.unitPrice * rate
+                    const tot = printCurrency === 'usd' ? item.subtotal : item.subtotal * rate
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '2px 4px' }}>{item.product?.name}</td>
+                        <td style={{ textAlign: 'center', padding: '2px 4px' }}>{item.quantity}</td>
+                        <td style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? '$' : 'Bs.'}{pu.toFixed(2)}</td>
+                        <td style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? '$' : 'Bs.'}{tot.toFixed(2)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
+              <div style={{ fontSize: 11, textAlign: 'right', margin: '6px 0' }}>
+                {(() => {
+                  const rate = showPrint.exchangeRate || 1
+                  const subtotal = printCurrency === 'usd' ? showPrint.subtotal : showPrint.subtotal * rate
+                  const iva = printCurrency === 'usd' ? showPrint.ivaTotal : showPrint.ivaTotal * rate
+                  const total = printCurrency === 'usd' ? showPrint.total : showPrint.total * rate
+                  return (
+                    <>
+                      <p style={{ margin: '1px 0' }}>Subtotal: {printCurrency === 'usd' ? '$' : 'Bs.'}{subtotal.toFixed(2)}</p>
+                      <p style={{ margin: '1px 0' }}>IVA: {printCurrency === 'usd' ? '$' : 'Bs.'}{iva.toFixed(2)}</p>
+                      <p style={{ margin: '4px 0', fontSize: 14, fontWeight: 'bold' }}>Total: {printCurrency === 'usd' ? '$' : 'Bs.'}{total.toFixed(2)}</p>
+                    </>
+                  )
+                })()}
+              </div>
+              {printCurrency === 'bs' && showPrint.exchangeRate && (
+                <p style={{ fontSize: 10, color: '#888', textAlign: 'center', margin: '4px 0 0' }}>
+                  Tasa BCV: Bs.{Number(showPrint.exchangeRate).toFixed(2)}/$
+                </p>
+              )}
+              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
+              <p style={{ fontSize: 10, color: '#999', textAlign: 'center', margin: '6px 0 0' }}>
+                Términos: Este presupuesto tiene una validez de 30 días.
+              </p>
+            </div>
+
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => { setShowPrint(null) }}
+                className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  const el = document.getElementById('quote-print-area')
+                  if (!el) return
+                  const win = window.open('', '_blank')
+                  if (!win) return
+                  win.document.write(`<html><head><title>${showPrint.number}</title><style>body{font-family:monospace;padding:20px;font-size:12px}table{width:100%;border-collapse:collapse}th,td{padding:2px 4px}th{border-bottom:1px solid #999}hr{border:none;border-top:1px solid #999}</style></head><body>${el.innerHTML}</body></html>`)
+                  win.document.close()
+                  win.print()
+                }}
+                className="flex-1 py-3 bg-blue-900 text-white rounded-lg font-bold touch-manipulation"
+              >
+                Imprimir
+              </button>
             </div>
           </div>
         </div>

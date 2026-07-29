@@ -65,11 +65,12 @@ export const api = {
     },
   },
   quotes: {
-    list: () => request('/quotes'),
+    list: (params?: string) => request(`/quotes${params ? `?${params}` : ''}`),
     getById: (id: number) => request(`/quotes/${id}`),
     create: (data: any) => request('/quotes', { method: 'POST', body: JSON.stringify(data) }),
     convert: (id: number) => request(`/quotes/${id}/convert`, { method: 'POST' }),
     delete: (id: number) => request(`/quotes/${id}`, { method: 'DELETE' }),
+    print: (id: number) => request(`/quotes/print/${id}`),
   },
   purchases: {
     list: (params?: string) => request(`/purchases${params ? `?${params}` : ''}`),
@@ -85,8 +86,11 @@ export const api = {
     create: (data: any) => request('/invoices', { method: 'POST', body: JSON.stringify(data) }),
     cancel: (id: number) => request(`/invoices/${id}/cancel`, { method: 'POST' }),
     print: (id: number) => request(`/invoices/print/${id}`),
-    drafts: () => request('/invoices/drafts'),
-    complete: (id: number) => request(`/invoices/${id}/complete`, { method: 'PATCH' }),
+    drafts: (q?: string) => request(`/invoices/drafts${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    complete: (id: number, data?: any) =>
+      request(`/invoices/${id}/complete`, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
+    update: (id: number, data: any) =>
+      request(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     abonar: (id: number, data: { amountBs: number; exchangeRate: number }) =>
       request(`/invoices/${id}/abonar`, { method: 'POST', body: JSON.stringify(data) }),
   },

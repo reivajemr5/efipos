@@ -6,7 +6,7 @@ import TicketPanel from '../components/pos/TicketPanel'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
-import LoadDraftModal from '../components/LoadDraftModal'
+import LoadModal from '../components/LoadModal'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
@@ -57,6 +57,8 @@ export default function POSPage() {
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [showCartMobile, setShowCartMobile] = useState(false)
   const [showLoadDraft, setShowLoadDraft] = useState(false)
+  const [activeDraftId, setActiveDraftId] = useState<number | null>(null)
+  const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [showProductSearch, setShowProductSearch] = useState(false)
   const [modalSearch, setModalSearch] = useState('')
@@ -193,43 +195,57 @@ export default function POSPage() {
     setCart([])
     setDiscount(0)
     setNotes('')
+    setActiveDraftId(null)
+    setActiveQuoteId(null)
   }
 
   async function handleSaveDraft() {
     if (cart.length === 0) return
     try {
-      await api.invoices.create({
-        clientId: selectedClient.id || undefined,
-        status: 'borrador',
-        paymentMethod: 'efectivo',
-        currency: 'usd',
-        exchangeRate: exchangeRate || undefined,
-        items: cart.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-        })),
-      })
+      const items = cart.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      }))
+      if (activeDraftId) {
+        await api.invoices.update(activeDraftId, {
+          items,
+          exchangeRate: exchangeRate || undefined,
+        })
+      } else {
+        const inv = await api.invoices.create({
+          clientId: selectedClient.id || undefined,
+          status: 'borrador',
+          paymentMethod: 'efectivo',
+          currency: 'usd',
+          exchangeRate: exchangeRate || undefined,
+          items,
+        })
+        setActiveDraftId(inv.id)
+      }
       setCart([])
       setDiscount(0)
       setNotes('')
       setSelectedClient(DEFAULT_CLIENT)
+      setActiveDraftId(null)
     } catch (err: any) {
       alert('Error al guardar borrador: ' + err.message)
     }
   }
 
-  function handleLoadDraft(draft: any) {
-    setCart(draft.items.map((i: any) => ({
+  function handleLoadFromSource(source: { type: 'draft' | 'quote'; id: number; items: any[]; client: any; exchangeRate?: number }) {
+    setCart(source.items.map((i: any) => ({
       productId: i.productId,
-      name: i.name || i.product?.name || '',
+      name: i.name || '',
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice),
       ivaPercent: Number(i.ivaPercent),
     })))
-    if (draft.client) {
-      setSelectedClient({ id: draft.clientId, name: draft.client.name, documentType: draft.client.documentType, documentNumber: draft.client.documentNumber, phone: draft.client.phone, address: draft.client.address })
+    if (source.client) {
+      setSelectedClient({ id: source.client.id, name: source.client.name, documentType: source.client.documentType, documentNumber: source.client.documentNumber, phone: null, address: null })
     }
+    if (source.type === 'draft') setActiveDraftId(source.id)
+    else if (source.type === 'quote') setActiveQuoteId(source.id)
     setShowLoadDraft(false)
   }
 
@@ -249,24 +265,51 @@ export default function POSPage() {
     try {
       const activePayments = paymentLines.filter((p) => p.amount > 0)
       const rate = exchangeRate > 0 ? exchangeRate : 1
-      const invoice = await api.invoices.create({
-        clientId: selectedClient.id || undefined,
-        paymentMethod: activePayments.map((p) => p.method).join('+'),
-        currency: 'usd',
-        items: cart.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-        })),
-        payments: activePayments.map((p) => ({ ...p, amount: Math.round((p.amount / rate) * 100) / 100 })),
-        exchangeRate: rate,
-      })
+      const items = cart.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      }))
+      const paymentsUsd = activePayments.map((p) => ({ ...p, amount: Math.round((p.amount / rate) * 100) / 100 }))
+
+      let invoice: any
+
+      if (activeDraftId) {
+        invoice = await api.invoices.complete(activeDraftId, {
+          items,
+          payments: paymentsUsd,
+          exchangeRate: rate,
+          paymentMethod: activePayments.map((p) => p.method).join('+'),
+        })
+      } else if (activeQuoteId) {
+        invoice = await api.invoices.create({
+          clientId: selectedClient.id || undefined,
+          quoteId: activeQuoteId,
+          paymentMethod: activePayments.map((p) => p.method).join('+'),
+          currency: 'usd',
+          items,
+          payments: paymentsUsd,
+          exchangeRate: rate,
+        })
+      } else {
+        invoice = await api.invoices.create({
+          clientId: selectedClient.id || undefined,
+          paymentMethod: activePayments.map((p) => p.method).join('+'),
+          currency: 'usd',
+          items,
+          payments: paymentsUsd,
+          exchangeRate: rate,
+        })
+      }
+
       setLastSaleAmount(paidTotal)
-      setSuccessSale({ number: invoice.number, id: invoice.id })
+      setSuccessSale({ number: invoice.number || invoice.number, id: invoice.id })
       setCart([])
       setDiscount(0)
       setNotes('')
       setCheckoutModal(false)
+      setActiveDraftId(null)
+      setActiveQuoteId(null)
     } catch (err: any) {
       alert('Error al crear factura: ' + err.message)
     } finally {
@@ -307,6 +350,8 @@ export default function POSPage() {
     setCart([])
     setDiscount(0)
     setNotes('')
+    setActiveDraftId(null)
+    setActiveQuoteId(null)
     setTimeout(() => searchInputRef.current?.focus(), 0)
   }
 
@@ -382,6 +427,20 @@ export default function POSPage() {
               className="px-2 py-1 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700 touch-manipulation"
             >
               Auto
+            </button>
+          </div>
+        )}
+
+        {(activeDraftId || activeQuoteId) && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 border-b border-blue-200 text-xs text-blue-800 shrink-0">
+            <span className="font-medium">
+              {activeQuoteId ? '✏️ Editando presupuesto' : '📄 Editando factura guardada'}
+            </span>
+            <button
+              onClick={() => { setActiveDraftId(null); setActiveQuoteId(null); setCart([]); setDiscount(0); setNotes('') }}
+              className="ml-auto px-2 py-0.5 bg-blue-200 text-blue-800 rounded hover:bg-blue-300 touch-manipulation"
+            >
+              Cancelar edición
             </button>
           </div>
         )}
@@ -733,7 +792,7 @@ export default function POSPage() {
 
         <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)} onSaved={handleClientCreated} initialQuery={clientSearch} existingClients={clients} />
 
-        <LoadDraftModal open={showLoadDraft} onClose={() => setShowLoadDraft(false)} onLoad={handleLoadDraft} />
+        <LoadModal open={showLoadDraft} onClose={() => setShowLoadDraft(false)} onLoad={handleLoadFromSource} />
 
         {showProductSearch && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowProductSearch(false); setModalSearch(''); setModalCategory(null) }}>

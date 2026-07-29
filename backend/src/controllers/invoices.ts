@@ -152,8 +152,17 @@ export async function create(req: AuthRequest, res: Response) {
 }
 
 export async function listDrafts(req: AuthRequest, res: Response) {
+  const q = String(req.query.q || '').trim()
+  const where: any = { userId: req.user!.id, status: 'borrador' }
+  if (q) {
+    where.OR = [
+      { number: { contains: q, mode: 'insensitive' } },
+      { client: { name: { contains: q, mode: 'insensitive' } } },
+      { client: { documentNumber: { contains: q } } },
+    ]
+  }
   const drafts = await prisma.invoice.findMany({
-    where: { userId: req.user!.id, status: 'borrador' },
+    where,
     orderBy: { createdAt: 'desc' },
     include: {
       client: { select: { id: true, name: true, documentType: true, documentNumber: true } },
@@ -167,6 +176,8 @@ export async function listDrafts(req: AuthRequest, res: Response) {
 
 export async function completeDraft(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
+  const { items: newItems, payments, exchangeRate: newRate, paymentMethod: newMethod } = req.body
+
   const invoice = await prisma.invoice.findUnique({
     where: { id },
     include: { items: true },
@@ -174,8 +185,55 @@ export async function completeDraft(req: AuthRequest, res: Response) {
   if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
   if (invoice.status !== 'borrador') { res.status(400).json({ error: 'La factura no es un borrador' }); return }
 
-  // Subtract stock
-  for (const item of invoice.items) {
+  // If new items provided, recalculate totals and replace items
+  let finalItems = invoice.items
+  let finalSubtotal = Number(invoice.subtotal)
+  let finalIvaTotal = Number(invoice.ivaTotal)
+  let finalTotal = Number(invoice.total)
+  let finalBalance = Number(invoice.balance)
+  let finalTotalBs = invoice.totalBs ? Number(invoice.totalBs) : null
+
+  if (newItems?.length) {
+    const productIds = newItems.map((i: any) => i.productId)
+    const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+    const productMap = new Map(products.map((p) => [p.id, p]))
+
+    let subtotal = 0
+    let ivaTotal = 0
+    const computedItems = newItems.map((i: any) => {
+      const product = productMap.get(i.productId)
+      if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+      const unitPrice = i.unitPrice || Number(product.price)
+      const itemSubtotal = unitPrice * i.quantity
+      const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
+      subtotal += itemSubtotal
+      ivaTotal += itemIva
+      return { productId: i.productId, quantity: i.quantity, unitPrice, ivaPercent: product.ivaPercent, subtotal: itemSubtotal }
+    })
+
+    finalSubtotal = subtotal
+    finalIvaTotal = ivaTotal
+    finalTotal = subtotal + ivaTotal
+    finalItems = computedItems as any
+
+    const rate = newRate || invoice.exchangeRate
+    if (rate) finalTotalBs = finalTotal * Number(rate)
+    else finalTotalBs = null
+
+    const payMethod = newMethod || invoice.paymentMethod
+    finalBalance = payMethod.includes('credito')
+      ? finalTotal - (payments?.filter((p: any) => p.method !== 'credito').reduce((s: number, p: any) => s + Number(p.amount), 0) || 0)
+      : 0
+
+    // Delete old items and create new ones
+    await prisma.invoiceItem.deleteMany({ where: { invoiceId: id } })
+    await prisma.invoiceItem.createMany({
+      data: computedItems.map((i: any) => ({ ...i, invoiceId: id })),
+    })
+  }
+
+  // Subtract stock for final items
+  for (const item of finalItems) {
     const product = await prisma.product.findUnique({ where: { id: item.productId } })
     if (!product) continue
     const stockBefore = Number(product.stock)
@@ -198,12 +256,37 @@ export async function completeDraft(req: AuthRequest, res: Response) {
     })
   }
 
+  // Create payments if provided
+  if (payments?.length) {
+    await prisma.payment.createMany({
+      data: payments.map((p: any) => ({
+        invoiceId: id,
+        amount: p.amount,
+        method: p.method,
+        reference: p.reference || null,
+        userId: req.user!.id,
+      })),
+    })
+  }
+
+  const updateData: any = {
+    status: 'activa',
+    subtotal: finalSubtotal,
+    ivaTotal: finalIvaTotal,
+    total: finalTotal,
+    totalBs: finalTotalBs,
+    balance: finalBalance,
+  }
+  if (newMethod) updateData.paymentMethod = newMethod
+  if (newRate) updateData.exchangeRate = newRate
+
   const updated = await prisma.invoice.update({
     where: { id },
-    data: { status: 'activa' },
+    data: updateData,
     include: {
       client: { select: { id: true, name: true } },
       items: { include: { product: { select: { id: true, name: true } } } },
+      payments: true,
     },
   })
   res.json(updated)
@@ -309,4 +392,64 @@ export async function getPrintData(req: AuthRequest, res: Response) {
   }
 
   res.json({ company, invoice })
+}
+
+export async function updateDraft(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const { items, exchangeRate, paymentMethod } = req.body
+
+  const invoice = await prisma.invoice.findUnique({ where: { id } })
+  if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
+  if (invoice.status !== 'borrador') { res.status(400).json({ error: 'La factura no es un borrador' }); return }
+  if (!items?.length) { res.status(400).json({ error: 'Productos requeridos' }); return }
+
+  const productIds = items.map((i: any) => i.productId)
+  const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+  const productMap = new Map(products.map((p) => [p.id, p]))
+
+  let subtotal = 0
+  let ivaTotal = 0
+  const invoiceItems = items.map((i: any) => {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const unitPrice = i.unitPrice || Number(product.price)
+    const itemSubtotal = unitPrice * i.quantity
+    const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
+    subtotal += itemSubtotal
+    ivaTotal += itemIva
+    return { productId: i.productId, quantity: i.quantity, unitPrice, ivaPercent: product.ivaPercent, subtotal: itemSubtotal }
+  })
+
+  const total = subtotal + ivaTotal
+  const rate = exchangeRate || invoice.exchangeRate
+  let totalBs = null
+  if (rate) totalBs = total * Number(rate)
+
+  const payMethod = paymentMethod || invoice.paymentMethod
+  const balance = payMethod.includes('credito') ? total : 0
+
+  // Delete old items and create new ones
+  await prisma.invoiceItem.deleteMany({ where: { invoiceId: id } })
+  await prisma.invoiceItem.createMany({
+    data: invoiceItems.map((i: any) => ({ ...i, invoiceId: id })),
+  })
+
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: {
+      subtotal,
+      ivaTotal,
+      total,
+      totalBs,
+      paymentMethod: payMethod,
+      exchangeRate: rate || null,
+      balance,
+    },
+    include: {
+      client: { select: { id: true, name: true } },
+      items: { include: { product: { select: { id: true, name: true } } } },
+    },
+  })
+
+  res.json(updated)
 }

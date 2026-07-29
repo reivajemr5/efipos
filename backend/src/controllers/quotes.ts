@@ -3,8 +3,20 @@ import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 
 export async function list(req: AuthRequest, res: Response) {
+  const q = String(req.query.q || '').trim()
+  const status = String(req.query.status || '').trim()
+  const where: any = {}
+  if (status) where.status = status
+  if (q) {
+    where.OR = [
+      { number: { contains: q, mode: 'insensitive' } },
+      { client: { name: { contains: q, mode: 'insensitive' } } },
+      { client: { documentNumber: { contains: q } } },
+    ]
+  }
   const quotes = await prisma.quote.findMany({
-    include: { client: { select: { id: true, name: true } }, items: { include: { product: { select: { id: true, name: true, code: true } } } } },
+    where,
+    include: { client: { select: { id: true, name: true, documentType: true, documentNumber: true } }, items: { include: { product: { select: { id: true, name: true, code: true } } } } },
     orderBy: { createdAt: 'desc' },
   })
   res.json(quotes)
@@ -135,4 +147,28 @@ export async function remove(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   await prisma.quote.delete({ where: { id } })
   res.status(204).send()
+}
+
+export async function getPrintData(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const quote = await prisma.quote.findUnique({
+    where: { id },
+    include: {
+      client: true,
+      user: { select: { id: true, name: true } },
+      items: {
+        include: { product: { select: { id: true, name: true, code: true, price: true } } },
+      },
+    },
+  })
+  if (!quote) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
+
+  const company = {
+    name: 'Efi- Pos',
+    rif: 'J-12345678-9',
+    address: 'Av. Principal, Local 1',
+    phone: '0412-1234567',
+  }
+
+  res.json({ company, quote })
 }
