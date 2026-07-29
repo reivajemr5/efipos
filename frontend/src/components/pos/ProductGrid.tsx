@@ -89,7 +89,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
   }
 
   return (
-    <div className="bg-gray-50">
+    <div className="bg-gray-50 w-full max-w-full overflow-hidden">
       <div ref={tabsRef} className="flex gap-1 p-3 pb-2 overflow-x-auto shrink-0 sticky top-0 bg-gray-50 z-10">
         <button
           onClick={() => onSelectCategory(null)}
@@ -127,7 +127,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
               ref={gridRef}
               tabIndex={-1}
               onKeyDown={handleGridKeyDown}
-              className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-1.5 w-full"
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 w-full"
             >
               {visibleProducts.map((product) => (
                  <ProductCard

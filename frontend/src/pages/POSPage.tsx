@@ -388,7 +388,7 @@ export default function POSPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
+        <div className="flex flex-col md:grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
           <div className="hidden md:flex flex-col min-h-0 h-full">
             <TicketPanel
               items={cart}
@@ -403,7 +403,7 @@ export default function POSPage() {
               exchangeRate={exchangeRate}
             />
           </div>
-          <div className={`overflow-y-auto min-h-0 ${showCartMobile ? 'hidden md:block' : ''}`}>
+          <div className={`overflow-y-auto min-h-0 w-full max-w-full ${showCartMobile ? 'hidden md:block' : ''}`}>
             <ProductGrid
               products={filteredProducts}
               categories={categories}
