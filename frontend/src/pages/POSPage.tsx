@@ -505,7 +505,7 @@ export default function POSPage() {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={line.amount ? line.amount.toFixed(2) : ''}
+                            value={line.amount || ''}
                             onChange={(e) => {
                               const next = [...paymentLines]
                               next[i] = { ...next[i], amount: Math.max(0, Number(e.target.value) || 0) }
@@ -578,7 +578,7 @@ export default function POSPage() {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={receivedAmount ? receivedAmount.toFixed(2) : ''}
+                      value={receivedAmount || ''}
                       onChange={(e) => setReceivedAmount(Math.max(0, Number(e.target.value) || 0))}
                       onBlur={(e) => setReceivedAmount(Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
