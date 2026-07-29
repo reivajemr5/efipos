@@ -330,7 +330,7 @@ export default function POSPage() {
         .print-area { display: none; }
       `}</style>
 
-      <div className="no-print grid grid-rows-[auto_1fr] h-[calc(100dvh-56px)]">
+      <div className="no-print grid grid-rows-[auto_1fr] h-[calc(100dvh-56px)] overflow-x-hidden">
         <POSHeader
           clientSearch={clientSearch}
           onClientSearchChange={setClientSearch}
@@ -388,7 +388,7 @@ export default function POSPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-[2fr_3fr] overflow-hidden min-h-0">
+        <div className="grid md:grid-cols-[2fr_3fr] min-h-0">
           <div className="hidden md:flex flex-col min-h-0 h-full">
             <TicketPanel
               items={cart}

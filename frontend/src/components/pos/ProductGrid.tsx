@@ -90,7 +90,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
 
   return (
     <div className="bg-gray-50 w-full max-w-full">
-      <div ref={tabsRef} className="flex gap-1 p-3 pb-2 overflow-x-auto shrink-0 sticky top-0 bg-gray-50 z-10">
+      <div ref={tabsRef} className="flex gap-1 p-3 pb-2 overflow-x-auto shrink-0 sticky top-0 bg-gray-50 z-10" style={{ overflowY: 'hidden' }}>
         <button
           onClick={() => onSelectCategory(null)}
           className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors touch-manipulation ${
