@@ -42,7 +42,6 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [checkoutModal, setCheckoutModal] = useState(false)
   const [paymentLines, setPaymentLines] = useState<Array<{ method: string; amount: number; reference: string }>>([])
-  const [receivedAmount, setReceivedAmount] = useState(0)
   const [manualRate, setManualRate] = useState(0)
 
   const [successSale, setSuccessSale] = useState<{ number: string; id: number } | null>(null)
@@ -578,29 +577,23 @@ export default function POSPage() {
                   )
                 })}
 
-                {paymentLines.some((l) => l.method === 'efectivo') && (
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <span className="text-xs md:text-sm text-gray-600 shrink-0 whitespace-nowrap">{exchangeRate > 0 ? 'Recibido Bs.' : 'Recibido $'}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={receivedAmount || ''}
-                      onChange={(e) => setReceivedAmount(Math.max(0, Number(e.target.value) || 0))}
-                      onBlur={(e) => setReceivedAmount(Math.round(Math.max(0, Number(e.target.value) || 0) * 100) / 100)}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      placeholder="0.00"
-                    />
-                  </div>
-                )}
-
                 {(() => {
-                  const cashLine = paymentLines.find((l) => l.method === 'efectivo')
-                  const cashAmount = cashLine ? cashLine.amount : 0
-                  return cashLine && receivedAmount > cashAmount && (
-                    <p className="text-sm text-green-600 font-medium">
-                      Cambio: {exchangeRate > 0 ? 'Bs.' : '$'}{(receivedAmount - cashAmount).toFixed(2)}
-                    </p>
+                  const target = total * (exchangeRate > 0 ? exchangeRate : 1)
+                  const sumAmt = paymentLines.reduce((s, l) => s + l.amount, 0)
+                  const diff = sumAmt - target
+                  return (
+                    <div className="space-y-1 pt-1 border-t border-gray-200 text-xs text-gray-600">
+                      <p className="flex justify-between">
+                        <span>Total recibido:</span>
+                        <span className={sumAmt >= target ? 'font-semibold text-green-700' : ''}>{exchangeRate > 0 ? 'Bs.' : '$'}{sumAmt.toFixed(2)}</span>
+                      </p>
+                      {diff > 0 && (
+                        <p className="flex justify-between text-green-600 font-medium">
+                          <span>Cambio:</span>
+                          <span>{exchangeRate > 0 ? 'Bs.' : '$'}{diff.toFixed(2)}</span>
+                        </p>
+                      )}
+                    </div>
                   )
                 })()}
 
