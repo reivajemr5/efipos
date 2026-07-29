@@ -116,7 +116,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
         ))}
       </div>
 
-      <div className="px-3 pb-3">
+      <div className="px-2 pb-2">
         {products.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
             No hay productos en esta categoría
@@ -127,7 +127,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
               ref={gridRef}
               tabIndex={-1}
               onKeyDown={handleGridKeyDown}
-              className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2"
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-1.5 w-full"
             >
               {visibleProducts.map((product) => (
                  <ProductCard

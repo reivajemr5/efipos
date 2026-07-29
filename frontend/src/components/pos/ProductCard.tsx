@@ -79,7 +79,7 @@ export default function ProductCard({ product, onSelect, onSelectQuantity, excha
           </div>
         )}
       </div>
-      <div className="p-1.5 flex-1 flex items-center">
+      <div className="p-1 flex-1 flex items-center">
         <p className="text-[11px] font-medium text-gray-800 line-clamp-2 leading-tight">{product.name}</p>
       </div>
     </button>
