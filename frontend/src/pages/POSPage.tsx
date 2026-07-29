@@ -471,7 +471,7 @@ export default function POSPage() {
                 <label className="block text-sm font-medium text-gray-700">Métodos de pago</label>
                 {paymentLines.map((line, i) => {
                   const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
-                  const remaining = exchangeRate > 0 ? (total - (lineTotal - line.amount)) * exchangeRate : total - (lineTotal - line.amount)
+                  const remaining = exchangeRate > 0 ? (total * exchangeRate) - (lineTotal - line.amount) : total - (lineTotal - line.amount)
                   return (
                     <div key={i} data-line={i}>
                       <div className="flex items-center gap-1.5">
