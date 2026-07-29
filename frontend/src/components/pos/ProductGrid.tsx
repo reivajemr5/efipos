@@ -89,7 +89,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
   }
 
   return (
-    <div className="bg-gray-50 w-full max-w-full overflow-hidden">
+    <div className="bg-gray-50 w-full max-w-full">
       <div ref={tabsRef} className="flex gap-1 p-3 pb-2 overflow-x-auto shrink-0 sticky top-0 bg-gray-50 z-10">
         <button
           onClick={() => onSelectCategory(null)}
