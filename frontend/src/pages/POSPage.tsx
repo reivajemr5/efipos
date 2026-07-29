@@ -236,10 +236,7 @@ export default function POSPage() {
   function handleCheckout() {
     if (cart.length === 0) return
     setQtyModalProduct(null)
-    const paidTotal = Math.max(0, subtotal + ivaTotal - discount)
-    const paidBs = exchangeRate > 0 ? Math.round(paidTotal * exchangeRate * 100) / 100 : paidTotal
-    setPaymentLines([{ method: 'efectivo', amount: paidBs, reference: '' }])
-    setReceivedAmount(paidBs)
+    setPaymentLines([{ method: 'efectivo', amount: 0, reference: '' }])
     setCheckoutModal(true)
   }
 
