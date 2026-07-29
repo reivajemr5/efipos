@@ -127,7 +127,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
               ref={gridRef}
               tabIndex={-1}
               onKeyDown={handleGridKeyDown}
-              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-1.5 w-full"
+              className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-1.5 w-full"
             >
               {visibleProducts.map((product) => (
                  <ProductCard
