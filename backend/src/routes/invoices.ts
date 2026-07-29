@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { list, getById, create, cancel, getPrintData, listDrafts, completeDraft } from '../controllers/invoices'
+import { list, getById, create, cancel, getPrintData, listDrafts, completeDraft, abonar } from '../controllers/invoices'
 import { authenticate } from '../middleware/auth'
 
 const router = Router()
@@ -12,5 +12,6 @@ router.get('/:id', getById)
 router.post('/', create)
 router.post('/:id/cancel', cancel)
 router.patch('/:id/complete', completeDraft)
+router.post('/:id/abonar', abonar)
 
 export default router

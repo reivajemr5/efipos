@@ -113,6 +113,9 @@ export async function create(req: AuthRequest, res: Response) {
           userId: req.user!.id,
         })),
       } : undefined,
+      balance: (paymentMethod || '').includes('credito')
+        ? total - (payments?.filter((p: any) => p.method !== 'credito').reduce((s: number, p: any) => s + Number(p.amount), 0) || 0)
+        : 0,
     },
     include: {
       client: { select: { id: true, name: true } },
@@ -218,7 +221,7 @@ export async function cancel(req: AuthRequest, res: Response) {
 
   await prisma.invoice.update({
     where: { id },
-    data: { status: 'anulada', cancelledAt: new Date() },
+    data: { status: 'anulada', cancelledAt: new Date(), balance: 0 },
   })
 
   for (const item of invoice.items) {
@@ -229,6 +232,59 @@ export async function cancel(req: AuthRequest, res: Response) {
   }
 
   res.json({ message: 'Factura anulada exitosamente' })
+}
+
+export async function abonar(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const { amountBs, exchangeRate } = req.body
+  if (!amountBs || amountBs <= 0) {
+    res.status(400).json({ error: 'Monto inválido' })
+    return
+  }
+  if (!exchangeRate || exchangeRate <= 0) {
+    res.status(400).json({ error: 'Tasa de cambio inválida' })
+    return
+  }
+
+  const invoice = await prisma.invoice.findUnique({ where: { id } })
+  if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
+  if (invoice.status === 'anulada') { res.status(400).json({ error: 'Factura anulada' }); return }
+
+  const amountUsd = Math.round((amountBs / exchangeRate) * 100) / 100
+  const currentBalance = Number(invoice.balance)
+  if (amountUsd > currentBalance) {
+    res.status(400).json({ error: `El abono excede el saldo pendiente de $${currentBalance.toFixed(2)}` })
+    return
+  }
+
+  const newBalance = Math.round((currentBalance - amountUsd) * 100) / 100
+
+  const [payment] = await prisma.$transaction([
+    prisma.payment.create({
+      data: {
+        invoiceId: id,
+        amount: amountUsd,
+        method: 'abono_credito',
+        reference: `Bs.${amountBs.toFixed(2)} @ ${exchangeRate.toFixed(2)}`,
+        notes: `Abono a crédito. Tasa: Bs.${exchangeRate.toFixed(2)}/USD`,
+        userId: req.user!.id,
+      },
+    }),
+    prisma.invoice.update({
+      where: { id },
+      data: { balance: newBalance },
+    }),
+  ])
+
+  const updated = await prisma.invoice.findUnique({
+    where: { id },
+    include: {
+      client: { select: { id: true, name: true, documentType: true, documentNumber: true } },
+      payments: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  res.json(updated)
 }
 
 export async function getPrintData(req: AuthRequest, res: Response) {

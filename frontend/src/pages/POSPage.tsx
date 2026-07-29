@@ -456,7 +456,7 @@ export default function POSPage() {
 
         {checkoutModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-sm p-6">
+            <div className="bg-white rounded-2xl w-full max-w-sm p-4 md:p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-1">Confirmar Venta</h3>
               {exchangeRate > 0 ? (
                 <p className="text-sm text-gray-500 mb-4">
@@ -491,13 +491,14 @@ export default function POSPage() {
                               input?.focus()
                             }
                           }}
-                          className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          className="w-[85px] md:w-auto shrink-0 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                         >
                           <option value="efectivo">Efectivo</option>
                           <option value="pago_movil">Pago Móvil</option>
                           <option value="bio_pago">Bio Pago</option>
                           <option value="cashea">Cashea</option>
                           <option value="transferencia">Transferencia</option>
+                          <option value="credito">Crédito</option>
                         </select>
                         <div className="relative flex-1 min-w-0">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{exchangeRate > 0 ? 'Bs.' : '$'}</span>
@@ -527,6 +528,12 @@ export default function POSPage() {
                               const next = [...paymentLines]
                               next[i] = { ...next[i], amount: amt }
                               setPaymentLines(next)
+                              if (line.method === 'credito') {
+                                if (amt <= 0) next[i] = { ...next[i], amount: Math.round(remaining * 100) / 100 }
+                                setPaymentLines(next)
+                                setTimeout(() => cobrarRef.current?.focus(), 0)
+                                return
+                              }
                               if (line.method !== 'efectivo' && amt > remaining + 0.01) return
                               const newSum = next.reduce((s, l) => s + l.amount, 0)
                               const targetTotal = exchangeRate > 0 ? total * exchangeRate : total
@@ -543,7 +550,7 @@ export default function POSPage() {
                           />
                         </div>
                         {exchangeRate > 0 && line.amount > 0 && (
-                          <span className="text-[11px] text-gray-400 shrink-0 tabular-nums w-[60px] text-right">${(line.amount / exchangeRate).toFixed(2)}</span>
+                          <span className="text-[11px] text-gray-400 shrink-0 tabular-nums w-[55px] text-right">${(line.amount / exchangeRate).toFixed(2)}</span>
                         )}
                         {paymentLines.length > 1 && (
                           <button
@@ -554,7 +561,7 @@ export default function POSPage() {
                           </button>
                         )}
                       </div>
-                      {line.method !== 'efectivo' && line.amount > remaining + 0.01 && (
+                      {line.method !== 'efectivo' && line.method !== 'credito' && line.amount > remaining + 0.01 && (
                         <div className="flex items-center gap-2 mt-1 text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
                           <span>Excede los {exchangeRate > 0 ? 'Bs.' : '$'}{remaining.toFixed(2)} restantes</span>
                           <button
@@ -573,7 +580,7 @@ export default function POSPage() {
 
                 {paymentLines.some((l) => l.method === 'efectivo') && (
                   <div className="flex items-center gap-1.5 pt-1">
-                    <span className="text-sm text-gray-600 shrink-0">{exchangeRate > 0 ? 'Recibido Bs.' : 'Recibido $'}</span>
+                    <span className="text-xs md:text-sm text-gray-600 shrink-0 whitespace-nowrap">{exchangeRate > 0 ? 'Recibido Bs.' : 'Recibido $'}</span>
                     <input
                       type="number"
                       min="0"
@@ -630,8 +637,8 @@ export default function POSPage() {
                     <button
                       ref={cobrarRef}
                       onClick={confirmCheckout}
-                      disabled={loading || sumAmt < target - 0.01 || paymentLines.some((l, idx) => {
-                        if (l.method === 'efectivo') return false
+                      disabled={loading || (!paymentLines.some((l) => l.method === 'credito') && sumAmt < target - 0.01) || paymentLines.some((l, idx) => {
+                        if (l.method === 'efectivo' || l.method === 'credito') return false
                         const others = [...paymentLines]; others.splice(idx, 1)
                         const paid = others.reduce((s, o) => s + o.amount, 0)
                         return l.amount > target - paid + 0.01

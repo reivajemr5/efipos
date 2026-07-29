@@ -218,6 +218,7 @@ model Invoice {
   totalBs       Decimal?       @map("total_bs") @db.Decimal(14, 2)
   status        InvoiceStatus  @default(activa)
   paymentMethod String         @default("efectivo") @map("payment_method")
+  balance       Decimal        @default(0) @db.Decimal(12, 2)
   createdAt     DateTime       @default(now()) @map("created_at")
   cancelledAt   DateTime?      @map("cancelled_at")
   client        Client         @relation(fields: [clientId], references: [id])

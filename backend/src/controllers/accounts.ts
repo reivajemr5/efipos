@@ -4,15 +4,19 @@ import { AuthRequest } from '../middleware/auth'
 
 export async function receivable(req: AuthRequest, res: Response) {
   const invoices = await prisma.invoice.findMany({
-    where: { status: 'activa' },
+    where: { balance: { gt: 0 }, status: { not: 'anulada' } },
     include: {
       client: { select: { id: true, name: true, documentType: true, documentNumber: true } },
       user: { select: { id: true, name: true } },
+      payments: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
     },
     orderBy: { createdAt: 'desc' },
   })
 
-  const totalPending = invoices.reduce((s, inv) => s + Number(inv.total), 0)
+  const totalPending = invoices.reduce((s, inv) => s + Number(inv.balance), 0)
 
   res.json({
     totalPending,

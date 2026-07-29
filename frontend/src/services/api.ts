@@ -87,6 +87,8 @@ export const api = {
     print: (id: number) => request(`/invoices/print/${id}`),
     drafts: () => request('/invoices/drafts'),
     complete: (id: number) => request(`/invoices/${id}/complete`, { method: 'PATCH' }),
+    abonar: (id: number, data: { amountBs: number; exchangeRate: number }) =>
+      request(`/invoices/${id}/abonar`, { method: 'POST', body: JSON.stringify(data) }),
   },
   categories: {
     list: () => request('/categories'),
