@@ -79,8 +79,8 @@ export default function POSHeader({
   }
 
   return (
-    <header className="bg-blue-900 text-white px-3 flex items-center gap-2 shrink-0 h-10">
-      <div className="relative flex-1 min-w-0 h-full flex items-center" ref={ref}>
+    <header className="bg-blue-900 text-white px-2 md:px-3 flex flex-col md:flex-row md:items-center md:gap-2 md:h-10 shrink-0 gap-0.5 py-1 md:py-0">
+      <div className="relative w-full md:flex-1 md:min-w-0 md:h-full md:flex md:items-center" ref={ref}>
         {selectedClient ? (
           <div className="flex items-center gap-1.5 bg-blue-700 rounded-lg px-2 h-7 w-full min-w-0">
             <span className="text-xs shrink-0">👤</span>
@@ -153,44 +153,45 @@ export default function POSHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-1 bg-blue-800 rounded-lg px-2 h-7 flex-1 min-w-0">
-        <svg className="w-3.5 h-3.5 shrink-0 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Producto..."
-          value={productSearch}
-          onChange={(e) => onProductSearchChange(e.target.value)}
-          onFocus={(e) => e.target.select()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              if (!e.ctrlKey && !e.metaKey) onSearchSubmit?.()
-            }
-            if (e.key === 'ArrowDown') { e.preventDefault(); onSearchArrowDown?.() }
-          }}
-          className="flex-1 bg-transparent text-white text-xs placeholder-white/50 outline-none min-w-0"
-        />
-        <button onClick={onProductSearchModal} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation shrink-0">
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-        </button>
-        {onLoadDraft && (
-          <button onClick={onLoadDraft} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation shrink-0 text-[10px]" title="Cargar Borrador">
-            📂
+      <div className="w-full md:flex-1 md:min-w-0">
+        <div className="flex items-center gap-1 bg-blue-800 rounded-lg px-2 h-8 md:h-7 w-full min-w-0">
+          <svg className="w-3.5 h-3.5 shrink-0 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Producto..."
+            value={productSearch}
+            onChange={(e) => onProductSearchChange(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (!e.ctrlKey && !e.metaKey) onSearchSubmit?.()
+              }
+              if (e.key === 'ArrowDown') { e.preventDefault(); onSearchArrowDown?.() }
+            }}
+            className="flex-1 bg-transparent text-white text-xs placeholder-white/50 outline-none min-w-0"
+          />
+          <button onClick={onProductSearchModal} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation shrink-0">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-        )}
-      </div>
-
-      {exchangeRate > 0 && (
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] text-blue-200 whitespace-nowrap">Bs.{exchangeRate.toFixed(2)}</span>
-          {onUpdateRate && (
-            <button onClick={onUpdateRate} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation" title="Actualizar tasa">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          {onLoadDraft && (
+            <button onClick={onLoadDraft} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation shrink-0 text-[10px]" title="Cargar Borrador">
+              📂
             </button>
           )}
+          {exchangeRate > 0 && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <span className="text-[10px] text-blue-200 whitespace-nowrap">Bs.{exchangeRate.toFixed(2)}</span>
+              {onUpdateRate && (
+                <button onClick={onUpdateRate} className="p-0.5 hover:bg-blue-700 rounded touch-manipulation" title="Actualizar tasa">
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </header>
   )
 }
