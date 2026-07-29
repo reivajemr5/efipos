@@ -236,7 +236,9 @@ export default function POSPage() {
   function handleCheckout() {
     if (cart.length === 0) return
     setQtyModalProduct(null)
-    setPaymentLines([{ method: 'efectivo', amount: 0, reference: '' }])
+    const paidTotal = Math.max(0, subtotal + ivaTotal - discount)
+    const paidBs = exchangeRate > 0 ? Math.round(paidTotal * exchangeRate * 100) / 100 : paidTotal
+    setPaymentLines([{ method: 'efectivo', amount: paidBs, reference: '' }])
     setCheckoutModal(true)
   }
 
@@ -577,17 +579,24 @@ export default function POSPage() {
                 {(() => {
                   const target = total * (exchangeRate > 0 ? exchangeRate : 1)
                   const sumAmt = paymentLines.reduce((s, l) => s + l.amount, 0)
-                  const diff = sumAmt - target
+                  const falta = Math.max(0, target - sumAmt)
+                  const cambio = Math.max(0, sumAmt - target)
                   return (
                     <div className="space-y-1 pt-1 border-t border-gray-200 text-xs text-gray-600">
                       <p className="flex justify-between">
-                        <span>Total recibido:</span>
-                        <span className={sumAmt >= target ? 'font-semibold text-green-700' : ''}>{exchangeRate > 0 ? 'Bs.' : '$'}{sumAmt.toFixed(2)}</span>
+                        <span>Recibido:</span>
+                        <span>{exchangeRate > 0 ? 'Bs.' : '$'}{sumAmt.toFixed(2)}</span>
                       </p>
-                      {diff > 0 && (
+                      {falta > 0.01 && (
+                        <p className="flex justify-between text-amber-600 font-medium">
+                          <span>Falta:</span>
+                          <span>{exchangeRate > 0 ? 'Bs.' : '$'}{falta.toFixed(2)}</span>
+                        </p>
+                      )}
+                      {cambio > 0 && (
                         <p className="flex justify-between text-green-600 font-medium">
                           <span>Cambio:</span>
-                          <span>{exchangeRate > 0 ? 'Bs.' : '$'}{diff.toFixed(2)}</span>
+                          <span>{exchangeRate > 0 ? 'Bs.' : '$'}{cambio.toFixed(2)}</span>
                         </p>
                       )}
                     </div>
