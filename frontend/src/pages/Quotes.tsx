@@ -4,6 +4,7 @@ import POSHeader from '../components/pos/POSHeader'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
+import LoadModal from '../components/LoadModal'
 import { useNavigate } from 'react-router-dom'
 
 interface Client {
@@ -38,7 +39,7 @@ export default function Quotes() {
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
-  const [successQuote, setSuccessQuote] = useState<{ number: string } | null>(null)
+  const [successQuote, setSuccessQuote] = useState<{ number: string; id: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client>(DEFAULT_CLIENT)
   const [showClientModal, setShowClientModal] = useState(false)
@@ -51,6 +52,9 @@ export default function Quotes() {
   const [modalSearch, setModalSearch] = useState('')
   const [modalCategory, setModalCategory] = useState<number | null>(null)
   const [validDays, setValidDays] = useState('30')
+  const [editingQuoteId, setEditingQuoteId] = useState<number | null>(null)
+  const [editingQuoteNumber, setEditingQuoteNumber] = useState('')
+  const [showLoadModal, setShowLoadModal] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const clientInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -139,6 +143,26 @@ export default function Quotes() {
   function handleCancel() {
     setCart([])
     setSelectedClient(DEFAULT_CLIENT)
+    setEditingQuoteId(null)
+    setEditingQuoteNumber('')
+    setTimeout(() => clientInputRef.current?.focus(), 0)
+  }
+
+  function handleLoadQuote(source: { type: string; id: number; items: any[]; client: any }) {
+    if (source.type !== 'quote') return
+    const items = source.items.map((i: any) => ({
+      productId: i.productId,
+      name: i.name || i.product?.name || `Producto #${i.productId}`,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      ivaPercent: Number(i.ivaPercent),
+    }))
+    setCart(items)
+    setEditingQuoteId(source.id)
+    setEditingQuoteNumber(source.client?.name ? `COTI-${source.id}` : `COTI-${source.id}`)
+    if (source.client?.id) {
+      setSelectedClient({ id: source.client.id, name: source.client.name, documentType: source.client.documentType || 'V', documentNumber: source.client.documentNumber || '', phone: null, address: null })
+    }
     setTimeout(() => searchInputRef.current?.focus(), 0)
   }
 
@@ -155,12 +179,16 @@ export default function Quotes() {
         unitPrice: i.unitPrice,
       }))
       const validUntil = new Date(Date.now() + Number(validDays) * 86400000).toISOString()
-      const quote = await api.quotes.create({
-        clientId: selectedClient.id || undefined,
-        validUntil,
-        items,
-      })
-      setSuccessQuote({ number: quote.number || '' })
+      const data = { clientId: selectedClient.id || undefined, validUntil, items }
+      if (editingQuoteId) {
+        await api.quotes.update(editingQuoteId, data)
+        setSuccessQuote({ number: editingQuoteNumber, id: editingQuoteId })
+        setEditingQuoteId(null)
+        setEditingQuoteNumber('')
+      } else {
+        const quote = await api.quotes.create(data)
+        setSuccessQuote({ number: quote.number || '', id: quote.id })
+      }
       setCart([])
       setSelectedClient(DEFAULT_CLIENT)
       setValidDays('30')
@@ -203,9 +231,11 @@ export default function Quotes() {
     setSuccessQuote(null)
     setCart([])
     setSelectedClient(DEFAULT_CLIENT)
+    setEditingQuoteId(null)
+    setEditingQuoteNumber('')
     setValidDays('30')
     setShowCartMobile(false)
-    setTimeout(() => searchInputRef.current?.focus(), 0)
+    setTimeout(() => clientInputRef.current?.focus(), 0)
   }
 
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -236,7 +266,20 @@ export default function Quotes() {
           clientInputRef={clientInputRef}
           onClientSubmit={handleClientSubmit}
           exchangeRate={0}
+          onLoadDraft={() => setShowLoadModal(true)}
         />
+
+        {editingQuoteId && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 border-b border-blue-200 text-xs text-blue-800 shrink-0">
+            <span className="font-medium">📝 Editando Cotización {editingQuoteNumber}</span>
+            <button
+              onClick={() => { setEditingQuoteId(null); setEditingQuoteNumber(''); setCart([]); setSelectedClient(DEFAULT_CLIENT) }}
+              className="ml-auto px-2 py-0.5 bg-blue-200 text-blue-800 rounded hover:bg-blue-300 touch-manipulation"
+            >
+              Cancelar edición
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 grid md:grid-cols-[2fr_3fr]">
           <div className="hidden md:flex flex-col min-h-0 h-full">
@@ -502,8 +545,29 @@ export default function Quotes() {
                   Nueva Cotización
                 </button>
                 <button
-                  onClick={() => navigate('/quotes')}
+                  onClick={async () => {
+                    try {
+                      const data = await api.quotes.print(successQuote.id)
+                      const win = window.open('', '_blank')
+                      if (!win) return
+                      const rate = data.quote.exchangeRate || 1
+                      const itemsHtml = data.quote.items.map((item: any) => {
+                        const pu = item.unitPrice
+                        const tot = item.subtotal
+                        return `<tr><td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${pu.toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(pu * rate).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${tot.toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(tot * rate).toFixed(2)}</td></tr>`
+                      }).join('')
+                      win.document.write(`<!DOCTYPE html><html><head><title>${data.quote.number}</title><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#1E40AF;color:#fff;font-size:10px}hr{border:none;border-top:2px solid #333}.header{text-align:center;margin-bottom:20px}.header h1{font-size:18px;margin:0 0 4px}.header p{margin:2px 0;color:#555;font-size:11px}.info{display:flex;justify-content:space-between;margin:15px 0;font-size:11px}.totals{text-align:right;margin-top:15px;font-size:12px}.totals p{margin:3px 0}.totals .grand{font-size:16px;font-weight:bold}@media print{body{padding:15px}}@page{size:letter;margin:15mm}</style></head><body><div class="header"><h1>${data.company.name}</h1><p>RIF: ${data.company.rif}</p><p>${data.company.address} · ${data.company.phone}</p><hr><h2 style="margin:10px 0 0">COTIZACIÓN</h2><p style="font-size:14px;font-weight:bold;color:#1E40AF;margin:2px 0">${data.quote.number}</p></div><div class="info"><div><strong>Cliente:</strong> ${data.quote.client?.name || 'Consumidor Final'}<br><strong>Documento:</strong> ${data.quote.client?.documentType || ''}-${data.quote.client?.documentNumber || '0'}</div><div style="text-align:right"><strong>Fecha:</strong> ${new Date(data.quote.createdAt).toLocaleDateString('es')}<br><strong>Válido hasta:</strong> ${new Date(data.quote.validUntil).toLocaleDateString('es')}</div></div><table><thead><tr><th>Código</th><th>Producto</th><th>Cant</th><th>P/U $</th><th>P/U Bs.</th><th>Total $</th><th>Total Bs.</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="totals"><p>Subtotal: $${Number(data.quote.subtotal).toFixed(2)} · Bs.${(Number(data.quote.subtotal) * rate).toFixed(2)}</p><p>IVA: $${Number(data.quote.ivaTotal).toFixed(2)} · Bs.${(Number(data.quote.ivaTotal) * rate).toFixed(2)}</p><p class="grand">Total: $${Number(data.quote.total).toFixed(2)} · Bs.${(Number(data.quote.total) * rate).toFixed(2)}</p></div><hr><p style="font-size:10px;color:#888;text-align:center">Tasa BCV: Bs.${rate.toFixed(2)}/$ · Términos: Válido por ${validDays} días</p><p style="font-size:10px;color:#888;text-align:center;margin-top:20px">Gracias por su preferencia</p></body></html>`)
+                      win.document.close()
+                      win.print()
+                    } catch {}
+                  }}
                   className="w-full py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
+                >
+                  Imprimir Cotización
+                </button>
+                <button
+                  onClick={() => navigate('/quotes')}
+                  className="w-full py-3 bg-gray-100 text-gray-500 rounded-lg font-medium touch-manipulation"
                 >
                   Ver Cotizaciones
                 </button>
@@ -511,6 +575,12 @@ export default function Quotes() {
             </div>
           </div>
         )}
+
+        <LoadModal
+          open={showLoadModal}
+          onClose={() => setShowLoadModal(false)}
+          onLoad={(source) => { setShowLoadModal(false); handleLoadQuote(source) }}
+        />
 
         <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)}
           onSaved={(client: any) => { setClients((prev) => [...prev, client]); setSelectedClient(client); setShowNewClientForm(false) }} />

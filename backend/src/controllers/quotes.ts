@@ -94,6 +94,72 @@ export async function create(req: AuthRequest, res: Response) {
   res.status(201).json(quote)
 }
 
+export async function update(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const { clientId, validUntil, items } = req.body
+
+  const existing = await prisma.quote.findUnique({ where: { id } })
+  if (!existing) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
+
+  if (!items?.length) {
+    res.status(400).json({ error: 'Productos requeridos' })
+    return
+  }
+
+  const productIds = items.map((i: any) => i.productId)
+  const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+  const productMap = new Map(products.map((p) => [p.id, p]))
+
+  let subtotal = 0
+  let ivaTotal = 0
+  const quoteItems = items.map((i: any) => {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const unitPrice = i.unitPrice || Number(product.price)
+    const itemSubtotal = unitPrice * i.quantity
+    const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
+    subtotal += itemSubtotal
+    ivaTotal += itemIva
+    return {
+      productId: i.productId,
+      quantity: i.quantity,
+      unitPrice,
+      ivaPercent: product.ivaPercent,
+      subtotal: itemSubtotal,
+    }
+  })
+
+  const total = subtotal + ivaTotal
+  const qCurrency = existing.currency || 'usd'
+  let totalBs = existing.totalBs
+  if (qCurrency === 'usd' && existing.exchangeRate) {
+    totalBs = total * Number(existing.exchangeRate)
+  } else if (qCurrency === 'bs') {
+    totalBs = total
+  }
+
+  // Delete old items and create new ones
+  await prisma.quoteItem.deleteMany({ where: { quoteId: id } })
+  await prisma.quoteItem.createMany({
+    data: quoteItems.map((i) => ({ ...i, quoteId: id })),
+  })
+
+  const updated = await prisma.quote.update({
+    where: { id },
+    data: {
+      ...(clientId && { clientId }),
+      ...(validUntil && { validUntil: new Date(validUntil) }),
+      subtotal,
+      ivaTotal,
+      total,
+      totalBs,
+    },
+    include: { client: { select: { id: true, name: true } }, items: { include: { product: { select: { id: true, name: true } } } } },
+  })
+
+  res.json(updated)
+}
+
 export async function convertToInvoice(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const quote = await prisma.quote.findUnique({

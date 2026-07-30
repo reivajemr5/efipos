@@ -353,7 +353,7 @@ export default function POSPage() {
     setActiveDraftId(null)
     setActiveQuoteId(null)
     setShowCartMobile(false)
-    setTimeout(() => searchInputRef.current?.focus(), 0)
+    setTimeout(() => clientInputRef.current?.focus(), 0)
   }
 
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)

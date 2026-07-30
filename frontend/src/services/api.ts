@@ -68,6 +68,7 @@ export const api = {
     list: (params?: string) => request(`/quotes${params ? `?${params}` : ''}`),
     getById: (id: number) => request(`/quotes/${id}`),
     create: (data: any) => request('/quotes', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request(`/quotes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     convert: (id: number) => request(`/quotes/${id}/convert`, { method: 'POST' }),
     delete: (id: number) => request(`/quotes/${id}`, { method: 'DELETE' }),
     print: (id: number) => request(`/quotes/print/${id}`),
