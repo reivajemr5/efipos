@@ -213,7 +213,7 @@ export default function POSPage() {
           exchangeRate: exchangeRate || undefined,
         })
       } else {
-        const inv = await api.invoices.create({
+        await api.invoices.create({
           clientId: selectedClient.id || undefined,
           status: 'borrador',
           paymentMethod: 'efectivo',
@@ -221,13 +221,11 @@ export default function POSPage() {
           exchangeRate: exchangeRate || undefined,
           items,
         })
-        setActiveDraftId(inv.id)
       }
       setCart([])
       setDiscount(0)
       setNotes('')
       setSelectedClient(DEFAULT_CLIENT)
-      setActiveDraftId(null)
     } catch (err: any) {
       alert('Error al guardar borrador: ' + err.message)
     }

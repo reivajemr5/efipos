@@ -71,7 +71,6 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
   async function handleSelect(source: DraftLike, type: 'draft' | 'quote') {
     setLoadingProducts(true)
     try {
-      const productIds = source.items.map((i: any) => i.productId)
       const currentProducts: any[] = await api.products.list()
       const productMap = new Map(currentProducts.map((p: any) => [p.id, p]))
 
@@ -176,6 +175,7 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); loadData() } }}
               placeholder="Buscar por nombre, documento o número..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />

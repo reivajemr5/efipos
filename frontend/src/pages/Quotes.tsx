@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
@@ -53,13 +53,22 @@ export default function Quotes() {
   const [showProductTable, setShowProductTable] = useState(false)
   const [showPrint, setShowPrint] = useState<Quote | null>(null)
   const [printCurrency, setPrintCurrency] = useState<'usd' | 'bs'>('usd')
+  const [search, setSearch] = useState('')
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  async function load() {
-    const [q, c, p] = await Promise.all([api.quotes.list(), api.clients.list(), api.products.list()])
-    setQuotes(q); setClients(c); setProducts(p)
+  async function load(q?: string) {
+    const params = q ? `q=${encodeURIComponent(q)}` : ''
+    const [quotesData, c, p] = await Promise.all([api.quotes.list(params), api.clients.list(), api.products.list()])
+    setQuotes(quotesData); setClients(c); setProducts(p)
   }
 
   useEffect(() => { load() }, [])
+
+  function onSearchChange(value: string) {
+    setSearch(value)
+    clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => load(value || undefined), 300)
+  }
 
   function onClientCreated(client: any) {
     setClients((prev) => [...prev, client])
@@ -71,20 +80,20 @@ export default function Quotes() {
     if (!selectedClient || items.length === 0) return
     const validUntil = new Date(Date.now() + Number(validDays) * 86400000).toISOString()
     await api.quotes.create({ clientId: selectedClient.id, validUntil, items })
-    setShowForm(false); setSelectedClient(null); setItems([]); load()
+    setShowForm(false); setSelectedClient(null); setItems([]); load(search || undefined)
   }
 
   async function convert(q: Quote) {
     if (!confirm(`¿Convertir ${q.number} en factura?`)) return
     await api.quotes.convert(q.id)
-    load()
+    load(search || undefined)
     setShowDetail(null)
   }
 
   async function removeQuote(id: number) {
     if (!confirm('¿Eliminar esta cotización?')) return
     await api.quotes.delete(id)
-    load()
+    load(search || undefined)
   }
 
   function onProductCreated(product: any) {
@@ -138,15 +147,46 @@ export default function Quotes() {
   }
 
   return (
-    <div className="page-container">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Cotizaciones</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">+ Nueva</button>
+    <div className="flex flex-col h-[calc(100dvh-56px)]">
+      <div className="shrink-0 px-4 py-3 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-xl font-bold text-gray-800">Cotizaciones</h1>
+          <button onClick={() => setShowForm(true)} className="bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 touch-manipulation">+ Nueva</button>
+        </div>
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Buscar por número, cliente o documento..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {quotes.map((q) => (
+          <div key={q.id} onClick={() => setShowDetail(q)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold text-gray-800 text-sm">{q.number}</span>
+                {statusBadge(q.status)}
+              </div>
+              <p className="text-sm text-gray-500 truncate">{q.client.name} · {new Date(q.createdAt).toLocaleDateString()}</p>
+            </div>
+            <div className="text-right shrink-0 ml-3">
+              <p className="font-mono font-semibold text-gray-800">${Number(q.total).toFixed(2)}</p>
+              <button onClick={(e) => { e.stopPropagation(); removeQuote(q.id) }} className="text-red-500 text-xs hover:underline">Eliminar</button>
+            </div>
+          </div>
+        ))}
+        {quotes.length === 0 && <p className="text-gray-400 text-center py-8">No hay cotizaciones</p>}
       </div>
 
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-card p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">Nueva Cotización</h3>
 
             <label className="block text-sm font-medium mb-1">Cliente</label>
@@ -227,8 +267,8 @@ export default function Quotes() {
         onSaved={onClientCreated} />
 
       {showDetail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDetail(null)}>
-          <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDetail(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-lg font-bold">{showDetail.number}</h3>
@@ -376,22 +416,6 @@ export default function Quotes() {
           </div>
         </div>
       )}
-
-      <div className="space-y-2">
-        {quotes.map((q) => (
-          <div key={q.id} onClick={() => setShowDetail(q)} className="card p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
-            <div>
-              <p className="font-semibold text-gray-800">{q.number} {statusBadge(q.status)}</p>
-              <p className="text-sm text-gray-500">{q.client.name} · {new Date(q.createdAt).toLocaleDateString()}</p>
-            </div>
-            <div className="text-right">
-              <p className="font-mono font-semibold">${Number(q.total).toFixed(2)}</p>
-              <button onClick={(e) => { e.stopPropagation(); removeQuote(q.id) }} className="text-red-500 text-xs hover:underline">Eliminar</button>
-            </div>
-          </div>
-        ))}
-        {quotes.length === 0 && <p className="text-gray-400 text-center py-8">No hay cotizaciones</p>}
-      </div>
 
       <ProductFormModal open={showNewProductForm} onClose={() => setShowNewProductForm(false)}
         onSaved={onProductCreated} />
