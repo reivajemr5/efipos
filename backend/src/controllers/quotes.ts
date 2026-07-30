@@ -131,7 +131,7 @@ export async function update(req: AuthRequest, res: Response) {
 
   const total = subtotal + ivaTotal
   const qCurrency = existing.currency || 'usd'
-  let totalBs = existing.totalBs
+  let totalBs: number | null = existing.totalBs ? Number(existing.totalBs) : null
   if (qCurrency === 'usd' && existing.exchangeRate) {
     totalBs = total * Number(existing.exchangeRate)
   } else if (qCurrency === 'bs') {
@@ -141,7 +141,7 @@ export async function update(req: AuthRequest, res: Response) {
   // Delete old items and create new ones
   await prisma.quoteItem.deleteMany({ where: { quoteId: id } })
   await prisma.quoteItem.createMany({
-    data: quoteItems.map((i) => ({ ...i, quoteId: id })),
+    data: quoteItems.map((i: { productId: number; quantity: number; unitPrice: number; ivaPercent: string | number; subtotal: number }) => ({ ...i, quoteId: id })),
   })
 
   const updated = await prisma.quote.update({
