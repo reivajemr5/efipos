@@ -6,9 +6,10 @@ interface TicketFooterProps {
   onCheckout: () => void
   itemCount: number
   exchangeRate: number
+  buttonLabel?: string
 }
 
-export default function TicketFooter({ subtotal, ivaTotal, discount, total, onCheckout, itemCount, exchangeRate }: TicketFooterProps) {
+export default function TicketFooter({ subtotal, ivaTotal, discount, total, onCheckout, itemCount, exchangeRate, buttonLabel }: TicketFooterProps) {
   const totBs = exchangeRate > 0 ? total * exchangeRate : 0
   const subBs = exchangeRate > 0 ? subtotal * exchangeRate : 0
   const ivaBs = exchangeRate > 0 ? ivaTotal * exchangeRate : 0
@@ -54,10 +55,10 @@ export default function TicketFooter({ subtotal, ivaTotal, discount, total, onCh
         disabled={itemCount === 0}
         className="w-full py-4 bg-green-600 text-white text-lg font-bold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
       >
-        {exchangeRate > 0
+        {buttonLabel || (exchangeRate > 0
           ? `Cobrar Bs.${totBs.toFixed(2)} ($${total.toFixed(2)})`
           : `Cobrar $${total.toFixed(2)}`
-        }
+        )}
       </button>
     </div>
   )

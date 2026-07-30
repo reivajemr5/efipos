@@ -1,456 +1,520 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../services/api'
-import ProductFormModal from '../components/ProductFormModal'
-import SearchPicker from '../components/SearchPicker'
+import POSHeader from '../components/pos/POSHeader'
+import type { CartItem } from '../components/pos/TicketPanel'
+import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
-import TablePickerModal from '../components/TablePickerModal'
-
-interface Product {
-  id: number; name: string; code: string; price: number; ivaPercent: number; stock: number
-}
+import { useNavigate } from 'react-router-dom'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
+  phone: string | null; address: string | null
 }
 
-interface QuoteItem {
-  id?: number
-  productId: number
-  product?: { id: number; name: string; code: string }
-  quantity: number
-  unitPrice: number
-  ivaPercent: number
-  subtotal: number
-}
-
-interface Quote {
+interface Product {
   id: number
-  number: string
-  client: { id: number; name: string }
-  subtotal: number
-  ivaTotal: number
-  total: number
-  totalBs?: number | null
-  exchangeRate?: number | null
-  status: string
-  validUntil: string
-  createdAt: string
-  items: QuoteItem[]
+  code: string
+  name: string
+  description?: string | null
+  price: number
+  currency: string
+  ivaPercent: number
+  stock: number
+  imageUrl?: string | null
+  barcode?: string | null
+  categoryId?: number | null
+  category?: { id: number; name: string } | null
 }
+
+interface Category {
+  id: number
+  name: string
+}
+
+const DEFAULT_CLIENT: Client = { id: 0, name: 'Consumidor Final', documentType: 'V', documentNumber: '0', phone: null, address: null }
 
 export default function Quotes() {
-  const [quotes, setQuotes] = useState<Quote[]>([])
-  const [clients, setClients] = useState<Client[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [showForm, setShowForm] = useState(false)
-  const [showDetail, setShowDetail] = useState<Quote | null>(null)
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [items, setItems] = useState<{ productId: number; quantity: number }[]>([])
-  const [validDays, setValidDays] = useState('30')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [successQuote, setSuccessQuote] = useState<{ number: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client>(DEFAULT_CLIENT)
+  const [showClientModal, setShowClientModal] = useState(false)
+  const [clientSearch, setClientSearch] = useState('')
+  const [clients, setClients] = useState<Client[]>([])
   const [showNewClientForm, setShowNewClientForm] = useState(false)
-  const [showNewProductForm, setShowNewProductForm] = useState(false)
-  const [showClientTable, setShowClientTable] = useState(false)
-  const [showProductTable, setShowProductTable] = useState(false)
-  const [showPrint, setShowPrint] = useState<Quote | null>(null)
-  const [printCurrency, setPrintCurrency] = useState<'usd' | 'bs'>('usd')
+  const [showCartMobile, setShowCartMobile] = useState(false)
   const [search, setSearch] = useState('')
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [showProductSearch, setShowProductSearch] = useState(false)
+  const [modalSearch, setModalSearch] = useState('')
+  const [modalCategory, setModalCategory] = useState<number | null>(null)
+  const [validDays, setValidDays] = useState('30')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const clientInputRef = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
 
-  async function load(q?: string) {
-    const params = q ? `q=${encodeURIComponent(q)}` : ''
-    const [quotesData, c, p] = await Promise.all([api.quotes.list(params), api.clients.list(), api.products.list()])
-    setQuotes(quotesData); setClients(c); setProducts(p)
-  }
+  const loadData = useCallback(async () => {
+    try {
+      const [prods, cats, clis] = await Promise.all([
+        api.products.list(),
+        api.categories.list(),
+        api.clients.list(),
+      ])
+      setProducts(prods.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
+      setCategories(cats)
+      setClients(clis)
+    } catch {}
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { loadData() }, [loadData])
 
-  function onSearchChange(value: string) {
-    setSearch(value)
-    clearTimeout(searchTimer.current)
-    searchTimer.current = setTimeout(() => load(value || undefined), 300)
-  }
+  useEffect(() => { clientInputRef.current?.focus() }, [])
 
-  function onClientCreated(client: any) {
-    setClients((prev) => [...prev, client])
-    setSelectedClient(client)
-    setShowNewClientForm(false)
-  }
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        if (successQuote) { setSuccessQuote(null); return }
+        if (showClientModal) { setShowClientModal(false); return }
+        if (showProductSearch) { setShowProductSearch(false); return }
+        if (showCartMobile) { setShowCartMobile(false); return }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && cart.length > 0 && !successQuote) {
+        e.preventDefault()
+        handleCreateQuote()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  })
 
-  async function createQuote() {
-    if (!selectedClient || items.length === 0) return
-    const validUntil = new Date(Date.now() + Number(validDays) * 86400000).toISOString()
-    await api.quotes.create({ clientId: selectedClient.id, validUntil, items })
-    setShowForm(false); setSelectedClient(null); setItems([]); load(search || undefined)
-  }
+  const filteredProducts = products.filter((p) => {
+    const q = search.toLowerCase()
+    const matchesSearch = !search || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
+    const matchesCategory = !selectedCategory || p.categoryId === selectedCategory
+    return matchesSearch && matchesCategory
+  })
 
-  async function convert(q: Quote) {
-    if (!confirm(`¿Convertir ${q.number} en factura?`)) return
-    await api.quotes.convert(q.id)
-    load(search || undefined)
-    setShowDetail(null)
-  }
+  const modalResults = products.filter((p) => {
+    const q = modalSearch.toLowerCase()
+    const matchesSearch = !modalSearch || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))
+    const matchesCategory = !modalCategory || p.categoryId === modalCategory
+    return matchesSearch && matchesCategory
+  })
 
-  async function removeQuote(id: number) {
-    if (!confirm('¿Eliminar esta cotización?')) return
-    await api.quotes.delete(id)
-    load(search || undefined)
-  }
-
-  function onProductCreated(product: any) {
-    setProducts((prev) => [...prev, product])
-    setShowNewProductForm(false)
-    addItem(product.id)
-  }
-
-  function addItem(productId: number) {
-    setItems((prev) => {
-      const existing = prev.find((i) => i.productId === productId)
-      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
-      return [...prev, { productId, quantity: 1 }]
+  function handleSelectProduct(product: Product) {
+    if (product.stock <= 0) return
+    setCart((prev) => {
+      const existing = prev.find((i) => i.productId === product.id)
+      if (existing) {
+        return prev.map((i) =>
+          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
+        )
+      }
+      return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent) }]
     })
   }
 
-  function updateQty(productId: number, quantity: number) {
-    if (quantity <= 0) { setItems((prev) => prev.filter((i) => i.productId !== productId)); return }
-    setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity } : i))
-  }
-
-  function calcItemTotal(item: { productId: number; quantity: number }) {
-    const p = products.find((x) => x.id === item.productId)
-    if (!p) return 0
-    return Number(p.price) * item.quantity * (1 + Number(p.ivaPercent) / 100)
-  }
-
-  function calcSubtotal() {
-    return items.reduce((sum, item) => {
-      const p = products.find((x) => x.id === item.productId)
-      if (!p) return sum
-      return sum + Number(p.price) * item.quantity
-    }, 0)
-  }
-
-  function calcIva() {
-    return items.reduce((sum, item) => {
-      const p = products.find((x) => x.id === item.productId)
-      if (!p) return sum
-      return sum + Number(p.price) * item.quantity * Number(p.ivaPercent) / 100
-    }, 0)
-  }
-
-  const statusBadge = (s: string) => {
-    const styles: Record<string, string> = {
-      activa: 'bg-green-100 text-green-800',
-      convertida: 'bg-blue-100 text-blue-800',
-      vencida: 'bg-gray-100 text-gray-500',
+  function handleSelectProductQuantity(product: Product) {
+    if (product.stock <= 0) return
+    const existing = cart.find((i) => i.productId === product.id)
+    if (existing) {
+      handleUpdateQuantity(product.id, existing.quantity + 1)
+    } else {
+      setCart((prev) => [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent) }])
     }
-    return <span className={`text-xs px-2 py-0.5 rounded-full ${styles[s] || ''}`}>{s}</span>
+    setShowProductSearch(false)
   }
+
+  function handleUpdateQuantity(productId: number, quantity: number) {
+    if (quantity <= 0) { handleRemove(productId); return }
+    setCart((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity } : i))
+  }
+
+  function handleRemove(productId: number) {
+    setCart((prev) => prev.filter((i) => i.productId !== productId))
+  }
+
+  function handleCancel() {
+    setCart([])
+    setSelectedClient(DEFAULT_CLIENT)
+    setTimeout(() => searchInputRef.current?.focus(), 0)
+  }
+
+  async function handleCreateQuote() {
+    if (cart.length === 0) return
+    if (!selectedClient || selectedClient.id === 0) {
+      if (!confirm('¿Generar cotización sin cliente asignado?')) return
+    }
+    setLoading(true)
+    try {
+      const items = cart.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      }))
+      const validUntil = new Date(Date.now() + Number(validDays) * 86400000).toISOString()
+      const quote = await api.quotes.create({
+        clientId: selectedClient.id || undefined,
+        validUntil,
+        items,
+      })
+      setSuccessQuote({ number: quote.number || '' })
+      setCart([])
+      setSelectedClient(DEFAULT_CLIENT)
+      setValidDays('30')
+    } catch (err: any) {
+      alert('Error al crear cotización: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleSearchSubmit() {
+    if (filteredProducts.length > 0) {
+      const first = filteredProducts[0]
+      if (first.stock > 0) handleSelectProduct(first)
+    }
+  }
+
+  function handleSearchArrowDown() {
+    const firstCard = document.querySelector<HTMLButtonElement>('.product-card-btn')
+    firstCard?.focus()
+  }
+
+  function handleClientSubmit() {
+    if (clientSearch.length >= 3 && clients.length > 0) {
+      setSelectedClient(clients[0])
+      setClientSearch('')
+    } else {
+      setShowClientModal(true)
+    }
+  }
+
+  function handleSelectClient(c: Client) {
+    setSelectedClient(c)
+    setShowClientModal(false)
+    setClientSearch('')
+    setTimeout(() => searchInputRef.current?.focus(), 0)
+  }
+
+  function startNewQuote() {
+    setSuccessQuote(null)
+    setCart([])
+    setSelectedClient(DEFAULT_CLIENT)
+    setValidDays('30')
+    setShowCartMobile(false)
+    setTimeout(() => searchInputRef.current?.focus(), 0)
+  }
+
+  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const ivaTotal = cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
+  const total = Math.max(0, subtotal + ivaTotal)
+
+  const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
+  const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0) + cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-56px)]">
-      <div className="shrink-0 px-4 py-3 border-b border-gray-200 bg-white">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold text-gray-800">Cotizaciones</h1>
-          <button onClick={() => setShowForm(true)} className="bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 touch-manipulation">+ Nueva</button>
-        </div>
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar por número, cliente o documento..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-        </div>
-      </div>
+    <>
+      <div className="no-print flex flex-col h-[calc(100dvh-56px)]">
+        <POSHeader
+          clientSearch={clientSearch}
+          onClientSearchChange={setClientSearch}
+          onClientSearchModal={() => setShowClientModal(true)}
+          onClientAdd={() => setShowNewClientForm(true)}
+          clients={clients}
+          onSelectClient={handleSelectClient}
+          selectedClient={selectedClient.id ? { id: selectedClient.id, name: selectedClient.name, documentType: selectedClient.documentType, documentNumber: selectedClient.documentNumber, phone: selectedClient.phone, address: selectedClient.address } : null}
+          onClearClient={() => setSelectedClient(DEFAULT_CLIENT)}
+          productSearch={search}
+          onProductSearchChange={setSearch}
+          onProductSearchModal={() => { setModalSearch(''); setModalCategory(null); setShowProductSearch(true) }}
+          searchInputRef={searchInputRef}
+          onSearchSubmit={handleSearchSubmit}
+          onSearchArrowDown={handleSearchArrowDown}
+          clientInputRef={clientInputRef}
+          onClientSubmit={handleClientSubmit}
+          exchangeRate={0}
+        />
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {quotes.map((q) => (
-          <div key={q.id} onClick={() => setShowDetail(q)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-gray-800 text-sm">{q.number}</span>
-                {statusBadge(q.status)}
+        <div className="flex-1 min-h-0 grid md:grid-cols-[2fr_3fr]">
+          <div className="hidden md:flex flex-col min-h-0 h-full">
+            <div className="flex flex-col h-full min-h-0 bg-white border-r border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 shrink-0">
+                <h2 className="text-sm font-semibold text-gray-700">Nueva Cotización</h2>
+                <p className="text-xs text-gray-400">{cartItemCount} items · Válida {validDays} días</p>
               </div>
-              <p className="text-sm text-gray-500 truncate">{q.client.name} · {new Date(q.createdAt).toLocaleDateString()}</p>
-            </div>
-            <div className="text-right shrink-0 ml-3">
-              <p className="font-mono font-semibold text-gray-800">${Number(q.total).toFixed(2)}</p>
-              <button onClick={(e) => { e.stopPropagation(); removeQuote(q.id) }} className="text-red-500 text-xs hover:underline">Eliminar</button>
-            </div>
-          </div>
-        ))}
-        {quotes.length === 0 && <p className="text-gray-400 text-center py-8">No hay cotizaciones</p>}
-      </div>
-
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Nueva Cotización</h3>
-
-            <label className="block text-sm font-medium mb-1">Cliente</label>
-            {selectedClient ? (
-              <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg mb-2">
-                <span>{selectedClient.name} ({selectedClient.documentType}-{selectedClient.documentNumber})</span>
-                <button onClick={() => setSelectedClient(null)} className="text-red-500 text-sm">Cambiar</button>
+              <div className="px-4 py-2 bg-white border-b border-gray-100 shrink-0">
+                <label className="text-xs text-gray-500 mr-2">Validez:</label>
+                <input
+                  type="number"
+                  value={validDays}
+                  onChange={(e) => setValidDays(e.target.value)}
+                  className="w-16 px-2 py-1 border rounded text-sm text-center"
+                  min="1"
+                />
+                <span className="text-xs text-gray-500 ml-1">días</span>
               </div>
-            ) : (
-              <SearchPicker
-                items={clients}
-                onSelect={setSelectedClient}
-                filter={(c, q) => c.name.toLowerCase().includes(q.toLowerCase()) || c.documentNumber.includes(q)}
-                renderItem={(c) => <span>{c.name} - {c.documentType}{c.documentNumber}</span>}
-                keyExtractor={(c) => c.id}
-                placeholder="Buscar cliente (nombre o cédula)..."
-                onAdvancedSearch={() => setShowClientTable(true)}
-                absolute
-                className="mb-2"
-              />
-            )}
-
-            <label className="block text-sm font-medium mb-1">Válida por</label>
-            <input type="number" value={validDays} onChange={(e) => setValidDays(e.target.value)} className="w-20 px-3 py-2 border rounded-lg mb-3" /> días
-
-            <label className="block text-sm font-medium mb-1">Productos</label>
-            <div className="space-y-2 mb-3">
-              {items.map((item) => {
-                const p = products.find((x) => x.id === item.productId)
-                if (!p) return null
-                return (
-                  <div key={item.productId} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
-                    <span className="flex-1 text-sm">{p.name}</span>
-                    <input type="number" value={item.quantity} min="1" max={p.stock}
-                      onChange={(e) => updateQty(item.productId, Number(e.target.value))}
-                      className="w-16 px-2 py-1 border rounded text-center text-sm" />
-                    <span className="text-sm font-mono w-20 text-right">${calcItemTotal(item).toFixed(2)}</span>
-                    <button onClick={() => updateQty(item.productId, 0)} className="text-red-500 text-sm">✕</button>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {cart.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-400 text-sm px-4 text-center">
+                    Selecciona productos del catálogo para añadirlos a la cotización
                   </div>
-                )
-              })}
+                ) : (
+                  cart.map((item) => (
+                    <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                        <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
+                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 touch-manipulation"
+                        >-</button>
+                        <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
+                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 touch-manipulation"
+                        >+</button>
+                      </div>
+                      <p className="w-20 text-right text-sm font-mono font-medium">${(item.unitPrice * item.quantity).toFixed(2)}</p>
+                      <button
+                        onClick={() => handleRemove(item.productId)}
+                        className="p-1 text-red-400 hover:text-red-600 touch-manipulation"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="bg-white border-t border-gray-200">
+                <div className="px-4 py-3 space-y-1">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Subtotal ({cartItemCount} items)</span>
+                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>IVA</span>
+                    <span className="font-medium">${ivaTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
+                    <span>Total</span>
+                    <span className="font-medium">${total.toFixed(2)}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCreateQuote}
+                  disabled={cart.length === 0 || loading}
+                  className="w-full py-4 bg-blue-900 text-white text-lg font-bold hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                >
+                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}`}
+                </button>
+              </div>
+              <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
+                <button
+                  onClick={handleCancel}
+                  className="flex-1 py-2.5 px-3 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors touch-manipulation"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
-
-            <SearchPicker
-              items={products}
-              onSelect={(p) => addItem(p.id)}
-              filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
-              renderItem={(p) => (
-                <span className="flex justify-between w-full">
-                  <span>{p.code} - {p.name}</span>
-                  <span className="text-gray-500">${Number(p.price).toFixed(2)} (stock: {p.stock})</span>
-                </span>
-              )}
-              keyExtractor={(p) => p.id}
-              placeholder="Buscar por nombre o código..."
-              onCreateNew={() => setShowNewProductForm(true)}
-              createNewLabel="+ Nuevo producto"
-              onAdvancedSearch={() => setShowProductTable(true)}
-              className="mb-3"
+          </div>
+          <div className={`overflow-y-auto min-h-0 w-full max-w-full ${showCartMobile ? 'hidden md:block' : ''}`}>
+            <ProductGrid
+              products={filteredProducts}
+              categories={categories}
+              selectedCategoryId={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              onSelectProduct={handleSelectProduct}
+              onSelectProductQuantity={(p) => { handleSelectProductQuantity(p) }}
+              onArrowUpFromFirst={() => searchInputRef.current?.focus()}
+              exchangeRate={0}
             />
-
-            <div className="border-t pt-3 text-right space-y-1">
-              <p className="text-sm text-gray-600">Subtotal: <span className="font-mono">${calcSubtotal().toFixed(2)}</span></p>
-              <p className="text-sm text-gray-600">IVA: <span className="font-mono">${calcIva().toFixed(2)}</span></p>
-              <p className="text-lg font-bold">Total: <span className="font-mono">${(calcSubtotal() + calcIva()).toFixed(2)}</span></p>
-            </div>
-
-            <div className="flex gap-2 pt-3">
-              <button onClick={createQuote} disabled={!selectedClient || items.length === 0}
-                className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">Generar Cotización</button>
-              <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
-            </div>
           </div>
         </div>
-      )}
 
-      <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)}
-        onSaved={onClientCreated} />
+        {cartItemCount > 0 && (
+          <button
+            onClick={() => setShowCartMobile(true)}
+            className="md:hidden fixed bottom-4 right-4 z-40 bg-blue-900 text-white rounded-full shadow-lg flex items-center gap-2 px-4 py-3 touch-manipulation"
+          >
+            <span className="bg-white text-blue-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{cartItemCount}</span>
+            <span className="font-bold">${cartTotal.toFixed(2)}</span>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+          </button>
+        )}
 
-      {showDetail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDetail(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-bold">{showDetail.number}</h3>
-                <p className="text-sm text-gray-500">{new Date(showDetail.createdAt).toLocaleDateString()}</p>
+        {showCartMobile && (
+          <div className="fixed inset-0 z-50 flex flex-col md:hidden" onClick={() => setShowCartMobile(false)}>
+            <div className="flex-1 bg-black/50" onClick={() => setShowCartMobile(false)} />
+            <div className="bg-white max-h-[70vh] flex flex-col rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+                <h3 className="font-bold text-gray-800">Nueva Cotización</h3>
+                <button onClick={() => setShowCartMobile(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-              {statusBadge(showDetail.status)}
-            </div>
-            <p className="text-sm mb-3"><strong>Cliente:</strong> {showDetail.client.name}</p>
-            <p className="text-sm mb-3"><strong>Válida hasta:</strong> {new Date(showDetail.validUntil).toLocaleDateString()}</p>
-            <table className="w-full text-sm mb-3">
-              <thead><tr className="border-b"><th className="text-left py-1">Producto</th><th className="text-right py-1">Cant</th><th className="text-right py-1">Total</th></tr></thead>
-              <tbody>
-                {showDetail.items.map((item, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-1">{item.product?.name}</td>
-                    <td className="text-right py-1">{item.quantity}</td>
-                    <td className="text-right py-1 font-mono">${Number(item.subtotal).toFixed(2)}</td>
-                  </tr>
+              <div className="px-4 py-2 border-b border-gray-100 shrink-0">
+                <label className="text-xs text-gray-500 mr-2">Validez:</label>
+                <input
+                  type="number"
+                  value={validDays}
+                  onChange={(e) => setValidDays(e.target.value)}
+                  className="w-16 px-2 py-1 border rounded text-sm text-center"
+                  min="1"
+                />
+                <span className="text-xs text-gray-500 ml-1">días</span>
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {cart.map((item) => (
+                  <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                      <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">-</button>
+                      <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+                      <button onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">+</button>
+                    </div>
+                    <p className="w-20 text-right text-sm font-mono font-medium">${(item.unitPrice * item.quantity).toFixed(2)}</p>
+                    <button onClick={() => handleRemove(item.productId)} className="p-1 text-red-400 hover:text-red-600 touch-manipulation">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-            <div className="text-right space-y-1 border-t pt-2">
-              <p className="text-sm">Subtotal: ${Number(showDetail.subtotal).toFixed(2)}</p>
-              <p className="text-sm">IVA: ${Number(showDetail.ivaTotal).toFixed(2)}</p>
-              <p className="text-lg font-bold">Total: ${Number(showDetail.total).toFixed(2)}</p>
-            </div>
-            <div className="flex gap-2 mt-4">
-              {showDetail.status === 'activa' && (
-                <button onClick={() => convert(showDetail)} className="flex-1 bg-green-700 text-white py-2 rounded-lg hover:bg-green-600">Convertir a Factura</button>
-              )}
-              <button onClick={() => { setShowPrint(showDetail); setPrintCurrency('usd') }} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Imprimir</button>
-              <button onClick={() => setShowDetail(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cerrar</button>
+              </div>
+              <div className="shrink-0">
+                <div className="px-4 py-3 space-y-1 border-t border-gray-200">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Subtotal ({cartItemCount} items)</span>
+                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>IVA</span>
+                    <span className="font-medium">${ivaTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
+                    <span>Total</span>
+                    <span className="font-medium">${total.toFixed(2)}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowCartMobile(false); handleCreateQuote() }}
+                  disabled={cart.length === 0 || loading}
+                  className="w-full py-4 bg-blue-900 text-white text-lg font-bold hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                >
+                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}`}
+                </button>
+                <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
+                  <button onClick={() => { setShowCartMobile(false); handleCancel() }} className="flex-1 py-2.5 px-3 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 touch-manipulation">Cancelar</button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {showPrint && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPrint(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Imprimir {showPrint.number}</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Moneda:</span>
-                <button
-                  onClick={() => setPrintCurrency('usd')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium ${printCurrency === 'usd' ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'}`}
-                >$ USD</button>
-                <button
-                  onClick={() => setPrintCurrency('bs')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium ${printCurrency === 'bs' ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'}`}
-                >Bs.</button>
+        {showProductSearch && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowProductSearch(false)}>
+            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
+                <h3 className="text-lg font-bold text-gray-800">Buscar Producto</h3>
+                <button onClick={() => setShowProductSearch(false)} className="text-gray-400 p-1 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-            </div>
-
-            <div className="border rounded-xl p-4 bg-white" id="quote-print-area" style={{ fontFamily: 'monospace', fontSize: 12 }}>
-              <div className="text-center mb-3">
-                <h2 style={{ fontSize: 16, fontWeight: 'bold', margin: 0 }}>EfiPOS</h2>
-                <p style={{ fontSize: 11, color: '#666', margin: '2px 0' }}>RIF: J-12345678-9</p>
-                <p style={{ fontSize: 11, color: '#666', margin: '2px 0' }}>Av. Principal, Local 1 - 0412-1234567</p>
-                <p style={{ fontSize: 14, fontWeight: 'bold', margin: '8px 0 2px' }}>PRESUPUESTO</p>
-                <p style={{ fontSize: 11, color: '#888', margin: '0 0 4px' }}>{showPrint.number}</p>
+              <div className="p-4 border-b border-gray-200 space-y-2 shrink-0">
+                <input
+                  type="text"
+                  value={modalSearch}
+                  onChange={(e) => setModalSearch(e.target.value)}
+                  placeholder="Buscar por nombre, código o código de barras..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  autoFocus
+                />
+                <div className="flex gap-2 overflow-x-auto">
+                  <button
+                    onClick={() => setModalCategory(null)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      modalCategory === null ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >Todas</button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setModalCategory(cat.id)}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        modalCategory === cat.id ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >{cat.name}</button>
+                  ))}
+                </div>
               </div>
-              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
-              <div style={{ fontSize: 11, margin: '6px 0' }}>
-                <p style={{ margin: '1px 0' }}><strong>Cliente:</strong> {showPrint.client?.name}</p>
-                <p style={{ margin: '1px 0' }}><strong>Fecha:</strong> {new Date(showPrint.createdAt).toLocaleDateString('es')}</p>
-                <p style={{ margin: '1px 0' }}><strong>Válido hasta:</strong> {new Date(showPrint.validUntil).toLocaleDateString('es')}</p>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {modalResults.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8 text-sm">Sin resultados</p>
+                ) : (
+                  modalResults.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleSelectProductQuantity(p)}
+                      disabled={p.stock <= 0}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-left"
+                    >
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                        <p className="text-xs text-gray-400">{p.code} · Stock: {p.stock}</p>
+                      </div>
+                      <span className="text-sm font-mono font-semibold text-gray-800">${Number(p.price).toFixed(2)}</span>
+                    </button>
+                  ))
+                )}
               </div>
-              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
-              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse', margin: '6px 0' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #999' }}>
-                    <th style={{ textAlign: 'left', padding: '2px 4px' }}>Producto</th>
-                    <th style={{ textAlign: 'center', padding: '2px 4px' }}>Cant</th>
-                    <th style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? 'P/U $' : 'P/U Bs.'}</th>
-                    <th style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? 'Total $' : 'Total Bs.'}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {showPrint.items.map((item, i) => {
-                    const rate = showPrint.exchangeRate || 1
-                    const pu = printCurrency === 'usd' ? item.unitPrice : item.unitPrice * rate
-                    const tot = printCurrency === 'usd' ? item.subtotal : item.subtotal * rate
-                    return (
-                      <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '2px 4px' }}>{item.product?.name}</td>
-                        <td style={{ textAlign: 'center', padding: '2px 4px' }}>{item.quantity}</td>
-                        <td style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? '$' : 'Bs.'}{pu.toFixed(2)}</td>
-                        <td style={{ textAlign: 'right', padding: '2px 4px' }}>{printCurrency === 'usd' ? '$' : 'Bs.'}{tot.toFixed(2)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
-              <div style={{ fontSize: 11, textAlign: 'right', margin: '6px 0' }}>
-                {(() => {
-                  const rate = showPrint.exchangeRate || 1
-                  const subtotal = printCurrency === 'usd' ? showPrint.subtotal : showPrint.subtotal * rate
-                  const iva = printCurrency === 'usd' ? showPrint.ivaTotal : showPrint.ivaTotal * rate
-                  const total = printCurrency === 'usd' ? showPrint.total : showPrint.total * rate
-                  return (
-                    <>
-                      <p style={{ margin: '1px 0' }}>Subtotal: {printCurrency === 'usd' ? '$' : 'Bs.'}{subtotal.toFixed(2)}</p>
-                      <p style={{ margin: '1px 0' }}>IVA: {printCurrency === 'usd' ? '$' : 'Bs.'}{iva.toFixed(2)}</p>
-                      <p style={{ margin: '4px 0', fontSize: 14, fontWeight: 'bold' }}>Total: {printCurrency === 'usd' ? '$' : 'Bs.'}{total.toFixed(2)}</p>
-                    </>
-                  )
-                })()}
-              </div>
-              {printCurrency === 'bs' && showPrint.exchangeRate && (
-                <p style={{ fontSize: 10, color: '#888', textAlign: 'center', margin: '4px 0 0' }}>
-                  Tasa BCV: Bs.{Number(showPrint.exchangeRate).toFixed(2)}/$
-                </p>
-              )}
-              <hr style={{ border: 'none', borderTop: '1px solid #999' }} />
-              <p style={{ fontSize: 10, color: '#999', textAlign: 'center', margin: '6px 0 0' }}>
-                Términos: Este presupuesto tiene una validez de 30 días.
-              </p>
-            </div>
-
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => { setShowPrint(null) }}
-                className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => {
-                  const el = document.getElementById('quote-print-area')
-                  if (!el) return
-                  const win = window.open('', '_blank')
-                  if (!win) return
-                  win.document.write(`<html><head><title>${showPrint.number}</title><style>body{font-family:monospace;padding:20px;font-size:12px}table{width:100%;border-collapse:collapse}th,td{padding:2px 4px}th{border-bottom:1px solid #999}hr{border:none;border-top:1px solid #999}</style></head><body>${el.innerHTML}</body></html>`)
-                  win.document.close()
-                  win.print()
-                }}
-                className="flex-1 py-3 bg-blue-900 text-white rounded-lg font-bold touch-manipulation"
-              >
-                Imprimir
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <ProductFormModal open={showNewProductForm} onClose={() => setShowNewProductForm(false)}
-        onSaved={onProductCreated} />
+        {successQuote && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-1">Cotización Creada</h3>
+              <p className="text-gray-500 mb-2">Número: {successQuote.number}</p>
+              <p className="text-sm text-gray-400 mb-6">Se ha generado la cotización correctamente</p>
+              <div className="space-y-3">
+                <button
+                  onClick={startNewQuote}
+                  className="w-full py-3 bg-blue-900 text-white rounded-lg font-bold touch-manipulation"
+                >
+                  Nueva Cotización
+                </button>
+                <button
+                  onClick={() => navigate('/quotes')}
+                  className="w-full py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
+                >
+                  Ver Cotizaciones
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-      <TablePickerModal
-        open={showClientTable} onClose={() => setShowClientTable(false)}
-        title="Clientes"
-        items={clients}
-        columns={[
-          { key: 'name', label: 'Nombre', render: (c: any) => c.name },
-          { key: 'doc', label: 'Documento', render: (c: any) => `${c.documentType}-${c.documentNumber}` },
-        ]}
-        filterFn={(c: any, q: string) => c.name.toLowerCase().includes(q.toLowerCase()) || c.documentNumber.includes(q)}
-        onSelect={(c: any) => { setSelectedClient(c); setShowClientTable(false) }}
-        searchPlaceholder="Buscar cliente..."
-      />
-
-      <TablePickerModal
-        open={showProductTable} onClose={() => setShowProductTable(false)}
-        title="Productos"
-        items={products}
-        columns={[
-          { key: 'code', label: 'Código', render: (p: any) => p.code },
-          { key: 'name', label: 'Nombre', render: (p: any) => p.name },
-          { key: 'price', label: 'Precio', render: (p: any) => `${p.currency === 'usd' ? '$' : 'Bs.'}${Number(p.price).toFixed(2)}` },
-          { key: 'stock', label: 'Stock', render: (p: any) => p.stock <= 0 ? <span className="text-red-500">{p.stock}</span> : p.stock },
-        ]}
-        filters={[
-          { key: 'currency', label: 'Moneda', options: [{ value: 'usd', label: '$ USD' }, { value: 'bs', label: 'Bs' }], filter: (p: any, v: string) => p.currency === v },
-          { key: 'stock', label: 'Stock', options: [{ value: 'yes', label: 'Con stock' }, { value: 'no', label: 'Sin stock' }], filter: (p: any, v: string) => v === 'yes' ? p.stock > 0 : p.stock <= 0 },
-        ]}
-        filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
-        onSelect={(p: any) => { addItem(p.id); setShowProductTable(false) }}
-        searchPlaceholder="Buscar producto..."
-      />
-    </div>
+        <ClientFormModal open={showNewClientForm} onClose={() => setShowNewClientForm(false)}
+          onSaved={(client: any) => { setClients((prev) => [...prev, client]); setSelectedClient(client); setShowNewClientForm(false) }} />
+      </div>
+    </>
   )
 }

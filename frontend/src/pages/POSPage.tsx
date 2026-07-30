@@ -308,6 +308,7 @@ export default function POSPage() {
       setCheckoutModal(false)
       setActiveDraftId(null)
       setActiveQuoteId(null)
+      setShowCartMobile(false)
     } catch (err: any) {
       alert('Error al crear factura: ' + err.message)
     } finally {
@@ -348,8 +349,10 @@ export default function POSPage() {
     setCart([])
     setDiscount(0)
     setNotes('')
+    setSelectedClient(DEFAULT_CLIENT)
     setActiveDraftId(null)
     setActiveQuoteId(null)
+    setShowCartMobile(false)
     setTimeout(() => searchInputRef.current?.focus(), 0)
   }
 
