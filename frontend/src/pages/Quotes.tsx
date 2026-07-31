@@ -55,6 +55,9 @@ export default function Quotes() {
   const [editingQuoteId, setEditingQuoteId] = useState<number | null>(null)
   const [editingQuoteNumber, setEditingQuoteNumber] = useState('')
   const [showLoadModal, setShowLoadModal] = useState(false)
+  const [showQuoteList, setShowQuoteList] = useState(false)
+  const [quotesList, setQuotesList] = useState<any[]>([])
+  const [quoteListLoading, setQuoteListLoading] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const clientInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -238,6 +241,30 @@ export default function Quotes() {
     setTimeout(() => clientInputRef.current?.focus(), 0)
   }
 
+  async function loadQuotesList() {
+    setQuoteListLoading(true)
+    try {
+      const data = await api.quotes.list()
+      setQuotesList(data)
+      setShowQuoteList(true)
+    } catch {} finally { setQuoteListLoading(false) }
+  }
+
+  async function printQuoteById(id: number) {
+    try {
+      const data = await api.quotes.print(id)
+      const win = window.open('', '_blank')
+      if (!win) return
+      const rate = data.quote.exchangeRate || 1
+      const itemsHtml = data.quote.items.map((item: any) =>
+        `<tr><td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${Number(item.unitPrice).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(Number(item.unitPrice) * rate).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${Number(item.subtotal).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(Number(item.subtotal) * rate).toFixed(2)}</td></tr>`
+      ).join('')
+      win.document.write(`<!DOCTYPE html><html><head><title>${data.quote.number}</title><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#1E40AF;color:#fff;font-size:10px}hr{border:none;border-top:2px solid #333}.header{text-align:center;margin-bottom:20px}.header h1{font-size:18px;margin:0 0 4px}.header p{margin:2px 0;color:#555;font-size:11px}.info{display:flex;justify-content:space-between;margin:15px 0;font-size:11px}.totals{text-align:right;margin-top:15px;font-size:12px}.totals p{margin:3px 0}.totals .grand{font-size:16px;font-weight:bold}@media print{body{padding:15px}}@page{size:letter;margin:15mm}</style></head><body><div class="header"><h1>${data.company.name}</h1><p>RIF: ${data.company.rif}</p><p>${data.company.address} · ${data.company.phone}</p><hr><h2 style="margin:10px 0 0">COTIZACIÓN</h2><p style="font-size:14px;font-weight:bold;color:#1E40AF;margin:2px 0">${data.quote.number}</p></div><div class="info"><div><strong>Cliente:</strong> ${data.quote.client?.name || 'Consumidor Final'}<br><strong>Documento:</strong> ${data.quote.client?.documentType || ''}-${data.quote.client?.documentNumber || '0'}</div><div style="text-align:right"><strong>Fecha:</strong> ${new Date(data.quote.createdAt).toLocaleDateString('es')}<br><strong>Válido hasta:</strong> ${new Date(data.quote.validUntil).toLocaleDateString('es')}</div></div><table><thead><tr><th>Código</th><th>Producto</th><th>Cant</th><th>P/U $</th><th>P/U Bs.</th><th>Total $</th><th>Total Bs.</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="totals"><p>Subtotal: $${Number(data.quote.subtotal).toFixed(2)} · Bs.${(Number(data.quote.subtotal) * rate).toFixed(2)}</p><p>IVA: $${Number(data.quote.ivaTotal).toFixed(2)} · Bs.${(Number(data.quote.ivaTotal) * rate).toFixed(2)}</p><p class="grand">Total: $${Number(data.quote.total).toFixed(2)} · Bs.${(Number(data.quote.total) * rate).toFixed(2)}</p></div><hr><p style="font-size:10px;color:#888;text-align:center">Tasa BCV: Bs.${rate.toFixed(2)}/$</p><p style="font-size:10px;color:#888;text-align:center;margin-top:20px">Gracias por su preferencia</p></body></html>`)
+      win.document.close()
+      win.print()
+    } catch {}
+  }
+
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const ivaTotal = cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
   const total = Math.max(0, subtotal + ivaTotal)
@@ -268,6 +295,16 @@ export default function Quotes() {
           exchangeRate={0}
           onLoadDraft={() => setShowLoadModal(true)}
         />
+
+        <div className="flex items-center justify-between px-4 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
+          <span className="text-xs text-gray-500">Cotizaciones</span>
+          <button
+            onClick={loadQuotesList}
+            className="text-xs text-blue-700 font-medium hover:underline touch-manipulation"
+          >
+            📋 Ver lista
+          </button>
+        </div>
 
         {editingQuoteId && (
           <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 border-b border-blue-200 text-xs text-blue-800 shrink-0">
@@ -571,6 +608,42 @@ export default function Quotes() {
                 >
                   Ver Cotizaciones
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showQuoteList && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowQuoteList(false)}>
+            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
+                <h3 className="text-lg font-bold text-gray-800">Cotizaciones</h3>
+                <button onClick={() => setShowQuoteList(false)} className="text-gray-400 p-1 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {quoteListLoading ? (
+                  <p className="text-gray-400 text-center py-8 text-sm">Cargando...</p>
+                ) : quotesList.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8 text-sm">No hay cotizaciones</p>
+                ) : (
+                  quotesList.map((q: any) => (
+                    <div key={q.id} className="flex items-center gap-2 p-3 rounded-xl hover:bg-gray-50 border border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{q.number}</p>
+                        <p className="text-xs text-gray-400">{q.client?.name || 'Consumidor Final'} · {new Date(q.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <span className="text-sm font-mono font-semibold text-gray-700">${Number(q.total).toFixed(2)}</span>
+                      <button
+                        onClick={() => printQuoteById(q.id)}
+                        className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation"
+                      >
+                        Imprimir
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
