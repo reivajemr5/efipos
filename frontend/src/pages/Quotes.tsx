@@ -58,6 +58,8 @@ export default function Quotes() {
   const [showQuoteList, setShowQuoteList] = useState(false)
   const [quotesList, setQuotesList] = useState<any[]>([])
   const [quoteListLoading, setQuoteListLoading] = useState(false)
+  const [printModal, setPrintModal] = useState<{ id: number } | null>(null)
+  const [exchangeRate, setExchangeRate] = useState(0)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const clientInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -76,6 +78,10 @@ export default function Quotes() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    api.exchangeRate.get().then((d: any) => { if (d?.rate) setExchangeRate(Number(d.rate)) }).catch(() => {})
+  }, [])
 
   useEffect(() => { clientInputRef.current?.focus() }, [])
 
@@ -182,7 +188,7 @@ export default function Quotes() {
         unitPrice: i.unitPrice,
       }))
       const validUntil = new Date(Date.now() + Number(validDays) * 86400000).toISOString()
-      const data = { clientId: selectedClient.id || undefined, validUntil, items }
+      const data = { clientId: selectedClient.id || undefined, validUntil, items, exchangeRate: exchangeRate > 0 ? exchangeRate : undefined }
       if (editingQuoteId) {
         await api.quotes.update(editingQuoteId, data)
         setSuccessQuote({ number: editingQuoteNumber, id: editingQuoteId })
@@ -250,19 +256,85 @@ export default function Quotes() {
     } catch {} finally { setQuoteListLoading(false) }
   }
 
-  async function printQuoteById(id: number) {
+  async function printQuoteById(id: number, currency: 'usd' | 'bs' | 'both') {
+    const win = window.open('', '_blank')
+    if (!win) { alert('Permite ventanas emergentes para imprimir'); return }
+    win.document.write('<html><head><title>Cargando...</title></head><body><p style="font-family:sans-serif;padding:40px;text-align:center;color:#999">Cargando cotización...</p></body></html>')
     try {
       const data = await api.quotes.print(id)
-      const win = window.open('', '_blank')
-      if (!win) return
-      const rate = data.quote.exchangeRate || 1
-      const itemsHtml = data.quote.items.map((item: any) =>
-        `<tr><td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${Number(item.unitPrice).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(Number(item.unitPrice) * rate).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${Number(item.subtotal).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(Number(item.subtotal) * rate).toFixed(2)}</td></tr>`
-      ).join('')
-      win.document.write(`<!DOCTYPE html><html><head><title>${data.quote.number}</title><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#1E40AF;color:#fff;font-size:10px}hr{border:none;border-top:2px solid #333}.header{text-align:center;margin-bottom:20px}.header h1{font-size:18px;margin:0 0 4px}.header p{margin:2px 0;color:#555;font-size:11px}.info{display:flex;justify-content:space-between;margin:15px 0;font-size:11px}.totals{text-align:right;margin-top:15px;font-size:12px}.totals p{margin:3px 0}.totals .grand{font-size:16px;font-weight:bold}@media print{body{padding:15px}}@page{size:letter;margin:15mm}</style></head><body><div class="header"><h1>${data.company.name}</h1><p>RIF: ${data.company.rif}</p><p>${data.company.address} · ${data.company.phone}</p><hr><h2 style="margin:10px 0 0">COTIZACIÓN</h2><p style="font-size:14px;font-weight:bold;color:#1E40AF;margin:2px 0">${data.quote.number}</p></div><div class="info"><div><strong>Cliente:</strong> ${data.quote.client?.name || 'Consumidor Final'}<br><strong>Documento:</strong> ${data.quote.client?.documentType || ''}-${data.quote.client?.documentNumber || '0'}</div><div style="text-align:right"><strong>Fecha:</strong> ${new Date(data.quote.createdAt).toLocaleDateString('es')}<br><strong>Válido hasta:</strong> ${new Date(data.quote.validUntil).toLocaleDateString('es')}</div></div><table><thead><tr><th>Código</th><th>Producto</th><th>Cant</th><th>P/U $</th><th>P/U Bs.</th><th>Total $</th><th>Total Bs.</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="totals"><p>Subtotal: $${Number(data.quote.subtotal).toFixed(2)} · Bs.${(Number(data.quote.subtotal) * rate).toFixed(2)}</p><p>IVA: $${Number(data.quote.ivaTotal).toFixed(2)} · Bs.${(Number(data.quote.ivaTotal) * rate).toFixed(2)}</p><p class="grand">Total: $${Number(data.quote.total).toFixed(2)} · Bs.${(Number(data.quote.total) * rate).toFixed(2)}</p></div><hr><p style="font-size:10px;color:#888;text-align:center">Tasa BCV: Bs.${rate.toFixed(2)}/$</p><p style="font-size:10px;color:#888;text-align:center;margin-top:20px">Gracias por su preferencia</p></body></html>`)
+      const rate = data.quote.exchangeRate || (exchangeRate > 0 ? exchangeRate : 1)
+      const showUsd = currency === 'usd' || currency === 'both'
+      const showBs = currency === 'bs' || currency === 'both'
+
+      const itemsHtml = data.quote.items.map((item: any) => {
+        const pu = Number(item.unitPrice)
+        const tot = Number(item.subtotal)
+        let cols = `<td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name || ''}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td>`
+        if (showUsd) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">$${pu.toFixed(2)}</td>`
+        if (showBs) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(pu * rate).toFixed(2)}</td>`
+        if (showUsd) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">$${tot.toFixed(2)}</td>`
+        if (showBs) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(tot * rate).toFixed(2)}</td>`
+        return `<tr>${cols}</tr>`
+      }).join('')
+
+      let thPrecio = ''
+      if (currency === 'both') thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U $</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U Bs.</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total $</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total Bs.</th>`
+      else if (currency === 'usd') thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Precio</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total</th>`
+      else thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U Bs.</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total Bs.</th>`
+
+      let totalsHtml = ''
+      const s = Number(data.quote.subtotal)
+      const i = Number(data.quote.ivaTotal)
+      const t = Number(data.quote.total)
+      if (currency === 'both') {
+        totalsHtml = `<p>Subtotal: $${s.toFixed(2)} · Bs.${(s * rate).toFixed(2)}</p><p>IVA: $${i.toFixed(2)} · Bs.${(i * rate).toFixed(2)}</p><p class="grand">Total: $${t.toFixed(2)} · Bs.${(t * rate).toFixed(2)}</p>`
+      } else if (currency === 'usd') {
+        totalsHtml = `<p>Subtotal: $${s.toFixed(2)}</p><p>IVA: $${i.toFixed(2)}</p><p class="grand">Total: $${t.toFixed(2)}</p>`
+      } else {
+        totalsHtml = `<p>Subtotal: Bs.${(s * rate).toFixed(2)}</p><p>IVA: Bs.${(i * rate).toFixed(2)}</p><p class="grand">Total: Bs.${(t * rate).toFixed(2)}</p>`
+      }
+
+      win.document.write(`<!DOCTYPE html><html><head><title>${data.quote.number}</title><style>
+        body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#333}
+        table{width:100%;border-collapse:collapse;margin:15px 0}
+        th,td{border:1px solid #ccc;padding:6px;text-align:left}
+        th{background:#1E40AF;color:#fff;font-size:10px}
+        hr{border:none;border-top:2px solid #333}
+        .header{text-align:center;margin-bottom:20px}
+        .header h1{font-size:18px;margin:0 0 4px}
+        .header p{margin:2px 0;color:#555;font-size:11px}
+        .info{display:flex;justify-content:space-between;margin:15px 0;font-size:11px}
+        .totals{text-align:right;margin-top:15px;font-size:12px}
+        .totals p{margin:3px 0}
+        .totals .grand{font-size:16px;font-weight:bold}
+        .footer{font-size:10px;color:#888;text-align:center;margin-top:20px}
+        @media print{body{padding:15px}}
+        @page{size:letter;margin:15mm}
+      </style></head><body>
+        <div class="header">
+          <h1>${data.company.name}</h1>
+          <p>RIF: ${data.company.rif} · ${data.company.address} · ${data.company.phone}</p>
+          <hr>
+          <h2 style="margin:10px 0 0">COTIZACIÓN</h2>
+          <p style="font-size:14px;font-weight:bold;color:#1E40AF;margin:2px 0">${data.quote.number}</p>
+        </div>
+        <div class="info">
+          <div><strong>Cliente:</strong> ${data.quote.client?.name || 'Consumidor Final'}<br><strong>Documento:</strong> ${data.quote.client?.documentType || ''}-${data.quote.client?.documentNumber || '0'}</div>
+          <div style="text-align:right"><strong>Fecha:</strong> ${new Date(data.quote.createdAt).toLocaleDateString('es')}<br><strong>Válido hasta:</strong> ${new Date(data.quote.validUntil).toLocaleDateString('es')}</div>
+        </div>
+        <table><thead><tr><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Código</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Producto</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Cant</th>${thPrecio}</tr></thead><tbody>${itemsHtml}</tbody></table>
+        <div class="totals">${totalsHtml}</div>
+        <hr>
+        <p class="footer">Tasa BCV: Bs.${rate.toFixed(2)}/$</p>
+        <p class="footer">Gracias por su preferencia</p>
+      </body></html>`)
       win.document.close()
       win.print()
-    } catch {}
+    } catch (err) {
+      console.error('Error al imprimir:', err)
+      win.document.write(`<html><head><title>Error</title></head><body><p style="font-family:sans-serif;padding:40px;color:red">Error al cargar la cotización: ${err}</p></body></html>`)
+      win.document.close()
+    }
   }
 
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -582,22 +654,7 @@ export default function Quotes() {
                   Nueva Cotización
                 </button>
                 <button
-                  onClick={async () => {
-                    try {
-                      const data = await api.quotes.print(successQuote.id)
-                      const win = window.open('', '_blank')
-                      if (!win) return
-                      const rate = data.quote.exchangeRate || 1
-                      const itemsHtml = data.quote.items.map((item: any) => {
-                        const pu = item.unitPrice
-                        const tot = item.subtotal
-                        return `<tr><td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${pu.toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(pu * rate).toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">$${tot.toFixed(2)}</td><td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(tot * rate).toFixed(2)}</td></tr>`
-                      }).join('')
-                      win.document.write(`<!DOCTYPE html><html><head><title>${data.quote.number}</title><style>body{font-family:Arial,sans-serif;padding:30px;font-size:12px}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#1E40AF;color:#fff;font-size:10px}hr{border:none;border-top:2px solid #333}.header{text-align:center;margin-bottom:20px}.header h1{font-size:18px;margin:0 0 4px}.header p{margin:2px 0;color:#555;font-size:11px}.info{display:flex;justify-content:space-between;margin:15px 0;font-size:11px}.totals{text-align:right;margin-top:15px;font-size:12px}.totals p{margin:3px 0}.totals .grand{font-size:16px;font-weight:bold}@media print{body{padding:15px}}@page{size:letter;margin:15mm}</style></head><body><div class="header"><h1>${data.company.name}</h1><p>RIF: ${data.company.rif}</p><p>${data.company.address} · ${data.company.phone}</p><hr><h2 style="margin:10px 0 0">COTIZACIÓN</h2><p style="font-size:14px;font-weight:bold;color:#1E40AF;margin:2px 0">${data.quote.number}</p></div><div class="info"><div><strong>Cliente:</strong> ${data.quote.client?.name || 'Consumidor Final'}<br><strong>Documento:</strong> ${data.quote.client?.documentType || ''}-${data.quote.client?.documentNumber || '0'}</div><div style="text-align:right"><strong>Fecha:</strong> ${new Date(data.quote.createdAt).toLocaleDateString('es')}<br><strong>Válido hasta:</strong> ${new Date(data.quote.validUntil).toLocaleDateString('es')}</div></div><table><thead><tr><th>Código</th><th>Producto</th><th>Cant</th><th>P/U $</th><th>P/U Bs.</th><th>Total $</th><th>Total Bs.</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="totals"><p>Subtotal: $${Number(data.quote.subtotal).toFixed(2)} · Bs.${(Number(data.quote.subtotal) * rate).toFixed(2)}</p><p>IVA: $${Number(data.quote.ivaTotal).toFixed(2)} · Bs.${(Number(data.quote.ivaTotal) * rate).toFixed(2)}</p><p class="grand">Total: $${Number(data.quote.total).toFixed(2)} · Bs.${(Number(data.quote.total) * rate).toFixed(2)}</p></div><hr><p style="font-size:10px;color:#888;text-align:center">Tasa BCV: Bs.${rate.toFixed(2)}/$ · Términos: Válido por ${validDays} días</p><p style="font-size:10px;color:#888;text-align:center;margin-top:20px">Gracias por su preferencia</p></body></html>`)
-                      win.document.close()
-                      win.print()
-                    } catch {}
-                  }}
+                  onClick={() => setPrintModal({ id: successQuote.id })}
                   className="w-full py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
                 >
                   Imprimir Cotización
@@ -636,7 +693,7 @@ export default function Quotes() {
                       </div>
                       <span className="text-sm font-mono font-semibold text-gray-700">${Number(q.total).toFixed(2)}</span>
                       <button
-                        onClick={() => printQuoteById(q.id)}
+                        onClick={() => setPrintModal({ id: q.id })}
                         className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation"
                       >
                         Imprimir
@@ -645,6 +702,28 @@ export default function Quotes() {
                   ))
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {printModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setPrintModal(null)}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">Imprimir en:</h3>
+              <div className="space-y-3">
+                <button onClick={() => { const id = printModal.id; setPrintModal(null); printQuoteById(id, 'usd') }} className="w-full py-3 bg-blue-900 text-white rounded-lg font-medium hover:bg-blue-800 touch-manipulation flex items-center justify-center gap-2">
+                  <span>$</span> USD
+                </button>
+                <button onClick={() => { const id = printModal.id; setPrintModal(null); printQuoteById(id, 'bs') }} className="w-full py-3 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 touch-manipulation flex items-center justify-center gap-2">
+                  <span>Bs.</span> Bolívares
+                </button>
+                <button onClick={() => { const id = printModal.id; setPrintModal(null); printQuoteById(id, 'both') }} className="w-full py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-600 touch-manipulation flex items-center justify-center gap-2">
+                  <span>$ + Bs.</span> Ambos
+                </button>
+              </div>
+              <button onClick={() => setPrintModal(null)} className="w-full mt-3 py-2 text-gray-500 text-sm hover:text-gray-700 touch-manipulation">
+                Cancelar
+              </button>
             </div>
           </div>
         )}
