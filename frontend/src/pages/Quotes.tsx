@@ -493,7 +493,7 @@ export default function Quotes() {
           </div>
         </div>
 
-        {cartItemCount > 0 && (
+        {cartItemCount > 0 && !showCartMobile && (
           <button
             onClick={() => setShowCartMobile(true)}
             className="md:hidden fixed bottom-20 right-4 z-[60] bg-blue-900 text-white rounded-full shadow-lg flex items-center gap-2 px-4 py-3 touch-manipulation"
