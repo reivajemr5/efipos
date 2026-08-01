@@ -71,6 +71,17 @@ export default function Clients() {
     load()
   }
 
+  async function handleCancelInvoice(inv: any) {
+    if (!confirm(`¿Anular la factura ${inv.number}?`)) return
+    try {
+      await api.invoices.cancel(inv.id)
+      toast('Factura anulada', 'success')
+      if (statementClient) openStatement(statementClient)
+    } catch (e: any) {
+      toast(e.message || 'Error al anular la factura', 'error')
+    }
+  }
+
   function openEdit(c: Client) { setEditing(c); setForm({ name: c.name, documentType: c.documentType, documentNumber: c.documentNumber, phone: c.phone || '', address: c.address || '' }); setShowForm(true) }
 
   const filtered = clients.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.documentNumber.includes(search))
@@ -198,19 +209,37 @@ export default function Clients() {
                         const isOpen = expandedId === inv.id
                         return (
                           <div key={inv.id} className="border border-gray-200 rounded-xl overflow-hidden">
-                            <button
-                              onClick={() => setExpandedId(isOpen ? null : inv.id)}
-                              className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 text-left"
-                            >
-                              <div>
-                                <p className="font-medium text-gray-800 text-sm">{inv.number}</p>
+                            <div className="flex items-center justify-between">
+                              <button
+                                onClick={() => setExpandedId(isOpen ? null : inv.id)}
+                                className="flex-1 min-w-0 text-left px-3 py-2.5 hover:bg-gray-50"
+                              >
+                                <p className="font-medium text-gray-800 text-sm truncate">{inv.number}</p>
                                 <p className="text-xs text-gray-400">{new Date(inv.createdAt).toLocaleDateString()}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
+                              </button>
+                              <div className="flex items-center gap-2 px-3 shrink-0">
                                 <span className={badge.cls}>{badge.label}</span>
                                 <span className="font-mono font-bold text-gray-800">${Number(inv.total).toFixed(2)}</span>
+                                {inv.status === 'activa' && (
+                                  <div className="flex gap-1.5">
+                                    {Number(inv.balance) > 0 && (
+                                      <button
+                                        onClick={() => setAbonarInvoice(inv)}
+                                        className="px-2.5 py-1 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation"
+                                      >
+                                        Abonar
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleCancelInvoice(inv)}
+                                      className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 touch-manipulation"
+                                    >
+                                      Anular
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                            </button>
+                            </div>
                             {isOpen && (
                               <div className="px-3 pb-3 space-y-3">
                                 <div className="space-y-1.5 border-t border-gray-100 pt-2">
