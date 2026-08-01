@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
-  const [amountBs, setAmountBs] = useState(0)
+  const [amountUsd, setAmountUsd] = useState(0)
   const [rate, setRate] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const toast = useToastStore((s: any) => s.addToast)
@@ -19,9 +19,10 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
   }, [])
 
   async function handleAbonar() {
-    if (!invoice || amountBs <= 0 || rate <= 0) return
+    if (!invoice || amountUsd <= 0 || rate <= 0) return
     setSubmitting(true)
     try {
+      const amountBs = Math.round(amountUsd * rate * 100) / 100
       await api.invoices.abonar(invoice.id, { amountBs, exchangeRate: rate })
       toast('Abono registrado', 'success')
       onSuccess()
@@ -42,14 +43,14 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
 
         <div className="space-y-3 mb-4">
           <div>
-            <label className="label">Monto en Bs.</label>
+            <label className="label">Monto en USD</label>
             <input
               type="number"
               min="0"
               step="0.01"
               autoFocus
-              value={amountBs || ''}
-              onChange={(e) => setAmountBs(Math.max(0, Number(e.target.value) || 0))}
+              value={amountUsd || ''}
+              onChange={(e) => setAmountUsd(Math.max(0, Number(e.target.value) || 0))}
               className="input"
               placeholder="0.00"
             />
@@ -77,10 +78,10 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
               </button>
             </div>
           </div>
-          {amountBs > 0 && rate > 0 && (
+          {amountUsd > 0 && rate > 0 && (
             <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg">
-              Equivalen a <span className="font-bold text-green-700">${(amountBs / rate).toFixed(2)}</span> USD
-              {amountBs / rate > Number(invoice.balance) && (
+              Equivalen a <span className="font-bold text-green-700">Bs. {(amountUsd * rate).toFixed(2)}</span> a la tasa del día
+              {amountUsd > Number(invoice.balance) && (
                 <p className="text-red-500 text-xs mt-1">Supera el saldo pendiente de ${Number(invoice.balance).toFixed(2)}</p>
               )}
             </div>
@@ -96,7 +97,7 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
           </button>
           <button
             onClick={handleAbonar}
-            disabled={submitting || amountBs <= 0 || rate <= 0 || (amountBs / rate) > Number(invoice.balance)}
+            disabled={submitting || amountUsd <= 0 || rate <= 0 || amountUsd > Number(invoice.balance)}
             className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
           >
             {submitting ? 'Procesando...' : 'Abonar'}
