@@ -10,6 +10,7 @@ import Purchases from './pages/Purchases'
 import Quotes from './pages/Quotes'
 import POSPage from './pages/POSPage'
 import InvoicePrint from './pages/InvoicePrint'
+import InvoicesHistory from './pages/InvoicesHistory'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import AccountsReceivable from './pages/AccountsReceivable'
@@ -34,6 +35,7 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="invoices" element={<POSPage />} />
+          <Route path="facturas" element={<InvoicesHistory />} />
           <Route path="quotes" element={<Quotes />} />
           <Route path="products" element={<Products />} />
           <Route path="purchases" element={<Purchases />} />

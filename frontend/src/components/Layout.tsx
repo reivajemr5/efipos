@@ -10,6 +10,7 @@ import ToastContainer from './ToastContainer'
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '🏠' },
   { to: '/invoices', label: 'Ventas', icon: '🧾' },
+  { to: '/facturas', label: 'Facturas', icon: '📑' },
   { to: '/products', label: 'Productos', icon: '📦' },
   { to: '/clients', label: 'Clientes', icon: '👥' },
   { to: '/purchases', label: 'Compras', icon: '📥' },

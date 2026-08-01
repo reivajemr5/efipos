@@ -36,10 +36,6 @@ export default function InvoicePrint() {
     api.invoices.print(Number(id)).then(setData).catch(() => setError('Error al cargar factura'))
   }, [id])
 
-  useEffect(() => {
-    if (data) setTimeout(() => window.print(), 300)
-  }, [data])
-
   if (error) {
     return <div className="flex items-center justify-center min-h-screen text-red-600">{error}</div>
   }
@@ -57,6 +53,15 @@ export default function InvoicePrint() {
 
   return (
     <div className="min-h-screen bg-white">
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <div className="no-print max-w-sm mx-auto pt-4 px-4">
+        <button
+          onClick={() => window.print()}
+          className="btn btn-primary w-full"
+        >
+          Imprimir
+        </button>
+      </div>
       <div className="max-w-sm mx-auto p-6 text-sm">
         <div className="text-center mb-6 pb-4 border-b border-gray-300">
           <h1 className="text-lg font-bold">{company.name}</h1>

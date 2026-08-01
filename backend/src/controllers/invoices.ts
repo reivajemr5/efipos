@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth'
 
 export async function list(req: AuthRequest, res: Response) {
   const { date_from, date_to, status } = req.query
+  const q = String(req.query.q || '').trim()
   const where: any = {}
   if (date_from || date_to) {
     where.createdAt = {}
@@ -11,6 +12,13 @@ export async function list(req: AuthRequest, res: Response) {
     if (date_to) where.createdAt.lte = new Date(String(date_to) + 'T23:59:59.999Z')
   }
   if (status) where.status = status
+  if (q) {
+    where.OR = [
+      { number: { contains: q, mode: 'insensitive' } },
+      { client: { name: { contains: q, mode: 'insensitive' } } },
+      { client: { documentNumber: { contains: q } } },
+    ]
+  }
 
   const invoices = await prisma.invoice.findMany({
     where,
