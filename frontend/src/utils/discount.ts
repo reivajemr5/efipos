@@ -9,7 +9,7 @@ export function discountAmountUsd(input: string, type: DiscountType, baseTotal: 
   const v = parseDiscount(input)
   if (v === 0) return 0
   if (type === 'usd') return Math.round(v * 100) / 100
-  if (type === 'bs') return rate > 0 ? Math.round((v / rate) * 100) / 100 : 0
+  if (type === 'bs') return rate > 0 ? Math.round((v / rate) * 1e6) / 1e6 : 0
   return Math.round((baseTotal * v / 100) * 100) / 100
 }
 
