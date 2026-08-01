@@ -16,6 +16,38 @@ export async function list(req: AuthRequest, res: Response) {
   res.json(clients)
 }
 
+export async function statement(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const client = await prisma.client.findUnique({ where: { id } })
+  if (!client) { res.status(404).json({ error: 'Cliente no encontrado' }); return }
+
+  const invoices = await prisma.invoice.findMany({
+    where: { clientId: id },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { id: true, name: true } },
+      items: { include: { product: { select: { id: true, name: true, code: true } } } },
+      payments: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+
+  const active = invoices.filter((i) => i.status !== 'anulada')
+  const totalComprado = active.reduce((s, i) => s + Number(i.total), 0)
+  const totalPagado = active.reduce((s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0), 0)
+  const totalPendiente = active.reduce((s, i) => s + Number(i.balance), 0)
+
+  res.json({
+    client,
+    invoices,
+    totals: {
+      totalComprado: Math.round(totalComprado * 100) / 100,
+      totalPagado: Math.round(totalPagado * 100) / 100,
+      totalPendiente: Math.round(totalPendiente * 100) / 100,
+      facturas: active.length,
+    },
+  })
+}
+
 export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const client = await prisma.client.findUnique({ where: { id } })

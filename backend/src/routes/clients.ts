@@ -1,11 +1,12 @@
 import { Router } from 'express'
-import { list, getById, create, update, remove } from '../controllers/clients'
+import { list, getById, create, update, remove, statement } from '../controllers/clients'
 import { authenticate } from '../middleware/auth'
 
 const router = Router()
 router.use(authenticate)
 
 router.get('/', list)
+router.get('/:id/statement', statement)
 router.get('/:id', getById)
 router.post('/', create)
 router.put('/:id', update)

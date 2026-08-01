@@ -3,15 +3,22 @@ import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 
 export async function receivable(req: AuthRequest, res: Response) {
+  const q = String(req.query.q || '').trim()
+  const where: any = { balance: { gt: 0 }, status: { not: 'anulada' } }
+  if (q) {
+    where.OR = [
+      { client: { name: { contains: q, mode: 'insensitive' } } },
+      { client: { documentNumber: { contains: q } } },
+    ]
+  }
+
   const invoices = await prisma.invoice.findMany({
-    where: { balance: { gt: 0 }, status: { not: 'anulada' } },
+    where,
     include: {
       client: { select: { id: true, name: true, documentType: true, documentNumber: true } },
       user: { select: { id: true, name: true } },
-      payments: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-      },
+      items: { include: { product: { select: { id: true, name: true, code: true } } } },
+      payments: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { createdAt: 'desc' },
   })

@@ -2,6 +2,13 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 
+async function creditClientError(paymentMethod: string | undefined, clientId: number): Promise<string | null> {
+  if (!(paymentMethod || '').includes('credito')) return null
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { documentNumber: true } })
+  if (client && client.documentNumber === '00000000') return 'Crédito requiere un cliente identificado'
+  return null
+}
+
 export async function list(req: AuthRequest, res: Response) {
   const { date_from, date_to, status } = req.query
   const q = String(req.query.q || '').trim()
@@ -101,6 +108,9 @@ export async function create(req: AuthRequest, res: Response) {
     finalClientId = walkIn.id
   }
 
+  const creditErr = await creditClientError(paymentMethod, finalClientId)
+  if (creditErr) { res.status(400).json({ error: creditErr }); return }
+
   const invoice = await prisma.invoice.create({
     data: {
       number,
@@ -196,6 +206,9 @@ export async function completeDraft(req: AuthRequest, res: Response) {
   })
   if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
   if (invoice.status !== 'borrador') { res.status(400).json({ error: 'La factura no es un borrador' }); return }
+
+  const creditErr = await creditClientError(newMethod || invoice.paymentMethod, invoice.clientId)
+  if (creditErr) { res.status(400).json({ error: creditErr }); return }
 
   // If new items provided, recalculate totals and replace items
   let finalItems = invoice.items
@@ -420,6 +433,10 @@ export async function updateDraft(req: AuthRequest, res: Response) {
   if (invoice.status !== 'borrador') { res.status(400).json({ error: 'La factura no es un borrador' }); return }
   if (!items?.length) { res.status(400).json({ error: 'Productos requeridos' }); return }
 
+  const payMethod = paymentMethod || invoice.paymentMethod
+  const creditErr = await creditClientError(payMethod, invoice.clientId)
+  if (creditErr) { res.status(400).json({ error: creditErr }); return }
+
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   const productMap = new Map(products.map((p) => [p.id, p]))
@@ -444,7 +461,6 @@ export async function updateDraft(req: AuthRequest, res: Response) {
   let totalBs = null
   if (rate) totalBs = total * Number(rate)
 
-  const payMethod = paymentMethod || invoice.paymentMethod
   const balance = payMethod.includes('credito') ? total : 0
 
   // Delete old items and create new ones

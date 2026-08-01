@@ -543,6 +543,17 @@ export default function POSPage() {
 
               <div className="space-y-2 mb-4">
                 <label className="block text-sm font-medium text-gray-700">Métodos de pago</label>
+                {selectedClient.id === 0 && paymentLines.some((l) => l.method === 'credito') && (
+                  <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                    <span>Crédito requiere un cliente identificado.</span>
+                    <button
+                      onClick={() => setShowClientModal(true)}
+                      className="ml-2 px-2.5 py-1 bg-amber-600 text-white rounded-md font-medium hover:bg-amber-700 touch-manipulation shrink-0"
+                    >
+                      Seleccionar cliente
+                    </button>
+                  </div>
+                )}
                 {paymentLines.map((line, i) => {
                   const lineTotal = paymentLines.reduce((s, l) => s + l.amount, 0)
                   const remaining = exchangeRate > 0 ? (total * exchangeRate) - (lineTotal - line.amount) : total - (lineTotal - line.amount)
@@ -572,7 +583,7 @@ export default function POSPage() {
                           <option value="bio_pago">Bio Pago</option>
                           <option value="cashea">Cashea</option>
                           <option value="transferencia">Transferencia</option>
-                          <option value="credito">Crédito</option>
+                          <option value="credito" disabled={selectedClient.id === 0}>Crédito</option>
                         </select>
                         <div className="relative flex-1 min-w-0">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{exchangeRate > 0 ? 'Bs.' : '$'}</span>
@@ -712,7 +723,7 @@ export default function POSPage() {
                     <button
                       ref={cobrarRef}
                       onClick={confirmCheckout}
-                      disabled={loading || (!paymentLines.some((l) => l.method === 'credito') && sumAmt < target - 0.01) || paymentLines.some((l, idx) => {
+                      disabled={loading || (!paymentLines.some((l) => l.method === 'credito') && sumAmt < target - 0.01) || (selectedClient.id === 0 && paymentLines.some((l) => l.method === 'credito')) || paymentLines.some((l, idx) => {
                         if (l.method === 'efectivo' || l.method === 'credito') return false
                         const others = [...paymentLines]; others.splice(idx, 1)
                         const paid = others.reduce((s, o) => s + o.amount, 0)

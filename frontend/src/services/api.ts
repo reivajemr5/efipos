@@ -30,6 +30,7 @@ export const api = {
   clients: {
     list: (q?: string) => request(`/clients${q ? `?q=${q}` : ''}`),
     getById: (id: number) => request(`/clients/${id}`),
+    statement: (id: number) => request(`/clients/${id}/statement`),
     create: (data: any) => request('/clients', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request(`/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/clients/${id}`, { method: 'DELETE' }),
@@ -112,7 +113,7 @@ export const api = {
     totals: (params: string) => request(`/payments/totals?${params}`),
   },
   accounts: {
-    receivable: () => request('/accounts/receivable'),
+    receivable: (params?: string) => request(`/accounts/receivable${params ? `?${params}` : ''}`),
     payable: () => request('/accounts/payable'),
   },
   search: {
