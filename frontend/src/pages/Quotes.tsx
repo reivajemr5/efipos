@@ -262,7 +262,7 @@ export default function Quotes() {
     win.document.write('<html><head><title>Cargando...</title></head><body><p style="font-family:sans-serif;padding:40px;text-align:center;color:#999">Cargando cotización...</p></body></html>')
     try {
       const data = await api.quotes.print(id)
-      const rate = data.quote.exchangeRate || (exchangeRate > 0 ? exchangeRate : 1)
+      const rate = Number(data.quote.exchangeRate) || (exchangeRate > 0 ? exchangeRate : 1)
       const showUsd = currency === 'usd' || currency === 'both'
       const showBs = currency === 'bs' || currency === 'both'
 
