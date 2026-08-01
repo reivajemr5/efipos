@@ -8,6 +8,7 @@ export interface CartItem {
   quantity: number
   unitPrice: number
   ivaPercent: number
+  discount?: number
 }
 
 interface TicketPanelProps {
@@ -15,6 +16,7 @@ interface TicketPanelProps {
   discount?: number
   onUpdateQuantity: (productId: number, qty: number) => void
   onRemove: (productId: number) => void
+  onLineDiscount: (productId: number) => void
   onCheckout: () => void
   onCancel: () => void
   onSaveDraft: () => void
@@ -25,10 +27,10 @@ interface TicketPanelProps {
 
 export default function TicketPanel({
   items, discount = 0, onUpdateQuantity, onRemove,
-  onCheckout, onCancel, onSaveDraft, onDiscount, onNotes, exchangeRate,
+  onLineDiscount, onCheckout, onCancel, onSaveDraft, onDiscount, onNotes, exchangeRate,
 }: TicketPanelProps) {
-  const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-  const ivaTotal = items.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
+  const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0)
+  const ivaTotal = items.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
   const total = Math.max(0, subtotal + ivaTotal - discount)
   const itemCount = items.reduce((c, i) => c + i.quantity, 0)
   const hasDiscount = discount > 0
@@ -52,6 +54,7 @@ export default function TicketPanel({
               item={item}
               onUpdateQuantity={onUpdateQuantity}
               onRemove={onRemove}
+              onLineDiscount={onLineDiscount}
               exchangeRate={exchangeRate}
             />
           ))

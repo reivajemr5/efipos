@@ -38,7 +38,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { clientId, quoteId, paymentMethod, currency, exchangeRate, items, payments, status } = req.body
+  const { clientId, quoteId, paymentMethod, currency, exchangeRate, items, payments, status, discount } = req.body
   const isDraft = status === 'borrador'
 
   if (!items?.length) {
@@ -50,13 +50,15 @@ export async function create(req: AuthRequest, res: Response) {
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
+  const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
   let ivaTotal = 0
   const invoiceItems = items.map((i: any) => {
     const product = productMap.get(i.productId)
     if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
     const unitPrice = i.unitPrice || Number(product.price)
-    const itemSubtotal = unitPrice * i.quantity
+    const lineDisc = Math.min(Math.max(0, Number(i.discount) || 0), unitPrice * i.quantity)
+    const itemSubtotal = unitPrice * i.quantity - lineDisc
     const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
     subtotal += itemSubtotal
     ivaTotal += itemIva
@@ -64,12 +66,13 @@ export async function create(req: AuthRequest, res: Response) {
       productId: i.productId,
       quantity: i.quantity,
       unitPrice,
+      discount: lineDisc || null,
       ivaPercent: product.ivaPercent,
       subtotal: itemSubtotal,
     }
   })
 
-  const total = subtotal + ivaTotal
+  const total = Math.max(0, subtotal + ivaTotal - globalDisc)
   const invCurrency = currency || 'usd'
   let totalBs = null
   if (invCurrency === 'usd' && exchangeRate) {
@@ -98,6 +101,7 @@ export async function create(req: AuthRequest, res: Response) {
       quoteId: quoteId || null,
       currency: invCurrency,
       exchangeRate: exchangeRate || null,
+      discount: globalDisc || null,
       subtotal,
       ivaTotal,
       total,
@@ -176,7 +180,7 @@ export async function listDrafts(req: AuthRequest, res: Response) {
 
 export async function completeDraft(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { items: newItems, payments, exchangeRate: newRate, paymentMethod: newMethod } = req.body
+  const { items: newItems, payments, exchangeRate: newRate, paymentMethod: newMethod, discount: newDiscount } = req.body
 
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -190,6 +194,7 @@ export async function completeDraft(req: AuthRequest, res: Response) {
   let finalSubtotal = Number(invoice.subtotal)
   let finalIvaTotal = Number(invoice.ivaTotal)
   let finalTotal = Number(invoice.total)
+  let finalDiscount = invoice.discount ? Number(invoice.discount) : 0
   let finalBalance = Number(invoice.balance)
   let finalTotalBs = invoice.totalBs ? Number(invoice.totalBs) : null
 
@@ -198,22 +203,25 @@ export async function completeDraft(req: AuthRequest, res: Response) {
     const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
     const productMap = new Map(products.map((p) => [p.id, p]))
 
+    const globalDisc = Math.max(0, Number(newDiscount) || 0)
     let subtotal = 0
     let ivaTotal = 0
     const computedItems = newItems.map((i: any) => {
       const product = productMap.get(i.productId)
       if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
       const unitPrice = i.unitPrice || Number(product.price)
-      const itemSubtotal = unitPrice * i.quantity
+      const lineDisc = Math.min(Math.max(0, Number(i.discount) || 0), unitPrice * i.quantity)
+      const itemSubtotal = unitPrice * i.quantity - lineDisc
       const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
       subtotal += itemSubtotal
       ivaTotal += itemIva
-      return { productId: i.productId, quantity: i.quantity, unitPrice, ivaPercent: product.ivaPercent, subtotal: itemSubtotal }
+      return { productId: i.productId, quantity: i.quantity, unitPrice, discount: lineDisc || null, ivaPercent: product.ivaPercent, subtotal: itemSubtotal }
     })
 
     finalSubtotal = subtotal
     finalIvaTotal = ivaTotal
-    finalTotal = subtotal + ivaTotal
+    finalDiscount = globalDisc
+    finalTotal = Math.max(0, subtotal + ivaTotal - globalDisc)
     finalItems = computedItems as any
 
     const rate = newRate || invoice.exchangeRate
@@ -271,6 +279,7 @@ export async function completeDraft(req: AuthRequest, res: Response) {
 
   const updateData: any = {
     status: 'activa',
+    discount: finalDiscount || null,
     subtotal: finalSubtotal,
     ivaTotal: finalIvaTotal,
     total: finalTotal,
@@ -396,7 +405,7 @@ export async function getPrintData(req: AuthRequest, res: Response) {
 
 export async function updateDraft(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { items, exchangeRate, paymentMethod } = req.body
+  const { items, exchangeRate, paymentMethod, discount } = req.body
 
   const invoice = await prisma.invoice.findUnique({ where: { id } })
   if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
@@ -407,20 +416,22 @@ export async function updateDraft(req: AuthRequest, res: Response) {
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
+  const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
   let ivaTotal = 0
   const invoiceItems = items.map((i: any) => {
     const product = productMap.get(i.productId)
     if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
     const unitPrice = i.unitPrice || Number(product.price)
-    const itemSubtotal = unitPrice * i.quantity
+    const lineDisc = Math.min(Math.max(0, Number(i.discount) || 0), unitPrice * i.quantity)
+    const itemSubtotal = unitPrice * i.quantity - lineDisc
     const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
     subtotal += itemSubtotal
     ivaTotal += itemIva
-    return { productId: i.productId, quantity: i.quantity, unitPrice, ivaPercent: product.ivaPercent, subtotal: itemSubtotal }
+    return { productId: i.productId, quantity: i.quantity, unitPrice, discount: lineDisc || null, ivaPercent: product.ivaPercent, subtotal: itemSubtotal }
   })
 
-  const total = subtotal + ivaTotal
+  const total = Math.max(0, subtotal + ivaTotal - globalDisc)
   const rate = exchangeRate || invoice.exchangeRate
   let totalBs = null
   if (rate) totalBs = total * Number(rate)
@@ -437,6 +448,7 @@ export async function updateDraft(req: AuthRequest, res: Response) {
   const updated = await prisma.invoice.update({
     where: { id },
     data: {
+      discount: globalDisc || null,
       subtotal,
       ivaTotal,
       total,

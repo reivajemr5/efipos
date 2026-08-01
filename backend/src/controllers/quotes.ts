@@ -33,7 +33,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { clientId, validUntil, currency, exchangeRate, items } = req.body
+  const { clientId, validUntil, currency, exchangeRate, items, discount } = req.body
   if (!clientId || !items?.length) {
     res.status(400).json({ error: 'Cliente y productos requeridos' })
     return
@@ -43,13 +43,15 @@ export async function create(req: AuthRequest, res: Response) {
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
+  const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
   let ivaTotal = 0
   const quoteItems = items.map((i: any) => {
     const product = productMap.get(i.productId)
     if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
     const unitPrice = i.unitPrice || Number(product.price)
-    const itemSubtotal = unitPrice * i.quantity
+    const lineDisc = Math.min(Math.max(0, Number(i.discount) || 0), unitPrice * i.quantity)
+    const itemSubtotal = unitPrice * i.quantity - lineDisc
     const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
     subtotal += itemSubtotal
     ivaTotal += itemIva
@@ -57,12 +59,13 @@ export async function create(req: AuthRequest, res: Response) {
       productId: i.productId,
       quantity: i.quantity,
       unitPrice,
+      discount: lineDisc || null,
       ivaPercent: product.ivaPercent,
       subtotal: itemSubtotal,
     }
   })
 
-  const total = subtotal + ivaTotal
+  const total = Math.max(0, subtotal + ivaTotal - globalDisc)
   const qCurrency = currency || 'usd'
   let totalBs = null
   if (qCurrency === 'usd' && exchangeRate) {
@@ -81,6 +84,7 @@ export async function create(req: AuthRequest, res: Response) {
       userId: req.user!.id,
       currency: qCurrency,
       exchangeRate: exchangeRate || null,
+      discount: globalDisc || null,
       subtotal,
       ivaTotal,
       total,
@@ -96,7 +100,7 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function update(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { clientId, validUntil, items } = req.body
+  const { clientId, validUntil, items, discount } = req.body
 
   const existing = await prisma.quote.findUnique({ where: { id } })
   if (!existing) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
@@ -110,13 +114,15 @@ export async function update(req: AuthRequest, res: Response) {
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
+  const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
   let ivaTotal = 0
   const quoteItems = items.map((i: any) => {
     const product = productMap.get(i.productId)
     if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
     const unitPrice = i.unitPrice || Number(product.price)
-    const itemSubtotal = unitPrice * i.quantity
+    const lineDisc = Math.min(Math.max(0, Number(i.discount) || 0), unitPrice * i.quantity)
+    const itemSubtotal = unitPrice * i.quantity - lineDisc
     const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
     subtotal += itemSubtotal
     ivaTotal += itemIva
@@ -124,12 +130,13 @@ export async function update(req: AuthRequest, res: Response) {
       productId: i.productId,
       quantity: i.quantity,
       unitPrice,
+      discount: lineDisc || null,
       ivaPercent: product.ivaPercent,
       subtotal: itemSubtotal,
     }
   })
 
-  const total = subtotal + ivaTotal
+  const total = Math.max(0, subtotal + ivaTotal - globalDisc)
   const qCurrency = existing.currency || 'usd'
   let totalBs: number | null = existing.totalBs ? Number(existing.totalBs) : null
   if (qCurrency === 'usd' && existing.exchangeRate) {
@@ -141,7 +148,7 @@ export async function update(req: AuthRequest, res: Response) {
   // Delete old items and create new ones
   await prisma.quoteItem.deleteMany({ where: { quoteId: id } })
   await prisma.quoteItem.createMany({
-    data: quoteItems.map((i: { productId: number; quantity: number; unitPrice: number; ivaPercent: string | number; subtotal: number }) => ({ ...i, quoteId: id })),
+    data: quoteItems.map((i: { productId: number; quantity: number; unitPrice: number; discount: number | null; ivaPercent: string | number; subtotal: number }) => ({ ...i, quoteId: id })),
   })
 
   const updated = await prisma.quote.update({
@@ -149,6 +156,7 @@ export async function update(req: AuthRequest, res: Response) {
     data: {
       ...(clientId && { clientId }),
       ...(validUntil && { validUntil: new Date(validUntil) }),
+      discount: globalDisc || null,
       subtotal,
       ivaTotal,
       total,
@@ -181,6 +189,7 @@ export async function convertToInvoice(req: AuthRequest, res: Response) {
       quoteId: quote.id,
       currency: quote.currency,
       exchangeRate: quote.exchangeRate,
+      discount: quote.discount,
       subtotal: quote.subtotal,
       ivaTotal: quote.ivaTotal,
       total: quote.total,
@@ -190,6 +199,7 @@ export async function convertToInvoice(req: AuthRequest, res: Response) {
           productId: item.productId,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          discount: item.discount,
           ivaPercent: item.ivaPercent,
           subtotal: item.subtotal,
         })),

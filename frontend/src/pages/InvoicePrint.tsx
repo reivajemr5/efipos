@@ -11,6 +11,7 @@ interface PrintData {
     client: { name: string; documentType: string; documentNumber: string; phone: string | null; address: string | null }
     user: { name: string }
     currency: string
+    discount?: string | null
     subtotal: string
     ivaTotal: string
     total: string
@@ -19,6 +20,7 @@ interface PrintData {
       quantity: number
       unitPrice: string
       subtotal: string
+      discount?: string | null
       product: { name: string; code: string }
     }>
   }
@@ -48,6 +50,7 @@ export default function InvoicePrint() {
 
   const { company, invoice } = data
   const symbol = invoice.currency === 'bs' ? 'Bs.' : '$'
+  const discountUsd = invoice.discount ? Number(invoice.discount) : 0
   const d = new Date(invoice.createdAt)
   const dateStr = d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const timeStr = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
@@ -108,6 +111,9 @@ export default function InvoicePrint() {
         <div className="text-right space-y-1 mb-6">
           <div className="text-gray-600">Subtotal: {symbol} {Number(invoice.subtotal).toFixed(2)}</div>
           <div className="text-gray-600">IVA: {symbol} {Number(invoice.ivaTotal).toFixed(2)}</div>
+          {discountUsd > 0 && (
+            <div className="text-amber-600">Descuento: -{symbol} {discountUsd.toFixed(2)}</div>
+          )}
           <div className="text-lg font-bold">Total: {symbol} {Number(invoice.total).toFixed(2)}</div>
         </div>
 

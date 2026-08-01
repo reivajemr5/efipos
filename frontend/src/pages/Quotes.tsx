@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../services/api'
 import POSHeader from '../components/pos/POSHeader'
+import DiscountModal from '../components/pos/DiscountModal'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
@@ -60,6 +61,9 @@ export default function Quotes() {
   const [quoteListLoading, setQuoteListLoading] = useState(false)
   const [printModal, setPrintModal] = useState<{ id: number } | null>(null)
   const [exchangeRate, setExchangeRate] = useState(0)
+  const [discount, setDiscount] = useState(0)
+  const [showDiscount, setShowDiscount] = useState(false)
+  const [lineDiscountProduct, setLineDiscountProduct] = useState<number | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const clientInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -147,17 +151,20 @@ export default function Quotes() {
 
   function handleRemove(productId: number) {
     setCart((prev) => prev.filter((i) => i.productId !== productId))
+    setLineDiscountProduct((cur) => (cur === productId ? null : cur))
   }
 
   function handleCancel() {
     setCart([])
+    setDiscount(0)
+    setLineDiscountProduct(null)
     setSelectedClient(DEFAULT_CLIENT)
     setEditingQuoteId(null)
     setEditingQuoteNumber('')
     setTimeout(() => clientInputRef.current?.focus(), 0)
   }
 
-  function handleLoadQuote(source: { type: string; id: number; items: any[]; client: any }) {
+  function handleLoadQuote(source: { type: string; id: number; items: any[]; client: any; discount?: number }) {
     if (source.type !== 'quote') return
     const items = source.items.map((i: any) => ({
       productId: i.productId,
@@ -165,8 +172,10 @@ export default function Quotes() {
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice),
       ivaPercent: Number(i.ivaPercent),
+      discount: i.discount ? Number(i.discount) : 0,
     }))
     setCart(items)
+    setDiscount(source.discount ? Number(source.discount) : 0)
     setEditingQuoteId(source.id)
     setEditingQuoteNumber(source.client?.name ? `COTI-${source.id}` : `COTI-${source.id}`)
     if (source.client?.id) {
@@ -186,9 +195,10 @@ export default function Quotes() {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice: i.unitPrice,
+        discount: i.discount || undefined,
       }))
       const validUntil = new Date(Date.now() + Number(validDays) * 86400000).toISOString()
-      const data = { clientId: selectedClient.id || undefined, validUntil, items, exchangeRate: exchangeRate > 0 ? exchangeRate : undefined }
+      const data = { clientId: selectedClient.id || undefined, validUntil, items, exchangeRate: exchangeRate > 0 ? exchangeRate : undefined, discount: discount || undefined }
       if (editingQuoteId) {
         await api.quotes.update(editingQuoteId, data)
         setSuccessQuote({ number: editingQuoteNumber, id: editingQuoteId })
@@ -201,6 +211,8 @@ export default function Quotes() {
       setCart([])
       setSelectedClient(DEFAULT_CLIENT)
       setValidDays('30')
+      setDiscount(0)
+      setLineDiscountProduct(null)
     } catch (err: any) {
       alert('Error al crear cotización: ' + err.message)
     } finally {
@@ -268,32 +280,40 @@ export default function Quotes() {
       const showUsd = currency === 'usd' || currency === 'both'
       const showBs = currency === 'bs' || currency === 'both'
 
+      const hasLineDisc = data.quote.items.some((it: any) => Number(it.discount) > 0)
       const itemsHtml = data.quote.items.map((item: any) => {
         const pu = Number(item.unitPrice)
+        const lineDisc = Number(item.discount) || 0
         const tot = Number(item.subtotal)
         let cols = `<td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name || ''}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td>`
         if (showUsd) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">$${pu.toFixed(2)}</td>`
         if (showBs) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(pu * rate).toFixed(2)}</td>`
+        if (hasLineDisc) {
+          cols += `<td style="padding:4px 6px;text-align:right;font-size:10px;color:#d97706">${lineDisc > 0 ? `-${showUsd ? `$${lineDisc.toFixed(2)}` : `Bs.${(lineDisc * rate).toFixed(2)}`}` : ''}</td>`
+        }
         if (showUsd) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">$${tot.toFixed(2)}</td>`
         if (showBs) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(tot * rate).toFixed(2)}</td>`
         return `<tr>${cols}</tr>`
       }).join('')
 
       let thPrecio = ''
-      if (currency === 'both') thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U $</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U Bs.</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total $</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total Bs.</th>`
-      else if (currency === 'usd') thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Precio</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total</th>`
-      else thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U Bs.</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total Bs.</th>`
+      const lineDiscHeader = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Descto.</th>`
+      if (currency === 'both') thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U $</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U Bs.</th>${hasLineDisc ? lineDiscHeader : ''}<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total $</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total Bs.</th>`
+      else if (currency === 'usd') thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Precio</th>${hasLineDisc ? lineDiscHeader : ''}<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total</th>`
+      else thPrecio = `<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">P/U Bs.</th>${hasLineDisc ? lineDiscHeader : ''}<th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Total Bs.</th>`
 
       let totalsHtml = ''
       const s = Number(data.quote.subtotal)
       const i = Number(data.quote.ivaTotal)
+      const d = Number(data.quote.discount) || 0
       const t = Number(data.quote.total)
+      const discLine = (u: string, b: string) => `<p style="color:#d97706">Descuento: -${u}${b ? ` · -${b}` : ''}</p>`
       if (currency === 'both') {
-        totalsHtml = `<p>Subtotal: $${s.toFixed(2)} · Bs.${(s * rate).toFixed(2)}</p><p>IVA: $${i.toFixed(2)} · Bs.${(i * rate).toFixed(2)}</p><p class="grand">Total: $${t.toFixed(2)} · Bs.${(t * rate).toFixed(2)}</p>`
+        totalsHtml = `<p>Subtotal: $${s.toFixed(2)} · Bs.${(s * rate).toFixed(2)}</p><p>IVA: $${i.toFixed(2)} · Bs.${(i * rate).toFixed(2)}</p>${d > 0 ? discLine(`$${d.toFixed(2)}`, `Bs.${(d * rate).toFixed(2)}`) : ''}<p class="grand">Total: $${t.toFixed(2)} · Bs.${(t * rate).toFixed(2)}</p>`
       } else if (currency === 'usd') {
-        totalsHtml = `<p>Subtotal: $${s.toFixed(2)}</p><p>IVA: $${i.toFixed(2)}</p><p class="grand">Total: $${t.toFixed(2)}</p>`
+        totalsHtml = `<p>Subtotal: $${s.toFixed(2)}</p><p>IVA: $${i.toFixed(2)}</p>${d > 0 ? discLine(`$${d.toFixed(2)}`, '') : ''}<p class="grand">Total: $${t.toFixed(2)}</p>`
       } else {
-        totalsHtml = `<p>Subtotal: Bs.${(s * rate).toFixed(2)}</p><p>IVA: Bs.${(i * rate).toFixed(2)}</p><p class="grand">Total: Bs.${(t * rate).toFixed(2)}</p>`
+        totalsHtml = `<p>Subtotal: Bs.${(s * rate).toFixed(2)}</p><p>IVA: Bs.${(i * rate).toFixed(2)}</p>${d > 0 ? discLine(`Bs.${(d * rate).toFixed(2)}`, '') : ''}<p class="grand">Total: Bs.${(t * rate).toFixed(2)}</p>`
       }
 
       win.document.open()
@@ -341,12 +361,12 @@ export default function Quotes() {
     }
   }
 
-  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-  const ivaTotal = cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
-  const total = Math.max(0, subtotal + ivaTotal)
+  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0)
+  const ivaTotal = cart.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
+  const total = Math.max(0, subtotal + ivaTotal - discount)
 
   const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
-  const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0) + cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
+  const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0) + cart.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
 
   return (
     <>
@@ -418,12 +438,24 @@ export default function Quotes() {
                     Selecciona productos del catálogo para añadirlos a la cotización
                   </div>
                 ) : (
-                  cart.map((item) => (
+                  cart.map((item) => {
+                    const lineDisc = item.discount || 0
+                    const lineTotal = Math.max(0, item.unitPrice * item.quantity - lineDisc)
+                    return (
                     <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
                         <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u</p>
+                        {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}</p>}
                       </div>
+                      <button
+                        onClick={() => setLineDiscountProduct(item.productId)}
+                        className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border touch-manipulation ${
+                          lineDisc > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                        }`}
+                      >
+                        {lineDisc > 0 ? 'Descto. ✓' : 'Descto.'}
+                      </button>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
@@ -435,7 +467,7 @@ export default function Quotes() {
                           className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 touch-manipulation"
                         >+</button>
                       </div>
-                      <p className="w-20 text-right text-sm font-mono font-medium">${(item.unitPrice * item.quantity).toFixed(2)}</p>
+                      <p className="w-20 text-right text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
                       <button
                         onClick={() => handleRemove(item.productId)}
                         className="p-1 text-red-400 hover:text-red-600 touch-manipulation"
@@ -443,7 +475,8 @@ export default function Quotes() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                     </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
               <div className="bg-white border-t border-gray-200">
@@ -456,6 +489,18 @@ export default function Quotes() {
                     <span>IVA</span>
                     <span className="font-medium">${ivaTotal.toFixed(2)}</span>
                   </div>
+                  <button
+                    onClick={() => setShowDiscount(true)}
+                    disabled={cart.length === 0}
+                    className={`w-full flex justify-between items-center py-2 px-3 rounded-lg text-sm font-medium border touch-manipulation disabled:opacity-40 ${
+                      discount > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    <span>{discount > 0 ? 'Descuento aplicado ✓' : 'Aplicar descuento'}</span>
+                    {discount > 0 && (
+                      <span className="font-mono">-${discount.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(discount * exchangeRate).toFixed(2)}`}</span>
+                    )}
+                  </button>
                   <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
                     <span>Total</span>
                     <span className="font-medium">${total.toFixed(2)}</span>
@@ -526,23 +571,36 @@ export default function Quotes() {
                 <span className="text-xs text-gray-500 ml-1">días</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
-                {cart.map((item) => (
+                {cart.map((item) => {
+                  const lineDisc = item.discount || 0
+                  const lineTotal = Math.max(0, item.unitPrice * item.quantity - lineDisc)
+                  return (
                   <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
                       <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u</p>
+                      {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}</p>}
                     </div>
+                    <button
+                      onClick={() => setLineDiscountProduct(item.productId)}
+                      className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border touch-manipulation ${
+                        lineDisc > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                      }`}
+                    >
+                      {lineDisc > 0 ? 'Descto. ✓' : 'Descto.'}
+                    </button>
                     <div className="flex items-center gap-1">
                       <button onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">-</button>
                       <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
                       <button onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">+</button>
                     </div>
-                    <p className="w-20 text-right text-sm font-mono font-medium">${(item.unitPrice * item.quantity).toFixed(2)}</p>
+                    <p className="w-20 text-right text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
                     <button onClick={() => handleRemove(item.productId)} className="p-1 text-red-400 hover:text-red-600 touch-manipulation">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="shrink-0">
                 <div className="px-4 py-3 space-y-1 border-t border-gray-200">
@@ -554,6 +612,18 @@ export default function Quotes() {
                     <span>IVA</span>
                     <span className="font-medium">${ivaTotal.toFixed(2)}</span>
                   </div>
+                  <button
+                    onClick={() => setShowDiscount(true)}
+                    disabled={cart.length === 0}
+                    className={`w-full flex justify-between items-center py-2 px-3 rounded-lg text-sm font-medium border touch-manipulation disabled:opacity-40 ${
+                      discount > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    <span>{discount > 0 ? 'Descuento aplicado ✓' : 'Aplicar descuento'}</span>
+                    {discount > 0 && (
+                      <span className="font-mono">-${discount.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(discount * exchangeRate).toFixed(2)}`}</span>
+                    )}
+                  </button>
                   <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
                     <span>Total</span>
                     <span className="font-medium">${total.toFixed(2)}</span>
@@ -731,6 +801,34 @@ export default function Quotes() {
             </div>
           </div>
         )}
+
+        <DiscountModal
+          open={showDiscount}
+          title="Descuento"
+          exchangeRate={exchangeRate}
+          baseAmount={subtotal + ivaTotal}
+          initialValue={discount}
+          onApply={(usd) => setDiscount(usd)}
+          onClear={() => setDiscount(0)}
+          onClose={() => setShowDiscount(false)}
+        />
+
+        {lineDiscountProduct !== null && (() => {
+          const line = cart.find((i) => i.productId === lineDiscountProduct)
+          if (!line) return null
+          return (
+            <DiscountModal
+              open
+              title={`Descuento: ${line.name}`}
+              exchangeRate={exchangeRate}
+              baseAmount={line.unitPrice * line.quantity}
+              initialValue={line.discount || 0}
+              onApply={(usd) => setCart((prev) => prev.map((i) => i.productId === lineDiscountProduct ? { ...i, discount: usd } : i))}
+              onClear={() => setCart((prev) => prev.map((i) => i.productId === lineDiscountProduct ? { ...i, discount: 0 } : i))}
+              onClose={() => setLineDiscountProduct(null)}
+            />
+          )
+        })()}
 
         <LoadModal
           open={showLoadModal}

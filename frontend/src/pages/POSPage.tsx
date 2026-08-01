@@ -3,6 +3,7 @@ import { api } from '../services/api'
 import { db } from '../services/db'
 import POSHeader from '../components/pos/POSHeader'
 import TicketPanel from '../components/pos/TicketPanel'
+import DiscountModal from '../components/pos/DiscountModal'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
@@ -50,6 +51,7 @@ export default function POSPage() {
   const [notes, setNotes] = useState('')
   const [showDiscount, setShowDiscount] = useState(false)
   const [discount, setDiscount] = useState(0)
+  const [lineDiscountProduct, setLineDiscountProduct] = useState<number | null>(null)
   const [selectedClient, setSelectedClient] = useState<Client>(DEFAULT_CLIENT)
   const [showClientModal, setShowClientModal] = useState(false)
   const [clientSearch, setClientSearch] = useState('')
@@ -154,7 +156,7 @@ export default function POSPage() {
           i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
         )
       }
-      return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent) }]
+      return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent), discount: 0 }]
     })
   }
 
@@ -188,12 +190,14 @@ export default function POSPage() {
 
   function handleRemove(productId: number) {
     setCart((prev) => prev.filter((i) => i.productId !== productId))
+    setLineDiscountProduct((cur) => (cur === productId ? null : cur))
   }
 
   function handleCancel() {
     if (cart.length === 0) return
     setCart([])
     setDiscount(0)
+    setLineDiscountProduct(null)
     setNotes('')
     setActiveDraftId(null)
     setActiveQuoteId(null)
@@ -206,11 +210,13 @@ export default function POSPage() {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice: i.unitPrice,
+        discount: i.discount || undefined,
       }))
       if (activeDraftId) {
         await api.invoices.update(activeDraftId, {
           items,
           exchangeRate: exchangeRate || undefined,
+          discount: discount || undefined,
         })
       } else {
         await api.invoices.create({
@@ -220,6 +226,7 @@ export default function POSPage() {
           currency: 'usd',
           exchangeRate: exchangeRate || undefined,
           items,
+          discount: discount || undefined,
         })
       }
       setCart([])
@@ -231,14 +238,16 @@ export default function POSPage() {
     }
   }
 
-  function handleLoadFromSource(source: { type: 'draft' | 'quote'; id: number; items: any[]; client: any; exchangeRate?: number }) {
+  function handleLoadFromSource(source: { type: 'draft' | 'quote'; id: number; items: any[]; client: any; exchangeRate?: number; discount?: number }) {
     setCart(source.items.map((i: any) => ({
       productId: i.productId,
       name: i.name || '',
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice),
       ivaPercent: Number(i.ivaPercent),
+      discount: i.discount ? Number(i.discount) : 0,
     })))
+    if (source.discount) setDiscount(Number(source.discount))
     if (source.client) {
       setSelectedClient({ id: source.client.id, name: source.client.name, documentType: source.client.documentType, documentNumber: source.client.documentNumber, phone: null, address: null })
     }
@@ -267,6 +276,7 @@ export default function POSPage() {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice: i.unitPrice,
+        discount: i.discount || undefined,
       }))
       const paymentsUsd = activePayments.map((p) => ({ ...p, amount: Math.round((p.amount / rate) * 100) / 100 }))
 
@@ -278,6 +288,7 @@ export default function POSPage() {
           payments: paymentsUsd,
           exchangeRate: rate,
           paymentMethod: activePayments.map((p) => p.method).join('+'),
+          discount: discount || undefined,
         })
       } else if (activeQuoteId) {
         invoice = await api.invoices.create({
@@ -288,6 +299,7 @@ export default function POSPage() {
           items,
           payments: paymentsUsd,
           exchangeRate: rate,
+          discount: discount || undefined,
         })
       } else {
         invoice = await api.invoices.create({
@@ -297,6 +309,7 @@ export default function POSPage() {
           items,
           payments: paymentsUsd,
           exchangeRate: rate,
+          discount: discount || undefined,
         })
       }
 
@@ -348,6 +361,7 @@ export default function POSPage() {
     setSuccessSale(null)
     setCart([])
     setDiscount(0)
+    setLineDiscountProduct(null)
     setNotes('')
     setSelectedClient(DEFAULT_CLIENT)
     setActiveDraftId(null)
@@ -356,12 +370,12 @@ export default function POSPage() {
     setTimeout(() => clientInputRef.current?.focus(), 0)
   }
 
-  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-  const ivaTotal = cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
+  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0)
+  const ivaTotal = cart.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
   const total = Math.max(0, subtotal + ivaTotal - discount)
 
   const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
-  const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0) + cart.reduce((s, i) => s + (i.unitPrice * i.quantity * i.ivaPercent) / 100, 0)
+  const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0) + cart.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
 
   return (
     <>
@@ -453,6 +467,7 @@ export default function POSPage() {
               discount={discount}
               onUpdateQuantity={handleUpdateQuantity}
               onRemove={handleRemove}
+              onLineDiscount={setLineDiscountProduct}
               onCheckout={handleCheckout}
               onCancel={handleCancel}
               onSaveDraft={handleSaveDraft}
@@ -501,6 +516,7 @@ export default function POSPage() {
                 discount={discount}
                 onUpdateQuantity={handleUpdateQuantity}
                 onRemove={handleRemove}
+                onLineDiscount={setLineDiscountProduct}
                 onCheckout={handleCheckout}
                 onCancel={() => { handleCancel(); setShowCartMobile(false) }}
                 onSaveDraft={handleSaveDraft}
@@ -875,41 +891,33 @@ export default function POSPage() {
           </div>
         )}
 
-        {showDiscount && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-sm p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">Descuento</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-600 font-medium">$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={discount}
-                  onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-                {exchangeRate > 0 && discount > 0 && (
-                  <span className="text-xs text-gray-400 min-w-[60px] text-right">Bs.{(discount * exchangeRate).toFixed(2)}</span>
-                )}
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => { setShowDiscount(false); setDiscount(0) }}
-                  className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
-                >
-                  Quitar
-                </button>
-                <button
-                  onClick={() => setShowDiscount(false)}
-                  className="flex-1 py-3 bg-blue-900 text-white rounded-lg font-medium touch-manipulation"
-                >
-                  Aplicar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <DiscountModal
+          open={showDiscount}
+          title="Descuento"
+          exchangeRate={exchangeRate}
+          baseAmount={subtotal + ivaTotal}
+          initialValue={discount}
+          onApply={(usd) => setDiscount(usd)}
+          onClear={() => setDiscount(0)}
+          onClose={() => setShowDiscount(false)}
+        />
+
+        {lineDiscountProduct !== null && (() => {
+          const line = cart.find((i) => i.productId === lineDiscountProduct)
+          if (!line) return null
+          return (
+            <DiscountModal
+              open
+              title={`Descuento: ${line.name}`}
+              exchangeRate={exchangeRate}
+              baseAmount={line.unitPrice * line.quantity}
+              initialValue={line.discount || 0}
+              onApply={(usd) => setCart((prev) => prev.map((i) => i.productId === lineDiscountProduct ? { ...i, discount: usd } : i))}
+              onClear={() => setCart((prev) => prev.map((i) => i.productId === lineDiscountProduct ? { ...i, discount: 0 } : i))}
+              onClose={() => setLineDiscountProduct(null)}
+            />
+          )
+        })()}
 
         {qtyModalProduct && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setQtyModalProduct(null); setTimeout(() => searchInputRef.current?.focus(), 0) }}>
@@ -1020,8 +1028,10 @@ export default function POSPage() {
             </thead>
             <tbody>
               {cart.map((item) => {
+                const lineDisc = item.discount || 0
+                const netUsd = Math.max(0, item.unitPrice * item.quantity - lineDisc)
                 const puBs = exchangeRate > 0 ? item.unitPrice * exchangeRate : item.unitPrice
-                const totBs = exchangeRate > 0 ? item.unitPrice * item.quantity * exchangeRate : item.unitPrice * item.quantity
+                const totBs = exchangeRate > 0 ? netUsd * exchangeRate : netUsd
                 return (
                   <tr key={item.productId}>
                     <td style={{ padding: '2px 0' }}>{item.name}</td>

@@ -7,6 +7,7 @@ interface LoadItem {
   unitPrice: number
   ivaPercent: number
   name?: string
+  discount?: number
 }
 
 interface DraftLike {
@@ -18,12 +19,13 @@ interface DraftLike {
   items: LoadItem[]
   total: string
   exchangeRate?: string | number | null
+  discount?: string | number | null
 }
 
 interface LoadModalProps {
   open: boolean
   onClose: () => void
-  onLoad: (source: { type: 'draft' | 'quote'; id: number; items: any[]; client: any; exchangeRate?: number }) => void
+  onLoad: (source: { type: 'draft' | 'quote'; id: number; items: any[]; client: any; exchangeRate?: number; discount?: number }) => void
 }
 
 export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
@@ -41,6 +43,7 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
     priceChanges: { name: string; oldPrice: number; newPrice: number }[]
     removedItems: string[]
     exchangeRate?: number
+    discount?: number
   } | null>(null)
   const [loadingProducts, setLoadingProducts] = useState(false)
 
@@ -99,11 +102,13 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
           quantity: item.quantity,
           unitPrice: newPrice,
           ivaPercent: Number(current.ivaPercent),
+          discount: item.discount ? Number(item.discount) : 0,
         })
       }
 
       const hasChanges = priceChanges.length > 0 || removedItems.length > 0
       const exchangeRate = source.exchangeRate ? Number(source.exchangeRate) : undefined
+      const discount = source.discount ? Number(source.discount) : undefined
 
       if (hasChanges) {
         setConfirmData({
@@ -115,6 +120,7 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
           priceChanges,
           removedItems,
           exchangeRate,
+          discount,
         })
       } else {
         onLoad({
@@ -123,6 +129,7 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
           items: finalItems,
           client: source.client,
           exchangeRate,
+          discount,
         })
       }
     } catch { /* ignore */ } finally { setLoadingProducts(false) }
@@ -136,6 +143,7 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
       items: confirmData.items,
       client: confirmData.client,
       exchangeRate: confirmData.exchangeRate,
+      discount: confirmData.discount,
     })
     setConfirmData(null)
   }
