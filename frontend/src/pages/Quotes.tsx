@@ -259,7 +259,9 @@ export default function Quotes() {
   async function printQuoteById(id: number, currency: 'usd' | 'bs' | 'both') {
     const win = window.open('', '_blank')
     if (!win) { alert('Permite ventanas emergentes para imprimir'); return }
+    win.document.open()
     win.document.write('<html><head><title>Cargando...</title></head><body><p style="font-family:sans-serif;padding:40px;text-align:center;color:#999">Cargando cotización...</p></body></html>')
+    win.document.close()
     try {
       const data = await api.quotes.print(id)
       const rate = Number(data.quote.exchangeRate) || Number(exchangeRate) || 1
@@ -294,6 +296,7 @@ export default function Quotes() {
         totalsHtml = `<p>Subtotal: Bs.${(s * rate).toFixed(2)}</p><p>IVA: Bs.${(i * rate).toFixed(2)}</p><p class="grand">Total: Bs.${(t * rate).toFixed(2)}</p>`
       }
 
+      win.document.open()
       win.document.write(`<!DOCTYPE html><html><head><title>${data.quote.number}</title><style>
         body{font-family:Arial,sans-serif;padding:30px;font-size:12px;color:#333}
         table{width:100%;border-collapse:collapse;margin:15px 0}
@@ -332,6 +335,7 @@ export default function Quotes() {
       win.print()
     } catch (err) {
       console.error('Error al imprimir:', err)
+      win.document.open()
       win.document.write(`<html><head><title>Error</title></head><body><p style="font-family:sans-serif;padding:40px;color:red">Error al cargar la cotización: ${err}</p></body></html>`)
       win.document.close()
     }
@@ -492,7 +496,7 @@ export default function Quotes() {
         {cartItemCount > 0 && (
           <button
             onClick={() => setShowCartMobile(true)}
-            className="md:hidden fixed bottom-4 right-4 z-40 bg-blue-900 text-white rounded-full shadow-lg flex items-center gap-2 px-4 py-3 touch-manipulation"
+            className="md:hidden fixed bottom-20 right-4 z-[60] bg-blue-900 text-white rounded-full shadow-lg flex items-center gap-2 px-4 py-3 touch-manipulation"
           >
             <span className="bg-white text-blue-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{cartItemCount}</span>
             <span className="font-bold">${cartTotal.toFixed(2)}</span>
@@ -503,7 +507,7 @@ export default function Quotes() {
         {showCartMobile && (
           <div className="fixed inset-0 z-50 flex flex-col md:hidden" onClick={() => setShowCartMobile(false)}>
             <div className="flex-1 bg-black/50" onClick={() => setShowCartMobile(false)} />
-            <div className="bg-white max-h-[70vh] flex flex-col rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white max-h-[70vh] flex flex-col rounded-t-2xl pb-[env(safe-area-inset-bottom)]" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
                 <h3 className="font-bold text-gray-800">Nueva Cotización</h3>
                 <button onClick={() => setShowCartMobile(false)} className="p-1 text-gray-400 hover:text-gray-600">
