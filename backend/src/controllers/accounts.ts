@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth'
 
 export async function receivable(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
-  const where: any = { balance: { gt: 0 }, status: { not: 'anulada' } }
+  const where: any = { balance: { gt: 0 }, status: { in: ['activa'] } }
   if (q) {
     where.OR = [
       { client: { name: { contains: q, mode: 'insensitive' } } },

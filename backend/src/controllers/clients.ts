@@ -22,7 +22,7 @@ export async function statement(req: AuthRequest, res: Response) {
   if (!client) { res.status(404).json({ error: 'Cliente no encontrado' }); return }
 
   const invoices = await prisma.invoice.findMany({
-    where: { clientId: id },
+    where: { clientId: id, status: { not: 'borrador' } },
     orderBy: { createdAt: 'desc' },
     include: {
       user: { select: { id: true, name: true } },
@@ -31,7 +31,7 @@ export async function statement(req: AuthRequest, res: Response) {
     },
   })
 
-  const active = invoices.filter((i) => i.status !== 'anulada')
+  const active = invoices.filter((i) => i.status === 'activa')
   const totalComprado = active.reduce((s, i) => s + Number(i.total), 0)
   const totalPagado = active.reduce((s, i) => s + i.payments.reduce((p, pay) => p + Number(pay.amount), 0), 0)
   const totalPendiente = active.reduce((s, i) => s + Number(i.balance), 0)

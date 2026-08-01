@@ -135,9 +135,11 @@ export async function create(req: AuthRequest, res: Response) {
           userId: req.user!.id,
         })),
       } : undefined,
-      balance: (paymentMethod || '').includes('credito')
-        ? total - (payments?.filter((p: any) => p.method !== 'credito').reduce((s: number, p: any) => s + Number(p.amount), 0) || 0)
-        : 0,
+      balance: isDraft
+        ? 0
+        : (paymentMethod || '').includes('credito')
+          ? total - (payments?.filter((p: any) => p.method !== 'credito').reduce((s: number, p: any) => s + Number(p.amount), 0) || 0)
+          : 0,
     },
     include: {
       client: { select: { id: true, name: true } },
@@ -461,7 +463,7 @@ export async function updateDraft(req: AuthRequest, res: Response) {
   let totalBs = null
   if (rate) totalBs = total * Number(rate)
 
-  const balance = payMethod.includes('credito') ? total : 0
+  const balance = 0
 
   // Delete old items and create new ones
   await prisma.invoiceItem.deleteMany({ where: { invoiceId: id } })
