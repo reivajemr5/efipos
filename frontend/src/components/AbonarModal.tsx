@@ -14,7 +14,7 @@ const TYPES = [
 ] as const
 
 export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
-  const [type, setType] = useState<'usd' | 'bs'>('usd')
+  const [type, setType] = useState<'usd' | 'bs'>('bs')
   const [amount, setAmount] = useState(0)
   const [rate, setRate] = useState(0)
   const [submitting, setSubmitting] = useState(false)
