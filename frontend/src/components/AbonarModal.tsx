@@ -8,8 +8,14 @@ interface Props {
   onSuccess: () => void
 }
 
+const TYPES = [
+  { key: 'usd', label: 'Dólares', symbol: '$' },
+  { key: 'bs', label: 'Bolívares', symbol: 'Bs.' },
+] as const
+
 export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
-  const [amountUsd, setAmountUsd] = useState(0)
+  const [type, setType] = useState<'usd' | 'bs'>('usd')
+  const [amount, setAmount] = useState(0)
   const [rate, setRate] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const toast = useToastStore((s: any) => s.addToast)
@@ -18,12 +24,15 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
     api.exchangeRate.get().then((d: any) => { if (d?.rate) setRate(Number(d.rate)) }).catch(() => {})
   }, [])
 
+  const amountUsd = type === 'usd' ? amount : rate > 0 ? amount / rate : 0
+  const amountBs = type === 'usd' ? amount * rate : amount
+
   async function handleAbonar() {
-    if (!invoice || amountUsd <= 0 || rate <= 0) return
+    if (!invoice || amount <= 0 || rate <= 0 || amountUsd > Number(invoice.balance)) return
     setSubmitting(true)
     try {
-      const amountBs = Math.round(amountUsd * rate * 100) / 100
-      await api.invoices.abonar(invoice.id, { amountBs, exchangeRate: rate })
+      const bs = Math.round(amountBs * 100) / 100
+      await api.invoices.abonar(invoice.id, { amountBs: bs, exchangeRate: rate })
       toast('Abono registrado', 'success')
       onSuccess()
     } catch (e: any) {
@@ -42,19 +51,36 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
         </p>
 
         <div className="space-y-3 mb-4">
-          <div>
-            <label className="label">Monto en USD</label>
+          <div className="grid grid-cols-2 gap-2">
+            {TYPES.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setType(t.key)}
+                className={`py-2 rounded-lg text-sm font-medium border transition-colors touch-manipulation ${
+                  type === t.key
+                    ? 'bg-blue-900 text-white border-blue-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {t.symbol} <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600 font-semibold">{type === 'usd' ? '$' : 'Bs.'}</span>
             <input
               type="number"
               min="0"
               step="0.01"
               autoFocus
-              value={amountUsd || ''}
-              onChange={(e) => setAmountUsd(Math.max(0, Number(e.target.value) || 0))}
-              className="input"
+              value={amount || ''}
+              onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="0.00"
             />
           </div>
+
           <div>
             <label className="label">Tasa BCV (Bs./USD)</label>
             <div className="flex gap-2">
@@ -78,9 +104,13 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
               </button>
             </div>
           </div>
-          {amountUsd > 0 && rate > 0 && (
+          {amount > 0 && rate > 0 && (
             <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg">
-              Equivalen a <span className="font-bold text-green-700">Bs. {(amountUsd * rate).toFixed(2)}</span> a la tasa del día
+              {type === 'usd' ? (
+                <>Equivalen a <span className="font-bold text-green-700">Bs. {amountBs.toFixed(2)}</span> a la tasa del día</>
+              ) : (
+                <>Equivalen a <span className="font-bold text-green-700">${amountUsd.toFixed(2)}</span> USD a la tasa del día</>
+              )}
               {amountUsd > Number(invoice.balance) && (
                 <p className="text-red-500 text-xs mt-1">Supera el saldo pendiente de ${Number(invoice.balance).toFixed(2)}</p>
               )}
@@ -97,7 +127,7 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
           </button>
           <button
             onClick={handleAbonar}
-            disabled={submitting || amountUsd <= 0 || rate <= 0 || amountUsd > Number(invoice.balance)}
+            disabled={submitting || amount <= 0 || rate <= 0 || amountUsd > Number(invoice.balance)}
             className="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold touch-manipulation disabled:opacity-50"
           >
             {submitting ? 'Procesando...' : 'Abonar'}
