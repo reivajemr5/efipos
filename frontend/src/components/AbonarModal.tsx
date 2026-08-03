@@ -48,6 +48,7 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
         <h3 className="text-lg font-bold text-gray-800 mb-1">Abonar a {invoice.number}</h3>
         <p className="text-sm text-gray-500 mb-4">
           Cliente: {invoice.client?.name} · Saldo: <span className="font-semibold text-green-700">${Number(invoice.balance).toFixed(2)}</span>
+          {rate > 0 && <span className="text-gray-500"> · Bs. {(Number(invoice.balance) * rate).toFixed(2)}</span>}
         </p>
 
         <div className="space-y-3 mb-4">
