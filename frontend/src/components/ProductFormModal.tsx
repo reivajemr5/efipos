@@ -291,19 +291,28 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
             </div>
           </div>
 
-          {/* Código + Nombre */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Código interno <Tooltip text={tips.code} /></label>
-              <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Ej: PRD-001"
-                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
+          {/* Nombre + Código */}
+          {editing ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Código interno <Tooltip text={tips.code} /></label>
+                <input value={form.code} disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <Tooltip text={tips.name} /></label>
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nombre del producto"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
+              </div>
             </div>
+          ) : (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <Tooltip text={tips.name} /></label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nombre del producto"
                 className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" required />
+              <p className="text-xs text-gray-400 mt-1">El código único se genera automáticamente (PRD-…)</p>
             </div>
-          </div>
+          )}
 
           {/* Descripción */}
           <div>

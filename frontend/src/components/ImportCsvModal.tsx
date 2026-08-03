@@ -9,20 +9,22 @@ interface Brand { id: number; name: string }
 interface ImportResult {
   total: number
   created: number
+  updated: number
   errors: { row: number; name: string; error: string }[]
 }
 
 type FieldKey =
   | 'nombre' | 'precio' | 'costo' | 'stock' | 'iva'
-  | 'codigo_barra' | 'categoria' | 'marca' | 'descripcion'
+  | 'codigo' | 'codigo_barra' | 'categoria' | 'marca' | 'descripcion'
   | 'tipo' | 'moneda' | 'precio2' | 'stock_minimo'
 
 const FIELDS: { key: FieldKey; label: string; required: boolean; default: string }[] = [
   { key: 'nombre', label: 'Nombre', required: true, default: '' },
   { key: 'precio', label: 'Precio', required: true, default: '0' },
+  { key: 'codigo', label: 'Código único', required: false, default: '' },
   { key: 'costo', label: 'Costo', required: false, default: '' },
   { key: 'stock', label: 'Stock', required: false, default: '0' },
-  { key: 'iva', label: 'IVA %', required: false, default: '16' },
+  { key: 'iva', label: 'IVA %', required: false, default: '0' },
   { key: 'codigo_barra', label: 'Código de barra', required: false, default: '' },
   { key: 'categoria', label: 'Categoría', required: false, default: 'General' },
   { key: 'marca', label: 'Marca', required: false, default: '' },
@@ -46,6 +48,7 @@ const COLUMN_MAP: Record<string, string> = {
   costo: 'costo', 'costo unitario': 'costo', cost: 'costo',
   stock: 'stock', cantidad: 'stock', cant: 'stock', existencias: 'stock',
   iva: 'iva',
+  codigo: 'codigo', 'codigo unico': 'codigo', code: 'codigo',
   'codigo de barra': 'codigo_barra', 'codigo de barras': 'codigo_barra', barcode: 'codigo_barra',
   categoria: 'categoria', category: 'categoria',
   marca: 'marca', brand: 'marca',
@@ -132,9 +135,10 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
       _selected: true,
       nombre: toTitleCase(r.nombre || ''),
       precio: r.precio || '0',
+      codigo: r.codigo || '',
       costo: r.costo || '',
       stock: r.stock || '0',
-      iva: r.iva || '16',
+      iva: r.iva || '0',
       codigo_barra: r.codigo_barra || '',
       categoria: r.categoria || 'General',
       marca: r.marca || '',
@@ -178,6 +182,7 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
         return {
           name: r.nombre,
           price: parseFloat(r.precio) || 0,
+          code: r.codigo || undefined,
           cost: r.costo ? parseFloat(r.costo) : undefined,
           stock: r.stock ? parseFloat(r.stock) : undefined,
           ivaPercent: parseInt(r.iva) || 0,
@@ -189,13 +194,14 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
       })
 
       // Import in batches of 200 with progress
-      const results: ImportResult = { total, created: 0, errors: [] }
+      const results: ImportResult = { total, created: 0, updated: 0, errors: [] }
       const batchSize = 200
       for (let i = 0; i < payload.length; i += batchSize) {
         const batch = payload.slice(i, i + batchSize)
         try {
           const res = await api.products.import({ products: batch })
           results.created += res.created
+          results.updated += res.updated || 0
           results.errors.push(...res.errors.map((e: any) => ({ ...e, row: e.row + i })))
         } catch {
           results.errors.push(...batch.map((_, j) => ({ row: i + j + 1, name: batch[j].name, error: 'Error en lote' })))
@@ -205,8 +211,8 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
 
       setResult(results)
       setStep('result')
-      if (results.created > 0) {
-        addToast(`${results.created} productos importados`, 'success')
+      if (results.created > 0 || results.updated > 0) {
+        addToast(`${results.created} creados, ${results.updated} actualizados`, 'success')
         onDone()
       }
     } catch (e) {
@@ -429,7 +435,7 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
         {/* ========== RESULT ========== */}
         {step === 'result' && result && (
           <div className="p-6 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="bg-blue-50 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-blue-700">{result.total}</p>
                 <p className="text-xs text-gray-500">Total</p>
@@ -437,6 +443,10 @@ export default function ImportCsvModal({ open, onClose, onDone }: { open: boolea
               <div className="bg-green-50 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-green-700">{result.created}</p>
                 <p className="text-xs text-gray-500">Creados</p>
+              </div>
+              <div className="bg-cyan-50 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-cyan-700">{result.updated}</p>
+                <p className="text-xs text-gray-500">Actualizados</p>
               </div>
               <div className="bg-amber-50 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-amber-700">{result.errors.length}</p>

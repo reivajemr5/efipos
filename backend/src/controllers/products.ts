@@ -58,36 +58,53 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, imageUrl } = req.body
-  if (!code || !name || !price) {
-    res.status(400).json({ error: 'Código, nombre y precio requeridos' })
+  const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, imageUrl } = req.body
+  if (!name || price === undefined || price === null || price === '') {
+    res.status(400).json({ error: 'Nombre y precio requeridos' })
     return
   }
-  const product = await prisma.product.create({
-    data: {
-      code, name, description, notes, brandId: brandId || null, type: type || 'simple',
-      price, cost: cost || 0, barcode,
-      price2: price2 || null,
-      currency: currency || 'bs',
-      ivaPercent: ivaPercent || 0,
-      stock: stock || 0,
-      minStock: minStock || 5,
-      categoryId: categoryId || null,
-      imageUrl: imageUrl || null,
-      variations: variations || [],
-      barcodes: barcodes?.length ? { create: barcodes.map((b: string) => ({ barcode: b })) } : undefined,
-      suppliers: supplierIds?.length
-        ? { create: supplierIds.map((id: number) => ({ supplierId: id })) }
-        : undefined,
-    },
-    include: {
-      suppliers: { include: { supplier: { select: { id: true, name: true } } } },
-      category: { select: { id: true, name: true } },
-      brand: { select: { id: true, name: true } },
-      barcodes: { select: { id: true, barcode: true } },
-    },
-  })
-  res.status(201).json(product)
+  const data = {
+    code: '',
+    name,
+    description,
+    notes,
+    brandId: brandId || null,
+    type: type || 'simple',
+    price,
+    cost: cost || 0,
+    barcode,
+    price2: price2 || null,
+    currency: currency || 'bs',
+    ivaPercent: ivaPercent || 0,
+    stock: stock || 0,
+    minStock: minStock || 5,
+    categoryId: categoryId || null,
+    imageUrl: imageUrl || null,
+    variations: variations || [],
+    barcodes: barcodes?.length ? { create: barcodes.map((b: string) => ({ barcode: b })) } : undefined,
+    suppliers: supplierIds?.length
+      ? { create: supplierIds.map((id: number) => ({ supplierId: id })) }
+      : undefined,
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const product = await prisma.product.create({
+        data: { ...data, code: formatProductCode(await nextProductCode()) },
+        include: {
+          suppliers: { include: { supplier: { select: { id: true, name: true } } } },
+          category: { select: { id: true, name: true } },
+          brand: { select: { id: true, name: true } },
+          barcodes: { select: { id: true, barcode: true } },
+        },
+      })
+      res.status(201).json(product)
+      return
+    } catch (e) {
+      if (!isUniqueConstraintError(e)) throw e
+    }
+  }
+  res.status(500).json({ error: 'No se pudo asignar un código único' })
 }
 
 export async function update(req: AuthRequest, res: Response) {
@@ -150,6 +167,75 @@ function parseDecimal(val: string | undefined | null): number {
   return isNaN(num) ? 0 : num
 }
 
+function formatProductCode(id: number): string {
+  return `PRD-${String(id).padStart(5, '0')}`
+}
+
+async function nextProductCode(tx: any = prisma): Promise<number> {
+  const last = await tx.product.findFirst({ orderBy: { id: 'desc' }, select: { id: true } })
+  return (last?.id ?? 0) + 1
+}
+
+function isUniqueConstraintError(e: unknown): boolean {
+  return e instanceof Error && (e as any).code === 'P2002'
+}
+
+async function upsertImportedProduct(
+  tx: any,
+  p: { name: string; code?: string; barcode?: string; price: number; cost?: number; stock?: number; ivaPercent?: number; currency?: string; description?: string | null; categoryId?: number | null },
+  generalCategoryId: number,
+  nextId: { value: number },
+): Promise<'created' | 'updated'> {
+  const name = (p.name || '').trim()
+
+  let existing: any = null
+  if (p.code) existing = await tx.product.findUnique({ where: { code: p.code } })
+  if (!existing && p.barcode) {
+    existing = await tx.product.findFirst({
+      where: { OR: [{ barcode: p.barcode }, { barcodes: { some: { barcode: p.barcode } } }] },
+    })
+  }
+  if (!existing) {
+    existing = await tx.product.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+  }
+
+  const base = {
+    price: p.price,
+    cost: p.cost ?? 0,
+    currency: (p.currency as any) || 'usd',
+    ivaPercent: p.ivaPercent ?? 0,
+    description: p.description ?? null,
+    categoryId: p.categoryId || generalCategoryId,
+  }
+
+  if (existing) {
+    await tx.product.update({
+      where: { id: existing.id },
+      data: {
+        ...base,
+        stock: p.stock ?? existing.stock,
+        active: p.price > 0,
+        ...(p.barcode && !existing.barcode ? { barcode: p.barcode } : {}),
+      },
+    })
+    return 'updated'
+  }
+
+  const code = p.code || formatProductCode(nextId.value)
+  nextId.value++
+  await tx.product.create({
+    data: {
+      ...base,
+      code,
+      name,
+      stock: p.stock ?? 0,
+      active: p.price > 0,
+      barcode: p.barcode ?? null,
+    },
+  })
+  return 'created'
+}
+
 export async function importCsv(req: AuthRequest, res: Response) {
   const file = req.file
   if (!file) { res.status(400).json({ error: 'Archivo CSV requerido' }); return }
@@ -175,8 +261,10 @@ export async function importCsv(req: AuthRequest, res: Response) {
   const categoryMap = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]))
 
   let created = 0
+  let updated = 0
   let skipped = 0
   let errors: { row: number; name: string; error: string }[] = []
+  let nextId = await nextProductCode()
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
@@ -186,12 +274,10 @@ export async function importCsv(req: AuthRequest, res: Response) {
     const price = parseDecimal(row.precio)
     const stock = parseDecimal(row.stock)
     const cost = parseDecimal(row.costo)
-    const iva = parseDecimal(row.iva || '16')
+    const iva = parseDecimal(row.iva || '0')
     const barcode = row.codigo_barra?.trim() || undefined
     const description = row.descripcion?.trim() || undefined
-
     const normalizedName = toTitleCase(name)
-    const code = `IMP-${String(i + 1).padStart(5, '0')}`
 
     let categoryId: number | null = null
     const catName = row.categoria?.trim()
@@ -207,28 +293,31 @@ export async function importCsv(req: AuthRequest, res: Response) {
     }
 
     try {
-      await prisma.product.create({
-        data: {
-          code,
+      const result = await upsertImportedProduct(
+        prisma,
+        {
           name: normalizedName,
-          description,
-          price,
-          cost: cost || 0,
-          currency: 'usd',
-          stock,
-          active: price > 0,
-          ivaPercent: iva || 0,
+          code: row.codigo_unico?.trim() || row.codigo?.trim() || undefined,
           barcode,
+          price,
+          cost,
+          stock,
+          ivaPercent: iva,
+          currency: 'usd',
+          description,
           categoryId: categoryId || generalCategory.id,
         },
-      })
-      created++
+        generalCategory.id,
+        { value: nextId },
+      )
+      if (result === 'created') created++
+      else updated++
     } catch (e) {
       errors.push({ row: i + 2, name: normalizedName, error: e instanceof Error ? e.message : 'Error desconocido' })
     }
   }
 
-  res.json({ total: rows.length, created, skipped, errors })
+  res.json({ total: rows.length, created, updated, skipped, errors })
 }
 
 interface BulkProductInput {
@@ -252,6 +341,7 @@ export async function bulkImport(req: AuthRequest, res: Response) {
   }
 
   let created = 0
+  let updated = 0
   let errors: { row: number; name: string; error: string }[] = []
 
   let generalCategory = await prisma.category.findFirst({ where: { name: 'General' } })
@@ -260,33 +350,37 @@ export async function bulkImport(req: AuthRequest, res: Response) {
   }
 
   await prisma.$transaction(async (tx) => {
+    const nextId = { value: await nextProductCode(tx) }
     for (let i = 0; i < products.length; i++) {
       const p = products[i]
       if (!p.name || !p.name.trim()) { errors.push({ row: i + 1, name: '', error: 'Nombre requerido' }); continue }
       if (p.price === undefined || p.price === null) { errors.push({ row: i + 1, name: p.name, error: 'Precio requerido' }); continue }
 
       try {
-        await tx.product.create({
-          data: {
-            code: p.code || `IMP-${String(Date.now() + i).slice(-6)}`,
+        const result = await upsertImportedProduct(
+          tx,
+          {
             name: p.name.trim(),
-            description: p.description || null,
+            code: p.code,
+            barcode: p.barcode,
             price: p.price,
-            cost: p.cost || 0,
+            cost: p.cost,
+            stock: p.stock,
+            ivaPercent: p.ivaPercent,
             currency: (p.currency as any) || 'usd',
-            stock: p.stock || 0,
-            active: p.price > 0,
-            ivaPercent: p.ivaPercent ?? 16,
-            barcode: p.barcode || null,
-            categoryId: p.categoryId || generalCategory!.id,
+            description: p.description,
+            categoryId: p.categoryId,
           },
-        })
-        created++
+          generalCategory!.id,
+          nextId,
+        )
+        if (result === 'created') created++
+        else updated++
       } catch (e) {
         errors.push({ row: i + 1, name: p.name, error: e instanceof Error ? e.message : 'Error desconocido' })
       }
     }
   })
 
-  res.json({ total: products.length, created, errors })
+  res.json({ total: products.length, created, updated, errors })
 }

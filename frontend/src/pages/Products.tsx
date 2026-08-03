@@ -65,11 +65,40 @@ export default function Products() {
     load()
   }
 
+  async function exportCsv() {
+    try {
+      const prods = await api.products.list()
+      const items = Array.isArray(prods) ? prods : prods.items
+      const headers = ['codigo unico', 'codigo de barra', 'nombre', 'categoria', 'marca', 'costo unitario', 'precio unitario', 'precio2', 'stock', 'stock minimo', 'iva', 'moneda', 'tipo', 'descripcion']
+      const esc = (v: unknown) => {
+        const s = v === null || v === undefined ? '' : String(v)
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+      }
+      const lines = items.map((p: any) => [
+        esc(p.code), esc(p.barcode || ''), esc(p.name), esc(p.category?.name || ''), esc(p.brand?.name || ''),
+        esc(p.cost ?? ''), esc(p.price), esc(p.price2 ?? ''), esc(p.stock ?? 0), esc(p.minStock ?? 0),
+        esc(p.ivaPercent ?? 0), esc(p.currency || 'usd'), esc(p.type || 'simple'), esc(p.description || ''),
+      ].join(','))
+      const csv = '\uFEFF' + [headers.join(','), ...lines].join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'productos.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`${items.length} productos exportados`, 'success')
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : 'Error al exportar', 'error')
+    }
+  }
+
   return (
     <div className="page-container">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Productos</h1>
         <div className="flex gap-2">
+          <button onClick={exportCsv} className="btn-secondary">📤 Exportar CSV</button>
           <button onClick={() => setImportOpen(true)} className="btn-secondary">📥 Importar CSV</button>
           <button onClick={openNew} className="btn-primary">+ Nuevo</button>
         </div>
