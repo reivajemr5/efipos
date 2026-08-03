@@ -1,3 +1,5 @@
+import InvoiceAbonos from './InvoiceAbonos'
+
 const PAYMENT_LABELS: Record<string, string> = {
   efectivo: 'Efectivo',
   pago_movil: 'Pago Móvil',
@@ -79,15 +81,15 @@ export default function InvoiceDetailModal({ invoice, onClose, onAbonar }: Props
             )}
           </div>
 
-          {payments.length > 0 && (
+          {payments.some((p: any) => p.method !== 'abono_credito') && (
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">Pagos</p>
               <div className="space-y-1.5">
-                {payments.map((p: any) => (
+                {payments.filter((p: any) => p.method !== 'abono_credito').map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between text-sm">
                     <div>
                       <p className="text-gray-700">{PAYMENT_LABELS[p.method] || p.method}</p>
-                      <p className="text-xs text-gray-400">{new Date(p.createdAt).toLocaleDateString()}{p.reference ? ` · ${p.reference}` : ''}</p>
+                      <p className="text-xs text-gray-400">{new Date(p.createdAt).toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}{p.reference ? ` · ${p.reference}` : ''}</p>
                     </div>
                     <span className="font-mono text-gray-700">${Number(p.amount).toFixed(2)}</span>
                   </div>
@@ -95,6 +97,8 @@ export default function InvoiceDetailModal({ invoice, onClose, onAbonar }: Props
               </div>
             </div>
           )}
+
+          <InvoiceAbonos payments={payments} />
 
           {Number(invoice.balance) > 0 && invoice.status === 'activa' && (
             <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
 import AbonarModal from '../components/AbonarModal'
+import InvoiceAbonos from '../components/InvoiceAbonos'
 
 interface Client {
   id: number
@@ -258,6 +259,7 @@ export default function Clients() {
                                   {Number(inv.balance) > 0 && inv.status === 'activa' && (
                                     <p className="flex justify-between text-xs font-semibold text-green-700"><span>Saldo pendiente</span><span>${Number(inv.balance).toFixed(2)}</span></p>
                                   )}
+                                  <InvoiceAbonos payments={inv.payments} />
                                 </div>
                               </div>
                             )}
