@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
+import PaginationBar from '../components/PaginationBar'
 
 interface InvoiceListItem {
   id: number
@@ -63,6 +64,9 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function InvoicesHistory() {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
+  const [invoicesTotal, setInvoicesTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 25
   const [status, setStatus] = useState('')
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -80,16 +84,26 @@ export default function InvoicesHistory() {
       if (search.trim()) params.set('q', search.trim())
       if (dateFrom) params.set('date_from', dateFrom)
       if (dateTo) params.set('date_to', dateTo)
+      params.set('limit', String(PAGE_SIZE))
+      params.set('offset', String(page * PAGE_SIZE))
       const data = await api.invoices.list(params.toString())
-      setInvoices(data)
+      setInvoices(Array.isArray(data) ? data : data.items)
+      setInvoicesTotal(Array.isArray(data) ? data.length : data.total)
     } catch { /* ignore */ } finally { setLoading(false) }
   }
 
   useEffect(() => {
+    setPage(0)
     const t = setTimeout(() => { load() }, 300)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, search, dateFrom, dateTo])
+
+  useEffect(() => {
+    const t = setTimeout(() => { load() }, 150)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   async function openDetail(id: number) {
     setLoadingDetail(true)
@@ -195,6 +209,8 @@ export default function InvoicesHistory() {
           ))
         )}
       </div>
+
+      <PaginationBar page={page} onPage={setPage} total={invoicesTotal} pageSize={PAGE_SIZE} />
 
       {loadingDetail && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[70]">

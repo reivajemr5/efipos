@@ -1,17 +1,23 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { parsePagination, paginate } from '../lib/paginate'
 
 export async function list(req: AuthRequest, res: Response) {
   const { status } = req.query
   const where: any = {}
   if (status) where.status = status
 
-  const purchases = await prisma.purchaseInvoice.findMany({
-    where,
-    include: { supplier: { select: { id: true, name: true, documentType: true, documentNumber: true } } },
-    orderBy: { createdAt: 'desc' },
-  })
+  const include = { supplier: { select: { id: true, name: true, documentType: true, documentNumber: true } } }
+  const orderBy = { createdAt: 'desc' as const }
+  const { limit, offset, hasPagination } = parsePagination(req.query)
+  if (hasPagination) {
+    const result = await paginate(prisma.purchaseInvoice, { where, include, orderBy }, limit, offset)
+    res.json(result)
+    return
+  }
+
+  const purchases = await prisma.purchaseInvoice.findMany({ where, include, orderBy })
   res.json(purchases)
 }
 

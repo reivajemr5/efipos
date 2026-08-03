@@ -3,6 +3,7 @@ import { api } from '../services/api'
 import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
 import TablePickerModal from '../components/TablePickerModal'
+import PaginationBar from '../components/PaginationBar'
 
 interface Purchase {
   id: number
@@ -50,7 +51,10 @@ interface Product {
 }
 
 export default function Purchases() {
+  const PAGE_SIZE = 25
   const [purchases, setPurchases] = useState<Purchase[]>([])
+  const [purchasesTotal, setPurchasesTotal] = useState(0)
+  const [page, setPage] = useState(0)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -85,16 +89,25 @@ export default function Purchases() {
   }
 
   async function load() {
-    const params = filterStatus ? `status=${filterStatus}` : ''
+    const params = new URLSearchParams()
+    if (filterStatus) params.set('status', filterStatus)
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String(page * PAGE_SIZE))
     const [pur, sup, prods] = await Promise.all([
-      api.purchases.list(params), api.suppliers.list(), api.products.list(),
+      api.purchases.list(params.toString()), api.suppliers.list(), api.products.list(),
     ])
-    setPurchases(pur)
+    setPurchases(Array.isArray(pur) ? pur : pur.items)
+    setPurchasesTotal(Array.isArray(pur) ? pur.length : pur.total)
     setSuppliers(sup)
     setProducts(prods)
   }
 
-  useEffect(() => { load() }, [filterStatus])
+  useEffect(() => { load() }, [filterStatus, page])
+
+  function selectStatus(s: string) {
+    setPage(0)
+    setFilterStatus(s)
+  }
 
   function addReceiveItem(productId: number) {
     setReceiveItems((prev) => {
@@ -229,7 +242,7 @@ export default function Purchases() {
 
       <div className="flex gap-2 mb-4">
         {['', 'pedido', 'recibido', 'pagada', 'anulada'].map((s) => (
-          <button key={s} onClick={() => setFilterStatus(s)}
+          <button key={s} onClick={() => selectStatus(s)}
             className={`px-3 py-1 rounded-full text-sm ${filterStatus === s ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>
             {s === '' ? 'Todas' : s === 'pedido' ? 'Pedidos' : s === 'recibido' ? 'Recibidas' : s === 'pagada' ? 'Pagadas' : 'Anuladas'}
           </button>
@@ -536,6 +549,7 @@ export default function Purchases() {
         ))}
         {purchases.length === 0 && <p className="text-gray-400 text-center py-8">No hay compras registradas</p>}
       </div>
+      <PaginationBar page={page} onPage={setPage} total={purchasesTotal} pageSize={PAGE_SIZE} />
     </div>
   )
 }

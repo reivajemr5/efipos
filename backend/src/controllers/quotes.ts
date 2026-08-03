@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { parsePagination, paginate } from '../lib/paginate'
 
 export async function list(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
@@ -14,11 +15,15 @@ export async function list(req: AuthRequest, res: Response) {
       { client: { documentNumber: { contains: q } } },
     ]
   }
-  const quotes = await prisma.quote.findMany({
-    where,
-    include: { client: { select: { id: true, name: true, documentType: true, documentNumber: true } }, items: { include: { product: { select: { id: true, name: true, code: true } } } } },
-    orderBy: { createdAt: 'desc' },
-  })
+  const include = { client: { select: { id: true, name: true, documentType: true, documentNumber: true } }, items: { include: { product: { select: { id: true, name: true, code: true } } } } }
+  const orderBy = { createdAt: 'desc' as const }
+  const { limit, offset, hasPagination } = parsePagination(req.query)
+  if (hasPagination) {
+    const result = await paginate(prisma.quote, { where, include, orderBy }, limit, offset)
+    res.json(result)
+    return
+  }
+  const quotes = await prisma.quote.findMany({ where, include, orderBy })
   res.json(quotes)
 }
 

@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { parsePagination, paginate } from '../lib/paginate'
 
 async function creditClientError(paymentMethod: string | undefined, clientId: number): Promise<string | null> {
   if (!(paymentMethod || '').includes('credito')) return null
@@ -27,11 +28,16 @@ export async function list(req: AuthRequest, res: Response) {
     ]
   }
 
-  const invoices = await prisma.invoice.findMany({
-    where,
-    include: { client: { select: { id: true, name: true, documentType: true, documentNumber: true } } },
-    orderBy: { createdAt: 'desc' },
-  })
+  const include = { client: { select: { id: true, name: true, documentType: true, documentNumber: true } } }
+  const orderBy = { createdAt: 'desc' as const }
+  const { limit, offset, hasPagination } = parsePagination(req.query)
+  if (hasPagination) {
+    const result = await paginate(prisma.invoice, { where, include, orderBy }, limit, offset)
+    res.json(result)
+    return
+  }
+
+  const invoices = await prisma.invoice.findMany({ where, include, orderBy })
   res.json(invoices)
 }
 

@@ -2,17 +2,25 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import AbonarModal from '../components/AbonarModal'
 import InvoiceDetailModal from '../components/InvoiceDetailModal'
+import PaginationBar from '../components/PaginationBar'
 
 export default function AccountsReceivable() {
+  const PAGE_SIZE = 25
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
   const [detail, setDetail] = useState<any>(null)
   const [abonarInvoice, setAbonarInvoice] = useState<any>(null)
 
-  function load(q?: string) {
+  function load(q?: string, pageOverride?: number) {
     setLoading(true)
-    api.accounts.receivable(q ? `q=${encodeURIComponent(q)}` : undefined).then(setData).catch(() => {}).finally(() => setLoading(false))
+    const p = pageOverride ?? page
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String(p * PAGE_SIZE))
+    api.accounts.receivable(params.toString()).then(setData).catch(() => {}).finally(() => setLoading(false))
   }
 
   useEffect(() => {
@@ -20,9 +28,14 @@ export default function AccountsReceivable() {
   }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => { load(search.trim() || undefined) }, 400)
+    setPage(0)
+    const t = setTimeout(() => { load(search.trim() || undefined, 0) }, 400)
     return () => clearTimeout(t)
   }, [search])
+
+  useEffect(() => {
+    load(search.trim() || undefined)
+  }, [page])
 
   if (loading && !data) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-900 border-t-transparent rounded-full" /></div>
 
@@ -39,11 +52,11 @@ export default function AccountsReceivable() {
         </div>
         <div className="card p-5">
           <p className="text-xs uppercase tracking-wider text-gray-500">Facturas</p>
-          <p className="text-2xl font-bold text-gray-800 mt-1">{invoices.length}</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">{Number(data?.total || 0)}</p>
         </div>
         <div className="card p-5">
           <p className="text-xs uppercase tracking-wider text-gray-500">Promedio</p>
-          <p className="text-2xl font-bold text-gray-800 mt-1">${invoices.length ? Number(data.totalPending / invoices.length).toFixed(2) : '0.00'}</p>
+          <p className="text-2xl font-bold text-gray-800 mt-1">${data?.total ? Number(Number(data.totalPending) / Number(data.total)).toFixed(2) : '0.00'}</p>
         </div>
       </div>
 
@@ -99,6 +112,7 @@ export default function AccountsReceivable() {
           </tbody>
         </table>
       </div>
+      <PaginationBar page={page} onPage={setPage} total={Number(data?.total || 0)} pageSize={PAGE_SIZE} />
 
       {detail && (
         <InvoiceDetailModal

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
+import PaginationBar from '../components/PaginationBar'
 
 const typeLabels: Record<string, string> = { sale: 'Venta', purchase: 'Compra', adjustment: 'Ajuste' }
 const typeColors: Record<string, string> = { sale: 'text-red-600 bg-red-50', purchase: 'text-green-600 bg-green-50', adjustment: 'text-amber-600 bg-amber-50' }
 
 export default function Inventory() {
   const [movements, setMovements] = useState<any[]>([])
+  const [movementsTotal, setMovementsTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 25
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
@@ -17,16 +21,24 @@ export default function Inventory() {
   const [adjustForm, setAdjustForm] = useState({ productId: 0, quantity: 0, notes: '' })
   const toast = useToastStore((s: any) => s.addToast)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [page])
   async function load() {
     try {
       const params = new URLSearchParams()
       if (filter) params.set('product', filter)
       if (filterType) params.set('type', filterType)
+      params.set('limit', String(PAGE_SIZE))
+      params.set('offset', String(page * PAGE_SIZE))
       const [mov, prods] = await Promise.all([api.inventory.movements(params.toString()), api.products.list()])
-      setMovements(mov)
+      setMovements(Array.isArray(mov) ? mov : mov.items)
+      setMovementsTotal(Array.isArray(mov) ? mov.length : mov.total)
       setProducts(prods)
     } catch {} finally { setLoading(false) }
+  }
+
+  function applyFilters() {
+    setPage(0)
+    load()
   }
 
   async function handleAdjust(e: React.FormEvent) {
@@ -66,7 +78,7 @@ export default function Inventory() {
           <option value="purchase">Compra</option>
           <option value="adjustment">Ajuste</option>
         </select>
-        <button onClick={load} className="btn-secondary">Filtrar</button>
+        <button onClick={applyFilters} className="btn-secondary">Filtrar</button>
       </div>
 
       <div className="card overflow-hidden">
@@ -101,6 +113,7 @@ export default function Inventory() {
           </tbody>
         </table>
       </div>
+      <PaginationBar page={page} onPage={setPage} total={movementsTotal} pageSize={PAGE_SIZE} />
 
       {showAdjust && (
         <div className="modal-overlay" onClick={() => setShowAdjust(false)}>

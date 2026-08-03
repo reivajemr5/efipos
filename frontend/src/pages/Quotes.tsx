@@ -6,6 +6,7 @@ import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
 import LoadModal from '../components/LoadModal'
+import PaginationBar from '../components/PaginationBar'
 import { useNavigate } from 'react-router-dom'
 
 interface Client {
@@ -59,6 +60,9 @@ export default function Quotes() {
   const [showQuoteList, setShowQuoteList] = useState(false)
   const [quotesList, setQuotesList] = useState<any[]>([])
   const [quoteListLoading, setQuoteListLoading] = useState(false)
+  const [quoteListTotal, setQuoteListTotal] = useState(0)
+  const [quoteListPage, setQuoteListPage] = useState(0)
+  const QUOTE_PAGE_SIZE = 25
   const [printModal, setPrintModal] = useState<{ id: number } | null>(null)
   const [exchangeRate, setExchangeRate] = useState(0)
   const [discount, setDiscount] = useState(0)
@@ -259,11 +263,13 @@ export default function Quotes() {
     setTimeout(() => clientInputRef.current?.focus(), 0)
   }
 
-  async function loadQuotesList() {
+  async function loadQuotesList(pageOverride?: number) {
+    const p = pageOverride ?? quoteListPage
     setQuoteListLoading(true)
     try {
-      const data = await api.quotes.list()
-      setQuotesList(data)
+      const data = await api.quotes.list(`limit=${QUOTE_PAGE_SIZE}&offset=${p * QUOTE_PAGE_SIZE}`)
+      setQuotesList(Array.isArray(data) ? data : data.items)
+      setQuoteListTotal(Array.isArray(data) ? data.length : data.total)
       setShowQuoteList(true)
     } catch {} finally { setQuoteListLoading(false) }
   }
@@ -395,7 +401,7 @@ export default function Quotes() {
         <div className="flex items-center justify-between px-4 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
           <span className="text-xs text-gray-500">Cotizaciones</span>
           <button
-            onClick={loadQuotesList}
+            onClick={() => loadQuotesList()}
             className="text-xs text-blue-700 font-medium hover:underline touch-manipulation"
           >
             📋 Ver lista
@@ -775,6 +781,14 @@ export default function Quotes() {
                     </div>
                   ))
                 )}
+              </div>
+              <div className="border-t border-gray-200 p-2 shrink-0">
+                <PaginationBar
+                  page={quoteListPage}
+                  total={quoteListTotal}
+                  pageSize={QUOTE_PAGE_SIZE}
+                  onPage={(p) => { setQuoteListPage(p); loadQuotesList(p) }}
+                />
               </div>
             </div>
           </div>

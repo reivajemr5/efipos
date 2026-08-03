@@ -1,22 +1,29 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { parsePagination, paginate } from '../lib/paginate'
 
 export async function movements(req: AuthRequest, res: Response) {
-  const { product_id, type, limit } = req.query
+  const { product_id, type } = req.query
   const where: any = {}
   if (product_id) where.productId = Number(product_id)
   if (type) where.type = String(type)
 
-  const movements = await prisma.stockMovement.findMany({
-    where,
-    include: {
-      product: { select: { id: true, name: true, code: true } },
-      user: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: Number(limit) || 100,
-  })
+  const include = {
+    product: { select: { id: true, name: true, code: true } },
+    user: { select: { id: true, name: true } },
+  }
+  const orderBy = { createdAt: 'desc' as const }
+  const { limit, offset, hasPagination } = parsePagination(req.query)
+  if (hasPagination) {
+    const result = await paginate(prisma.stockMovement, { where, include, orderBy }, limit, offset)
+    res.json(result)
+    return
+  }
+
+  // Backwards compatible default (legacy callers used `limit` param)
+  const takeLegacy = Number(req.query.limit) || 100
+  const movements = await prisma.stockMovement.findMany({ where, include, orderBy, take: takeLegacy })
   res.json(movements)
 }
 

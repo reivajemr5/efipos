@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { parsePagination, paginate } from '../lib/paginate'
 
 export async function list(req: AuthRequest, res: Response) {
   const { q, supplier_id, low_stock, category_id, type } = req.query
@@ -18,15 +19,25 @@ export async function list(req: AuthRequest, res: Response) {
   if (category_id) where.categoryId = Number(category_id)
   if (type) where.type = String(type)
 
+  const { limit, offset, hasPagination } = parsePagination(req.query)
+  const include = {
+    suppliers: { include: { supplier: { select: { id: true, name: true } } } },
+    category: { select: { id: true, name: true } },
+    brand: { select: { id: true, name: true } },
+    barcodes: { select: { id: true, barcode: true } },
+  }
+  const orderBy = { name: 'asc' as const }
+
+  if (hasPagination) {
+    const result = await paginate(prisma.product, { where, include, orderBy }, limit, offset)
+    res.json(result)
+    return
+  }
+
   const products = await prisma.product.findMany({
     where,
-    include: {
-      suppliers: { include: { supplier: { select: { id: true, name: true } } } },
-      category: { select: { id: true, name: true } },
-      brand: { select: { id: true, name: true } },
-      barcodes: { select: { id: true, barcode: true } },
-    },
-    orderBy: { name: 'asc' },
+    include,
+    orderBy,
   })
   res.json(products)
 }

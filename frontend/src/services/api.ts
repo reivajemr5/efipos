@@ -114,7 +114,7 @@ export const api = {
   },
   accounts: {
     receivable: (params?: string) => request(`/accounts/receivable${params ? `?${params}` : ''}`),
-    payable: () => request('/accounts/payable'),
+    payable: (params?: string) => request(`/accounts/payable${params ? `?${params}` : ''}`),
   },
   search: {
     global: (q: string) => request(`/search?q=${encodeURIComponent(q)}`),

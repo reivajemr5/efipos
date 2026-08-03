@@ -3,6 +3,7 @@ import { api } from '../services/api'
 import BarcodeScanner from '../components/BarcodeScanner'
 import ProductFormModal from '../components/ProductFormModal'
 import ImportCsvModal from '../components/ImportCsvModal'
+import PaginationBar from '../components/PaginationBar'
 import { useToastStore } from '../store/toast'
 
 interface Category { id: number; name: string }
@@ -24,7 +25,10 @@ const typeOptions = [
 ]
 
 export default function Products() {
+  const PAGE_SIZE = 25
   const [products, setProducts] = useState<Product[]>([])
+  const [productsTotal, setProductsTotal] = useState(0)
+  const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -33,11 +37,21 @@ export default function Products() {
   const addToast = useToastStore((s) => s.addToast)
 
   async function load() {
-    const prods = await api.products.list(search ? `q=${search}` : '')
-    setProducts(prods)
+    const params = new URLSearchParams()
+    if (search) params.set('q', search)
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String(page * PAGE_SIZE))
+    const prods = await api.products.list(params.toString())
+    setProducts(Array.isArray(prods) ? prods : prods.items)
+    setProductsTotal(Array.isArray(prods) ? prods.length : prods.total)
   }
 
-  useEffect(() => { load() }, [search])
+  useEffect(() => { load() }, [page])
+
+  useEffect(() => {
+    setPage(0)
+    load()
+  }, [search])
 
   function openNew() { setEditing(null); setModalOpen(true) }
   function openEdit(p: Product) { setEditing(p); setModalOpen(true) }
@@ -159,6 +173,8 @@ export default function Products() {
           )
         })}
       </div>
+
+      <PaginationBar page={page} onPage={setPage} total={productsTotal} pageSize={PAGE_SIZE} />
 
       <ImportCsvModal open={importOpen} onClose={() => setImportOpen(false)} onDone={load} />
       {scannerOpen && <BarcodeScanner onScan={(barcode) => setSearch(barcode)} onClose={() => setScannerOpen(false)} />}
