@@ -26,7 +26,14 @@ export async function login(req: AuthRequest, res: Response) {
     return
   }
 
-  const payload = { id: user.id, name: user.name, email: user.email, role: user.role }
+  const payload = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    businessId: user.businessId,
+    branchId: user.branchId,
+  }
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })
 
   res.json({ token, user: payload })
@@ -40,7 +47,12 @@ export async function me(req: AuthRequest, res: Response) {
 
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+    select: {
+      id: true, name: true, email: true, role: true, active: true,
+      businessId: true, branchId: true, createdAt: true,
+      business: { select: { id: true, name: true, rif: true } },
+      branch: { select: { id: true, name: true } },
+    },
   })
 
   if (!user) {

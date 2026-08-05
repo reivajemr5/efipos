@@ -1,14 +1,22 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { resolveContext } from '../lib/tenant'
+
+function baseWhere(ctx: { businessId: number | null; branchId: number | null }): any {
+  const w: any = { businessId: ctx.businessId ?? 0 }
+  if (ctx.branchId) w.branchId = ctx.branchId
+  return w
+}
 
 export async function salesReport(req: AuthRequest, res: Response) {
   const { date_from, date_to } = req.query
   const start = date_from ? new Date(String(date_from)) : new Date(new Date().setHours(0, 0, 0, 0))
   const end = date_to ? new Date(String(date_to) + 'T23:59:59.999Z') : new Date()
+  const ctx = resolveContext(req)
 
   const invoices = await prisma.invoice.findMany({
-    where: { createdAt: { gte: start, lte: end }, status: 'activa' },
+    where: { ...baseWhere(ctx), createdAt: { gte: start, lte: end }, status: 'activa' },
     include: { client: { select: { name: true } } },
     orderBy: { createdAt: 'asc' },
   })
@@ -19,7 +27,6 @@ export async function salesReport(req: AuthRequest, res: Response) {
     paymentBreakdown[inv.paymentMethod] = (paymentBreakdown[inv.paymentMethod] || 0) + Number(inv.total)
   }
 
-  // Daily breakdown
   const dailyMap: Record<string, { count: number; total: number }> = {}
   for (const inv of invoices) {
     const day = inv.createdAt.toISOString().split('T')[0]
@@ -42,10 +49,11 @@ export async function topProducts(req: AuthRequest, res: Response) {
   const { date_from, date_to, limit } = req.query
   const start = date_from ? new Date(String(date_from)) : new Date(0)
   const end = date_to ? new Date(String(date_to) + 'T23:59:59.999Z') : new Date()
+  const ctx = resolveContext(req)
 
   const items = await prisma.invoiceItem.findMany({
     where: {
-      invoice: { createdAt: { gte: start, lte: end }, status: 'activa' },
+      invoice: { ...baseWhere(ctx), createdAt: { gte: start, lte: end }, status: 'activa' },
     },
     include: { product: { select: { name: true, code: true } } },
   })
@@ -68,18 +76,19 @@ export async function topProducts(req: AuthRequest, res: Response) {
 
 export async function cashClose(req: AuthRequest, res: Response) {
   const { date } = req.query
+  const ctx = resolveContext(req)
   const closeDate = date ? new Date(String(date)) : new Date()
   const start = new Date(closeDate.setHours(0, 0, 0, 0))
   const end = new Date(closeDate.setHours(23, 59, 59, 999))
 
   const invoices = await prisma.invoice.findMany({
-    where: { createdAt: { gte: start, lte: end }, status: 'activa' },
+    where: { ...baseWhere(ctx), createdAt: { gte: start, lte: end }, status: 'activa' },
   })
 
   const expectedTotal = invoices.reduce((sum, inv) => sum + Number(inv.total), 0)
 
   const existingClose = await prisma.cashClose.findFirst({
-    where: { closeDate: { gte: start, lte: end } },
+    where: { ...baseWhere(ctx), closeDate: { gte: start, lte: end } },
   })
 
   res.json({
@@ -94,12 +103,13 @@ export async function cashClose(req: AuthRequest, res: Response) {
 
 export async function saveCashClose(req: AuthRequest, res: Response) {
   const { declaredTotal, closeDate } = req.body
+  const ctx = resolveContext(req)
   const date = closeDate ? new Date(String(closeDate)) : new Date()
   const start = new Date(date.setHours(0, 0, 0, 0))
   const end = new Date(date.setHours(23, 59, 59, 999))
 
   const invoices = await prisma.invoice.findMany({
-    where: { createdAt: { gte: start, lte: end }, status: 'activa' },
+    where: { ...baseWhere(ctx), createdAt: { gte: start, lte: end }, status: 'activa' },
   })
 
   const expectedTotal = invoices.reduce((sum, inv) => sum + Number(inv.total), 0)
@@ -107,6 +117,8 @@ export async function saveCashClose(req: AuthRequest, res: Response) {
 
   const close = await prisma.cashClose.create({
     data: {
+      businessId: ctx.businessId ?? 0,
+      branchId: ctx.branchId ?? 0,
       userId: req.user!.id,
       expectedTotal,
       declaredTotal,
@@ -119,24 +131,19 @@ export async function saveCashClose(req: AuthRequest, res: Response) {
 }
 
 export async function dashboard(req: AuthRequest, res: Response) {
+  const ctx = resolveContext(req)
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const todayEnd = new Date(todayStart.getTime() + 86400000)
   const weekAgo = new Date(todayStart.getTime() - 7 * 86400000)
+  const wWhere = baseWhere(ctx)
 
-  const [
-    todayInvoices,
-    weekInvoices,
-    topProds,
-    lowStockProds,
-    recentInvoices,
-    rate,
-  ] = await Promise.all([
+  const [todayInvoices, weekInvoices, topProds, lowStockProds, recentInvoices, rate] = await Promise.all([
     prisma.invoice.findMany({
-      where: { createdAt: { gte: todayStart, lte: todayEnd }, status: 'activa' },
+      where: { ...wWhere, createdAt: { gte: todayStart, lte: todayEnd }, status: 'activa' },
     }),
     prisma.invoice.findMany({
-      where: { createdAt: { gte: weekAgo, lte: todayEnd }, status: 'activa' },
+      where: { ...wWhere, createdAt: { gte: weekAgo, lte: todayEnd }, status: 'activa' },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.invoiceItem.groupBy({
@@ -144,25 +151,37 @@ export async function dashboard(req: AuthRequest, res: Response) {
       _sum: { quantity: true, subtotal: true },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 10,
-      where: { invoice: { createdAt: { gte: todayStart, lte: todayEnd }, status: 'activa' } },
+      where: { invoice: { ...wWhere, createdAt: { gte: todayStart, lte: todayEnd }, status: 'activa' } },
     }),
-    prisma.product.findMany({
-      where: { active: true, stock: { lte: 5 } },
-      orderBy: { stock: 'asc' },
-      take: 10,
-    }),
+    ctx.branchId
+      ? prisma.branchStock.findMany({
+          where: {
+            branchId: ctx.branchId,
+            stock: { lte: 5 },
+          },
+          include: { product: { select: { id: true, name: true, code: true } } },
+          orderBy: { stock: 'asc' },
+          take: 10,
+        })
+      : Promise.resolve([]),
     prisma.invoice.findMany({
-      where: { status: 'activa' },
+      where: { ...wWhere, status: 'activa' },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { client: { select: { name: true } } },
     }),
-    prisma.exchangeRate.findFirst({ orderBy: { createdAt: 'desc' } }),
+    prisma.exchangeRate.findFirst({
+      where: ctx.businessId ? { businessId: ctx.businessId } : { businessId: null },
+      orderBy: { createdAt: 'desc' },
+    }),
   ])
 
   const topProductIds = topProds.map((t) => t.productId)
   const topProductsData = topProductIds.length
-    ? await prisma.product.findMany({ where: { id: { in: topProductIds } }, select: { id: true, name: true, code: true } })
+    ? await prisma.product.findMany({
+        where: { id: { in: topProductIds }, businessId: ctx.businessId ?? 0 },
+        select: { id: true, name: true, code: true },
+      })
     : []
   const topProductMap = new Map(topProductsData.map((p) => [p.id, p]))
 
@@ -189,17 +208,24 @@ export async function dashboard(req: AuthRequest, res: Response) {
   }
 
   const totalSalesToday = todayInvoices.reduce((s, inv) => s + Number(inv.total), 0)
+  const lowStockProducts = (lowStockProds as any[]).map((b) => ({
+    id: b.product.id,
+    name: b.product.name,
+    code: b.product.code,
+    stock: Number(b.stock),
+    minStock: b.minStock,
+  }))
 
   res.json({
     today: {
       totalSales: totalSalesToday,
       totalInvoices: todayInvoices.length,
       averageTicket: todayInvoices.length ? totalSalesToday / todayInvoices.length : 0,
-      lowStockCount: lowStockProds.length,
+      lowStockCount: lowStockProducts.length,
     },
     dailySales,
     topProducts: topProducts.filter((p) => p.quantity > 0),
-    lowStockProducts: lowStockProds,
+    lowStockProducts,
     recentInvoices,
     exchangeRate: rate ? Number(rate.rate) : null,
   })

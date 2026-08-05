@@ -48,9 +48,9 @@ async function main() {
   console.log(`📄 Leídas ${rows.length} filas del CSV`)
 
   // Resolve "General" category
-  let generalCategory = await prisma.category.findFirst({ where: { name: 'General' } })
+  let generalCategory = await prisma.category.findFirst({ where: { businessId: 1, name: 'General' } })
   if (!generalCategory) {
-    generalCategory = await prisma.category.create({ data: { name: 'General' } })
+    generalCategory = await prisma.category.create({ data: { businessId: 1, name: 'General' } })
     console.log('➕ Categoría "General" creada')
   }
 
@@ -85,7 +85,7 @@ async function main() {
       if (categoryMap.has(key)) {
         categoryId = categoryMap.get(key)!
       } else {
-        const newCat = await prisma.category.create({ data: { name: toTitleCase(catName) } })
+        const newCat = await prisma.category.create({ data: { businessId: 1, name: toTitleCase(catName) } })
         categoryMap.set(key, newCat.id)
         categoryId = newCat.id
         console.log(`➕ Categoría "${newCat.name}" creada`)
@@ -93,18 +93,18 @@ async function main() {
     }
 
     try {
-      await prisma.product.create({
+await prisma.product.create({
         data: {
+          businessId: 1,
           code,
           name: normalizedName,
           description,
-      price,
-      cost: cost || 0,
-      currency: 'usd',
-      stock,
-      active: price > 0,
-      ivaPercent: iva || 0,
-      barcode,
+          price,
+          cost: cost || 0,
+          currency: 'usd',
+          active: price > 0,
+          ivaPercent: iva || 0,
+          barcode,
           categoryId: categoryId || generalCategory!.id,
         },
       })

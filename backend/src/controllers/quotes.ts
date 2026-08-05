@@ -2,11 +2,14 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
+import { resolveContext } from '../lib/tenant'
+import { changeStock } from '../lib/stock'
 
 export async function list(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
   const status = String(req.query.status || '').trim()
-  const where: any = {}
+  const ctx = resolveContext(req)
+  const where: any = { businessId: ctx.businessId ?? 0 }
   if (status) where.status = status
   if (q) {
     where.OR = [
@@ -29,8 +32,9 @@ export async function list(req: AuthRequest, res: Response) {
 
 export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const quote = await prisma.quote.findUnique({
-    where: { id },
+  const ctx = resolveContext(req)
+  const quote = await prisma.quote.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: { client: true, user: { select: { id: true, name: true } }, items: { include: { product: { select: { id: true, name: true, code: true, price: true } } } } },
   })
   if (!quote) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
@@ -39,13 +43,15 @@ export async function getById(req: AuthRequest, res: Response) {
 
 export async function create(req: AuthRequest, res: Response) {
   const { clientId, validUntil, currency, exchangeRate, items, discount } = req.body
+  const ctx = resolveContext(req)
   if (!clientId || !items?.length) {
     res.status(400).json({ error: 'Cliente y productos requeridos' })
     return
   }
+  if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
 
   const productIds = items.map((i: any) => i.productId)
-  const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
   const globalDisc = Math.max(0, Number(discount) || 0)
@@ -79,11 +85,13 @@ export async function create(req: AuthRequest, res: Response) {
     totalBs = total
   }
 
-  const count = await prisma.quote.count()
+  const count = await prisma.quote.count({ where: { businessId: ctx.businessId } })
   const number = `COTI-${String(count + 1).padStart(4, '0')}`
 
   const quote = await prisma.quote.create({
     data: {
+      businessId: ctx.businessId,
+      branchId: ctx.branchId ?? 0,
       number,
       clientId,
       userId: req.user!.id,
@@ -106,8 +114,9 @@ export async function create(req: AuthRequest, res: Response) {
 export async function update(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const { clientId, validUntil, items, discount } = req.body
+  const ctx = resolveContext(req)
 
-  const existing = await prisma.quote.findUnique({ where: { id } })
+  const existing = await prisma.quote.findFirst({ where: { id, businessId: ctx.businessId ?? 0 } })
   if (!existing) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
 
   if (!items?.length) {
@@ -116,7 +125,7 @@ export async function update(req: AuthRequest, res: Response) {
   }
 
   const productIds = items.map((i: any) => i.productId)
-  const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId ?? 0 } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
   const globalDisc = Math.max(0, Number(discount) || 0)
@@ -150,10 +159,9 @@ export async function update(req: AuthRequest, res: Response) {
     totalBs = total
   }
 
-  // Delete old items and create new ones
   await prisma.quoteItem.deleteMany({ where: { quoteId: id } })
   await prisma.quoteItem.createMany({
-    data: quoteItems.map((i: { productId: number; quantity: number; unitPrice: number; discount: number | null; ivaPercent: string | number; subtotal: number }) => ({ ...i, quoteId: id })),
+    data: quoteItems.map((i: any) => ({ ...i, quoteId: id })),
   })
 
   const updated = await prisma.quote.update({
@@ -175,65 +183,80 @@ export async function update(req: AuthRequest, res: Response) {
 
 export async function convertToInvoice(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const quote = await prisma.quote.findUnique({
-    where: { id },
+  const ctx = resolveContext(req)
+  const quote = await prisma.quote.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: { items: true },
   })
 
   if (!quote) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
   if (quote.status !== 'activa') { res.status(400).json({ error: 'La cotización no está activa' }); return }
 
-  const invoiceCount = await prisma.invoice.count()
+  const invoiceCount = await prisma.invoice.count({ where: { businessId: quote.businessId } })
   const invoiceNumber = `FACT-${String(invoiceCount + 1).padStart(4, '0')}`
 
-  const invoice = await prisma.invoice.create({
-    data: {
-      number: invoiceNumber,
-      clientId: quote.clientId,
-      userId: req.user!.id,
-      quoteId: quote.id,
-      currency: quote.currency,
-      exchangeRate: quote.exchangeRate,
-      discount: quote.discount,
-      subtotal: quote.subtotal,
-      ivaTotal: quote.ivaTotal,
-      total: quote.total,
-      totalBs: quote.totalBs,
-      items: {
-        create: quote.items.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
-          ivaPercent: item.ivaPercent,
-          subtotal: item.subtotal,
-        })),
+  const invoice = await prisma.$transaction(async (tx) => {
+    const inv = await tx.invoice.create({
+      data: {
+        businessId: quote.businessId,
+        branchId: ctx.branchId ?? quote.branchId,
+        number: invoiceNumber,
+        clientId: quote.clientId,
+        userId: req.user!.id,
+        quoteId: quote.id,
+        currency: quote.currency,
+        exchangeRate: quote.exchangeRate,
+        discount: quote.discount,
+        subtotal: quote.subtotal,
+        ivaTotal: quote.ivaTotal,
+        total: quote.total,
+        totalBs: quote.totalBs,
+        items: {
+          create: quote.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discount: item.discount,
+            ivaPercent: item.ivaPercent,
+            subtotal: item.subtotal,
+          })),
+        },
       },
-    },
+    })
+
+    for (const item of quote.items) {
+      await changeStock(tx, {
+        businessId: quote.businessId,
+        branchId: ctx.branchId ?? quote.branchId,
+        productId: item.productId,
+        type: 'sale',
+        quantity: -item.quantity,
+        userId: req.user!.id,
+        reference: `FACT-${invoiceNumber}`,
+      })
+    }
+    return inv
   })
 
   await prisma.quote.update({ where: { id }, data: { status: 'convertida' } })
-
-  for (const item of quote.items) {
-    await prisma.product.update({
-      where: { id: item.productId },
-      data: { stock: { decrement: item.quantity } },
-    })
-  }
 
   res.json({ invoiceId: invoice.id, invoiceNumber: invoice.number, message: 'Cotización convertida a factura' })
 }
 
 export async function remove(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
+  const ctx = resolveContext(req)
+  const existing = await prisma.quote.findFirst({ where: { id, businessId: ctx.businessId ?? 0 } })
+  if (!existing) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
   await prisma.quote.delete({ where: { id } })
   res.status(204).send()
 }
 
 export async function getPrintData(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const quote = await prisma.quote.findUnique({
-    where: { id },
+  const ctx = resolveContext(req)
+  const quote = await prisma.quote.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: {
       client: true,
       user: { select: { id: true, name: true } },
@@ -244,11 +267,12 @@ export async function getPrintData(req: AuthRequest, res: Response) {
   })
   if (!quote) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
 
+  const business = await prisma.business.findUnique({ where: { id: quote.businessId } })
   const company = {
-    name: 'Efi- Pos',
-    rif: 'J-12345678-9',
-    address: 'Av. Principal, Local 1',
-    phone: '0412-1234567',
+    name: business?.name || 'Mi Negocio',
+    rif: business?.rif || '',
+    address: business?.address || '',
+    phone: business?.phone || '',
   }
 
   res.json({ company, quote })

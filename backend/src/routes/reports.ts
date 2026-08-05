@@ -8,7 +8,7 @@ router.use(authenticate)
 router.get('/sales', salesReport)
 router.get('/top-products', topProducts)
 router.get('/cash-close', cashClose)
-router.post('/cash-close', authorize('dueno', 'admin'), saveCashClose)
+router.post('/cash-close', authorize('superadmin', 'dueno', 'admin'), saveCashClose)
 router.get('/dashboard', dashboard)
 
 export default router

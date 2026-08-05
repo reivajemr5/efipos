@@ -2,10 +2,13 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
+import { resolveContext } from '../lib/tenant'
+import { changeStock } from '../lib/stock'
 
 export async function list(req: AuthRequest, res: Response) {
   const { status } = req.query
-  const where: any = {}
+  const ctx = resolveContext(req)
+  const where: any = { businessId: ctx.businessId ?? 0 }
   if (status) where.status = status
 
   const include = { supplier: { select: { id: true, name: true, documentType: true, documentNumber: true } } }
@@ -23,8 +26,9 @@ export async function list(req: AuthRequest, res: Response) {
 
 export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const purchase = await prisma.purchaseInvoice.findUnique({
-    where: { id },
+  const ctx = resolveContext(req)
+  const purchase = await prisma.purchaseInvoice.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: {
       supplier: true,
       user: { select: { id: true, name: true } },
@@ -39,14 +43,16 @@ export async function getById(req: AuthRequest, res: Response) {
 
 export async function create(req: AuthRequest, res: Response) {
   const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type } = req.body
+  const ctx = resolveContext(req)
 
   if (!supplierId || !items?.length) {
     res.status(400).json({ error: 'Proveedor y productos requeridos' })
     return
   }
+  if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
 
   const productIds = items.map((i: any) => i.productId)
-  const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
   let subtotal = 0
@@ -77,13 +83,15 @@ export async function create(req: AuthRequest, res: Response) {
     totalBs = total
   }
 
-  const count = await prisma.purchaseInvoice.count()
+  const count = await prisma.purchaseInvoice.count({ where: { businessId: ctx.businessId } })
   const prefix = type === 'factura' ? 'FACT-C' : 'PED-'
   const number = `${prefix}${String(count + 1).padStart(4, '0')}`
   const status = type === 'factura' ? 'recibido' : 'pedido'
 
   const purchase = await prisma.purchaseInvoice.create({
     data: {
+      businessId: ctx.businessId,
+      branchId: ctx.branchId ?? 0,
       number,
       supplierId,
       userId: req.user!.id,
@@ -106,12 +114,20 @@ export async function create(req: AuthRequest, res: Response) {
   })
 
   if (type === 'factura') {
-    for (const item of purchaseItems) {
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: { increment: item.quantity } },
-      })
-    }
+    await prisma.$transaction(async (tx) => {
+      for (const item of purchaseItems) {
+        await changeStock(tx, {
+          businessId: ctx.businessId!,
+          branchId: ctx.branchId ?? 0,
+          productId: item.productId,
+          type: 'purchase',
+          quantity: item.quantity,
+          reference: number,
+          notes: `Compra #${number}`,
+          userId: req.user!.id,
+        })
+      }
+    })
   }
 
   res.status(201).json(purchase)
@@ -120,9 +136,10 @@ export async function create(req: AuthRequest, res: Response) {
 export async function receive(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const { items: receivedItems } = req.body
+  const ctx = resolveContext(req)
 
-  const purchase = await prisma.purchaseInvoice.findUnique({
-    where: { id },
+  const purchase = await prisma.purchaseInvoice.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: { items: true },
   })
 
@@ -131,71 +148,65 @@ export async function receive(req: AuthRequest, res: Response) {
 
   if (receivedItems?.length) {
     const receivedIds = receivedItems.map((i: any) => i.productId)
-    const products = await prisma.product.findMany({ where: { id: { in: receivedIds } } })
+    const products = await prisma.product.findMany({ where: { id: { in: receivedIds }, businessId: ctx.businessId ?? 0 } })
     const productMap = new Map(products.map((p) => [p.id, p]))
 
     const existingIds = purchase.items.map((i) => i.productId)
     const toRemove = purchase.items.filter((i) => !receivedIds.includes(i.productId))
 
-    for (const item of toRemove) {
-      await prisma.purchaseInvoiceItem.delete({ where: { id: item.id } })
-    }
-
-    for (const ri of receivedItems) {
-      const product = productMap.get(ri.productId)
-      if (!product) throw new Error(`Producto ${ri.productId} no encontrado`)
-
-      const existing = purchase.items.find((i) => i.productId === ri.productId)
-      const unitPrice = ri.unitPrice || Number(product.price)
-      const itemSubtotal = unitPrice * ri.quantity
-      const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
-
-      if (existing) {
-        await prisma.purchaseInvoiceItem.update({
-          where: { id: existing.id },
-          data: { quantity: ri.quantity, unitPrice, subtotal: itemSubtotal },
-        })
-      } else {
-        await prisma.purchaseInvoiceItem.create({
-          data: {
-            purchaseInvoiceId: id,
-            productId: ri.productId,
-            quantity: ri.quantity,
-            unitPrice,
-            ivaPercent: product.ivaPercent,
-            subtotal: itemSubtotal,
-          },
-        })
+    await prisma.$transaction(async (tx) => {
+      for (const item of toRemove) {
+        await tx.purchaseInvoiceItem.delete({ where: { id: item.id } })
       }
 
-      const stockBefore = Number(product.stock)
-      const stockAfter = stockBefore + ri.quantity
-      await prisma.product.update({
-        where: { id: ri.productId },
-        data: { stock: stockAfter },
-      })
-      await prisma.stockMovement.create({
-        data: {
+      for (const ri of receivedItems) {
+        const product = productMap.get(ri.productId)
+        if (!product) throw new Error(`Producto ${ri.productId} no encontrado`)
+
+        const existing = purchase.items.find((i) => i.productId === ri.productId)
+        const unitPrice = ri.unitPrice || Number(product.price)
+        const itemSubtotal = unitPrice * ri.quantity
+        const itemIva = itemSubtotal * Number(product.ivaPercent) / 100
+
+        if (existing) {
+          await tx.purchaseInvoiceItem.update({
+            where: { id: existing.id },
+            data: { quantity: ri.quantity, unitPrice, subtotal: itemSubtotal },
+          })
+        } else {
+          await tx.purchaseInvoiceItem.create({
+            data: {
+              purchaseInvoiceId: id,
+              productId: ri.productId,
+              quantity: ri.quantity,
+              unitPrice,
+              ivaPercent: product.ivaPercent,
+              subtotal: itemSubtotal,
+            },
+          })
+        }
+
+        await changeStock(tx, {
+          businessId: purchase.businessId,
+          branchId: purchase.branchId,
           productId: ri.productId,
           type: 'purchase',
           quantity: ri.quantity,
-          stockBefore,
-          stockAfter,
           reference: purchase.number,
           notes: `Recepción de compra #${purchase.number}`,
           userId: req.user!.id,
-        },
+        })
+      }
+
+      const allItems = await tx.purchaseInvoiceItem.findMany({ where: { purchaseInvoiceId: id } })
+      const subtotal = allItems.reduce((s, i) => s + Number(i.subtotal), 0)
+      const ivaTotal = allItems.reduce((s, i) => s + Number(i.subtotal) * Number(i.ivaPercent) / 100, 0)
+      const total = subtotal + ivaTotal
+
+      await tx.purchaseInvoice.update({
+        where: { id },
+        data: { status: 'recibido', subtotal, ivaTotal, total },
       })
-    }
-
-    const allItems = await prisma.purchaseInvoiceItem.findMany({ where: { purchaseInvoiceId: id } })
-    const subtotal = allItems.reduce((s, i) => s + Number(i.subtotal), 0)
-    const ivaTotal = allItems.reduce((s, i) => s + Number(i.subtotal) * Number(i.ivaPercent) / 100, 0)
-    const total = subtotal + ivaTotal
-
-    await prisma.purchaseInvoice.update({
-      where: { id },
-      data: { status: 'recibido', subtotal, ivaTotal, total },
     })
   } else {
     await prisma.purchaseInvoice.update({
@@ -203,34 +214,24 @@ export async function receive(req: AuthRequest, res: Response) {
       data: { status: 'recibido' },
     })
 
-    for (const item of purchase.items) {
-      const stockBefore = item.productId // We need stock before update
-      // Re-fetch the product to get current stock
-      const product = await prisma.product.findUnique({ where: { id: item.productId } })
-      if (!product) continue
-      const stockBeforeVal = Number(product.stock)
-      const stockAfter = stockBeforeVal + item.quantity
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: stockAfter },
-      })
-      await prisma.stockMovement.create({
-        data: {
+    await prisma.$transaction(async (tx) => {
+      for (const item of purchase.items) {
+        await changeStock(tx, {
+          businessId: purchase.businessId,
+          branchId: purchase.branchId,
           productId: item.productId,
           type: 'purchase',
           quantity: item.quantity,
-          stockBefore: stockBeforeVal,
-          stockAfter,
           reference: purchase.number,
           notes: `Recepción de compra #${purchase.number}`,
           userId: req.user!.id,
-        },
-      })
-    }
+        })
+      }
+    })
   }
 
-  const updated = await prisma.purchaseInvoice.findUnique({
-    where: { id },
+  const updated = await prisma.purchaseInvoice.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: { items: { include: { product: { select: { id: true, name: true, code: true } } } } },
   })
 
@@ -239,7 +240,8 @@ export async function receive(req: AuthRequest, res: Response) {
 
 export async function markAsPaid(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const purchase = await prisma.purchaseInvoice.findUnique({ where: { id } })
+  const ctx = resolveContext(req)
+  const purchase = await prisma.purchaseInvoice.findFirst({ where: { id, businessId: ctx.businessId ?? 0 } })
   if (!purchase) { res.status(404).json({ error: 'Compra no encontrada' }); return }
   if (purchase.status === 'anulada') { res.status(400).json({ error: 'No se puede pagar una compra anulada' }); return }
   if (purchase.status === 'pedido') { res.status(400).json({ error: 'Debe recibir el pedido antes de pagar' }); return }
@@ -253,8 +255,9 @@ export async function markAsPaid(req: AuthRequest, res: Response) {
 
 export async function cancel(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const purchase = await prisma.purchaseInvoice.findUnique({
-    where: { id },
+  const ctx = resolveContext(req)
+  const purchase = await prisma.purchaseInvoice.findFirst({
+    where: { id, businessId: ctx.businessId ?? 0 },
     include: { items: true },
   })
 
@@ -267,12 +270,20 @@ export async function cancel(req: AuthRequest, res: Response) {
   })
 
   if (purchase.status === 'recibido' || purchase.status === 'pagada') {
-    for (const item of purchase.items) {
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: { decrement: item.quantity } },
-      })
-    }
+    await prisma.$transaction(async (tx) => {
+      for (const item of purchase.items) {
+        await changeStock(tx, {
+          businessId: purchase.businessId,
+          branchId: purchase.branchId,
+          productId: item.productId,
+          type: 'purchase_cancellation',
+          quantity: -item.quantity,
+          reference: purchase.number,
+          notes: `Anulación de compra #${purchase.number}`,
+          userId: req.user!.id,
+        })
+      }
+    })
   }
 
   res.json({ message: 'Compra anulada exitosamente' })

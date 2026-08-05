@@ -1,11 +1,18 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'
 
+import { tenantParams } from './tenant'
+
 async function request(path: string, options?: RequestInit) {
   const token = localStorage.getItem('token')
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options?.headers as Record<string, string> | undefined }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers })
+  let url = `${API_URL}${path}`
+  // Append tenant context so superadmin/owner requests are scoped to the selected entity.
+  const t = tenantParams()
+  if (t) url += path.includes('?') ? t.replace('?', '&') : t
+
+  const res = await fetch(url, { ...options, headers })
 
   if (res.status === 401) {
     localStorage.removeItem('token')
@@ -54,7 +61,7 @@ export const api = {
       const formData = new FormData()
       formData.append('file', file)
       const token = localStorage.getItem('token')
-      return fetch(`${API_URL}/products/import-csv`, {
+      return fetch(`${API_URL}/products/import-csv${tenantParams()}`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -150,5 +157,28 @@ export const api = {
     get: () => request('/exchange-rate'),
     update: (rate: number) => request('/exchange-rate', { method: 'PUT', body: JSON.stringify({ rate }) }),
     autoUpdate: () => request('/exchange-rate/auto-update', { method: 'POST' }),
+    restoreAuto: () => request('/exchange-rate/restore-auto', { method: 'POST' }),
+  },
+  businesses: {
+    list: () => request('/businesses'),
+    getById: (id: number) => request(`/businesses/${id}`),
+    create: (data: any) => request('/businesses', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request(`/businesses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/businesses/${id}`, { method: 'DELETE' }),
+  },
+  branches: {
+    list: () => request('/branches/context'),
+    byBusiness: (id: number) => request(`/branches/by-business/${id}`),
+    getById: (id: number) => request(`/branches/${id}`),
+    create: (data: any) => request('/branches', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request(`/branches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/branches/${id}`, { method: 'DELETE' }),
+  },
+  users: {
+    list: () => request('/users'),
+    getById: (id: number) => request(`/users/${id}`),
+    create: (data: any) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request(`/users/${id}`, { method: 'DELETE' }),
   },
 }

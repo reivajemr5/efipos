@@ -18,6 +18,9 @@ import AccountsPayable from './pages/AccountsPayable'
 import Categories from './pages/Categories'
 import Inventory from './pages/Inventory'
 import Payments from './pages/Payments'
+import Businesses from './pages/Businesses'
+import Branches from './pages/Branches'
+import Users from './pages/Users'
 
 function App() {
   return (
@@ -47,6 +50,9 @@ function App() {
           <Route path="accounts/receivable" element={<AccountsReceivable />} />
           <Route path="accounts/payable" element={<AccountsPayable />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="businesses" element={<Businesses />} />
+          <Route path="branches" element={<Branches />} />
+          <Route path="users" element={<Users />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />

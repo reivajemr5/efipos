@@ -1,10 +1,12 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { resolveContext } from '../lib/tenant'
 
 export async function list(req: AuthRequest, res: Response) {
   const { invoice_id, purchase_invoice_id } = req.query
-  const where: any = {}
+  const ctx = resolveContext(req)
+  const where: any = { businessId: ctx.businessId ?? 0 }
   if (invoice_id) where.invoiceId = Number(invoice_id)
   if (purchase_invoice_id) where.purchaseInvoiceId = Number(purchase_invoice_id)
 
@@ -18,6 +20,7 @@ export async function list(req: AuthRequest, res: Response) {
 
 export async function create(req: AuthRequest, res: Response) {
   const { invoiceId, purchaseInvoiceId, amount, method, reference, notes } = req.body
+  const ctx = resolveContext(req)
   if (!amount || (!invoiceId && !purchaseInvoiceId)) {
     res.status(400).json({ error: 'Monto y referencia requeridos' })
     return
@@ -31,6 +34,8 @@ export async function create(req: AuthRequest, res: Response) {
       method: method || 'efectivo',
       reference,
       notes,
+      businessId: ctx.businessId ?? 0,
+      branchId: ctx.branchId ?? 0,
       userId: req.user!.id,
     },
     include: { user: { select: { id: true, name: true } } },
@@ -40,12 +45,13 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function totals(req: AuthRequest, res: Response) {
   const { invoice_id, purchase_invoice_id } = req.query
+  const ctx = resolveContext(req)
 
   if (invoice_id) {
-    const invoice = await prisma.invoice.findUnique({ where: { id: Number(invoice_id) }, select: { total: true } })
+    const invoice = await prisma.invoice.findFirst({ where: { id: Number(invoice_id), businessId: ctx.businessId ?? 0 }, select: { total: true } })
     if (!invoice) { res.status(404).json({ error: 'Factura no encontrada' }); return }
     const payments = await prisma.payment.aggregate({
-      where: { invoiceId: Number(invoice_id) },
+      where: { invoiceId: Number(invoice_id), businessId: ctx.businessId ?? 0 },
       _sum: { amount: true },
     })
     const paid = payments._sum.amount || 0
@@ -54,10 +60,10 @@ export async function totals(req: AuthRequest, res: Response) {
   }
 
   if (purchase_invoice_id) {
-    const purchase = await prisma.purchaseInvoice.findUnique({ where: { id: Number(purchase_invoice_id) }, select: { total: true } })
+    const purchase = await prisma.purchaseInvoice.findFirst({ where: { id: Number(purchase_invoice_id), businessId: ctx.businessId ?? 0 }, select: { total: true } })
     if (!purchase) { res.status(404).json({ error: 'Compra no encontrada' }); return }
     const payments = await prisma.payment.aggregate({
-      where: { purchaseInvoiceId: Number(purchase_invoice_id) },
+      where: { purchaseInvoiceId: Number(purchase_invoice_id), businessId: ctx.businessId ?? 0 },
       _sum: { amount: true },
     })
     const paid = payments._sum.amount || 0

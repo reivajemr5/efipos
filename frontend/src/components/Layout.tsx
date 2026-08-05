@@ -6,6 +6,7 @@ import { syncCatalogs, processPendingChanges } from '../services/sync'
 import OfflineIndicator from './OfflineIndicator'
 import GlobalSearch from './GlobalSearch'
 import ToastContainer from './ToastContainer'
+import TenantSwitcher from './TenantSwitcher'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '🏠' },
@@ -45,6 +46,14 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [navCompact, setNavCompact] = useState(false)
+
+  const canManageUsers = user?.role === 'superadmin' || user?.role === 'dueno'
+  const adminItems = [
+    ...(user?.role === 'superadmin' ? [{ to: '/businesses', label: 'Negocios', icon: '🏢' }] : []),
+    ...(canManageUsers ? [{ to: '/branches', label: 'Sucursales', icon: '🏬' }] : []),
+    ...(canManageUsers ? [{ to: '/users', label: 'Usuarios', icon: '👤' }] : []),
+  ]
+  const sideItems = [...navItems, ...moreItems, ...adminItems]
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -119,6 +128,8 @@ export default function Layout() {
 
           <div className="flex-1" />
 
+          <TenantSwitcher />
+
           <button
             onClick={() => setSearchOpen(true)}
             className="p-2 hover:bg-blue-800 rounded-lg touch-manipulation text-blue-100 hover:text-white"
@@ -150,7 +161,7 @@ export default function Layout() {
               </button>
             </div>
             <div className="p-3 space-y-0.5">
-              {[...navItems, ...moreItems].map((item) => (
+              {sideItems.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
@@ -217,7 +228,7 @@ export default function Layout() {
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Navegación</p>
             <div className="grid grid-cols-3 gap-3">
-              {[...navItems, ...moreItems].filter((i) => !mobileNav.some((m) => m.to === i.to) && i.to !== '/').map((item) => (
+              {sideItems.filter((i) => !mobileNav.some((m) => m.to === i.to) && i.to !== '/').map((item) => (
                 <button key={item.to} onClick={() => { navigate(item.to); setMobileMenuOpen(false) }}
                   className="flex flex-col items-center gap-1 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
                   <span className="text-2xl">{item.icon}</span>

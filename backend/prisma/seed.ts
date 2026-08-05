@@ -4,18 +4,27 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
-  const hash = await bcrypt.hash('admin123', 12)
-  await prisma.user.upsert({
-    where: { email: 'admin@efipos.com' },
-    update: {},
+  const email = process.env.SUPERADMIN_EMAIL || 'Reivajemr'
+  const password = process.env.SUPERADMIN_PASSWORD || '#Poss$9155#'
+  const hash = await bcrypt.hash(password, 12)
+
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { passwordHash: hash, role: 'superadmin', active: true },
     create: {
-      name: 'Admin',
-      email: 'admin@efipos.com',
+      name: 'Super Admin',
+      email,
       passwordHash: hash,
-      role: 'dueno',
+      role: 'superadmin',
     },
   })
-  console.log('Usuario admin creado: admin@efipos.com / admin123')
+  console.log(`Superadmin listo: ${email}`)
 }
 
-main().finally(() => prisma.$disconnect())
+main()
+  .then(() => prisma.$disconnect())
+  .catch(async (e) => {
+    console.error(e)
+    await prisma.$disconnect()
+    process.exit(1)
+  })

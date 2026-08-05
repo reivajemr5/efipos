@@ -2,10 +2,36 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
+import { resolveContext } from '../lib/tenant'
+import { changeStock } from '../lib/stock'
+
+const BASE_INCLUDE = {
+  suppliers: { include: { supplier: { select: { id: true, name: true } } } },
+  category: { select: { id: true, name: true } },
+  brand: { select: { id: true, name: true } },
+  barcodes: { select: { id: true, barcode: true } },
+}
+
+function withBranchStock(include: any, branchId: number | null) {
+  if (!branchId) return include
+  return {
+    ...include,
+    stocks: { where: { branchId }, select: { stock: true, minStock: true } },
+  }
+}
+
+function toDto(p: any) {
+  const s = Array.isArray(p.stocks) ? p.stocks[0] : undefined
+  const { stocks, ...rest } = p
+  return { ...rest, stock: s ? Number(s.stock) : 0, minStock: s ? s.minStock : 5 }
+}
 
 export async function list(req: AuthRequest, res: Response) {
   const { q, supplier_id, low_stock, category_id, type } = req.query
-  const where: any = { active: true }
+  const ctx = resolveContext(req)
+  if (!ctx.businessId) { res.status(400).json({ error: 'Se requiere un negocio activo' }); return }
+
+  const where: any = { businessId: ctx.businessId, active: true }
   if (q) {
     where.OR = [
       { name: { contains: String(q), mode: 'insensitive' as const } },
@@ -15,54 +41,50 @@ export async function list(req: AuthRequest, res: Response) {
     ]
   }
   if (supplier_id) where.suppliers = { some: { supplierId: Number(supplier_id) } }
-  if (low_stock === 'true') where.stock = { lte: prisma.product.fields.minStock }
   if (category_id) where.categoryId = Number(category_id)
   if (type) where.type = String(type)
 
-  const { limit, offset, hasPagination } = parsePagination(req.query)
-  const include = {
-    suppliers: { include: { supplier: { select: { id: true, name: true } } } },
-    category: { select: { id: true, name: true } },
-    brand: { select: { id: true, name: true } },
-    barcodes: { select: { id: true, barcode: true } },
-  }
+  const include = withBranchStock(BASE_INCLUDE, ctx.branchId)
   const orderBy = { name: 'asc' as const }
 
+  const { limit, offset, hasPagination } = parsePagination(req.query)
   if (hasPagination) {
     const result = await paginate(prisma.product, { where, include, orderBy }, limit, offset)
-    res.json(result)
+    let items = result.items.map(toDto)
+    if (low_stock === 'true') items = items.filter((p: any) => p.stock <= p.minStock)
+    res.json({ ...result, items })
     return
   }
 
-  const products = await prisma.product.findMany({
-    where,
-    include,
-    orderBy,
-  })
-  res.json(products)
+  let products = await prisma.product.findMany({ where, include, orderBy })
+  let dto = products.map(toDto)
+  if (low_stock === 'true') dto = dto.filter((p: any) => p.stock <= p.minStock)
+  res.json(dto)
 }
 
 export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: {
-      suppliers: { include: { supplier: { select: { id: true, name: true } } } },
-      category: { select: { id: true, name: true } },
-      brand: { select: { id: true, name: true } },
-      barcodes: { select: { id: true, barcode: true } },
-    },
+  const ctx = resolveContext(req)
+  const product = await prisma.product.findFirst({
+    where: { id, ...(ctx.businessId ? { businessId: ctx.businessId } : {}) },
+    include: withBranchStock(BASE_INCLUDE, ctx.branchId),
   })
   if (!product) { res.status(404).json({ error: 'Producto no encontrado' }); return }
-  res.json(product)
+  res.json(toDto(product))
 }
 
 export async function create(req: AuthRequest, res: Response) {
   const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, imageUrl } = req.body
+  const ctx = resolveContext(req)
   if (!name || price === undefined || price === null || price === '') {
     res.status(400).json({ error: 'Nombre y precio requeridos' })
     return
   }
+  if (!ctx.businessId) {
+    res.status(403).json({ error: 'Se requiere un negocio activo' })
+    return
+  }
+
   const data = {
     code: '',
     name,
@@ -76,8 +98,6 @@ export async function create(req: AuthRequest, res: Response) {
     price2: price2 || null,
     currency: currency || 'bs',
     ivaPercent: ivaPercent || 0,
-    stock: stock || 0,
-    minStock: minStock || 5,
     categoryId: categoryId || null,
     imageUrl: imageUrl || null,
     variations: variations || [],
@@ -89,16 +109,27 @@ export async function create(req: AuthRequest, res: Response) {
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const product = await prisma.product.create({
-        data: { ...data, code: formatProductCode(await nextProductCode()) },
-        include: {
-          suppliers: { include: { supplier: { select: { id: true, name: true } } } },
-          category: { select: { id: true, name: true } },
-          brand: { select: { id: true, name: true } },
-          barcodes: { select: { id: true, barcode: true } },
-        },
+      const product = await prisma.$transaction(async (tx) => {
+        const last = await tx.product.findFirst({
+          where: { businessId: ctx.businessId! },
+          orderBy: { id: 'desc' },
+          select: { id: true },
+        })
+        const code = formatProductCode((last?.id ?? 0) + 1)
+        const created = await tx.product.create({
+          data: { ...data, code, businessId: ctx.businessId! },
+          include: BASE_INCLUDE,
+        })
+        if (ctx.branchId) {
+          await tx.branchStock.upsert({
+            where: { branchId_productId: { branchId: ctx.branchId, productId: created.id } },
+            create: { branchId: ctx.branchId, productId: created.id, stock: stock || 0, minStock: minStock || 5 },
+            update: {},
+          })
+        }
+        return created
       })
-      res.status(201).json(product)
+      res.status(201).json(toDto({ ...product, stocks: [] }))
       return
     } catch (e) {
       if (!isUniqueConstraintError(e)) throw e
@@ -109,7 +140,13 @@ export async function create(req: AuthRequest, res: Response) {
 
 export async function update(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { code, name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, active, imageUrl } = req.body
+  const ctx = resolveContext(req)
+  const existing = await prisma.product.findFirst({
+    where: { id, ...(ctx.businessId ? { businessId: ctx.businessId } : {}) },
+  })
+  if (!existing) { res.status(404).json({ error: 'Producto no encontrado' }); return }
+
+  const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, active, imageUrl } = req.body
 
   if (supplierIds) {
     await prisma.productSupplier.deleteMany({ where: { productId: id } })
@@ -129,29 +166,64 @@ export async function update(req: AuthRequest, res: Response) {
     }
   }
 
-  const product = await prisma.product.update({
-    where: { id },
-    data: {
-      code, name, description, notes, type, brandId: brandId || null,
-      price, cost, barcode, price2,
-      currency, ivaPercent, stock, minStock,
-      categoryId: categoryId || null,
-      imageUrl: imageUrl || null,
-      variations,
-      active,
-    },
-    include: {
-      suppliers: { include: { supplier: { select: { id: true, name: true } } } },
-      category: { select: { id: true, name: true } },
-      brand: { select: { id: true, name: true } },
-      barcodes: { select: { id: true, barcode: true } },
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id },
+      data: {
+        name, description, notes, type, brandId: brandId || null,
+        price, cost, barcode, price2,
+        currency, ivaPercent, categoryId: categoryId || null,
+        imageUrl: imageUrl || null,
+        variations,
+        ...(active !== undefined ? { active } : {}),
+      },
+    })
+    if (ctx.branchId && (stock !== undefined || minStock !== undefined)) {
+      const cur = await tx.branchStock.findUnique({
+        where: { branchId_productId: { branchId: ctx.branchId, productId: id } },
+      })
+      await tx.branchStock.upsert({
+        where: { branchId_productId: { branchId: ctx.branchId, productId: id } },
+        create: {
+          branchId: ctx.branchId, productId: id,
+          stock: stock ?? 0, minStock: minStock ?? 5,
+        },
+        update: {
+          ...(stock !== undefined ? { stock } : {}),
+          ...(minStock !== undefined ? { minStock } : {}),
+        },
+      })
+      if (cur && stock !== undefined && Number(stock) !== Number(cur.stock)) {
+        await tx.stockMovement.create({
+          data: {
+            businessId: existing.businessId,
+            branchId: ctx.branchId,
+            productId: id,
+            type: 'adjustment',
+            quantity: Number(stock) - Number(cur.stock),
+            stockBefore: Number(cur.stock),
+            stockAfter: Number(stock),
+            userId: req.user!.id,
+          },
+        })
+      }
+    }
   })
-  res.json(product)
+
+  const updated = await prisma.product.findFirst({
+    where: { id },
+    include: withBranchStock(BASE_INCLUDE, ctx.branchId),
+  })
+  res.json(toDto(updated!))
 }
 
 export async function remove(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
+  const ctx = resolveContext(req)
+  const existing = await prisma.product.findFirst({
+    where: { id, ...(ctx.businessId ? { businessId: ctx.businessId } : {}) },
+  })
+  if (!existing) { res.status(404).json({ error: 'Producto no encontrado' }); return }
   await prisma.product.update({ where: { id }, data: { active: false } })
   res.status(204).send()
 }
@@ -171,32 +243,41 @@ function formatProductCode(id: number): string {
   return `PRD-${String(id).padStart(5, '0')}`
 }
 
-async function nextProductCode(tx: any = prisma): Promise<number> {
-  const last = await tx.product.findFirst({ orderBy: { id: 'desc' }, select: { id: true } })
-  return (last?.id ?? 0) + 1
-}
-
 function isUniqueConstraintError(e: unknown): boolean {
   return e instanceof Error && (e as any).code === 'P2002'
 }
 
 async function upsertImportedProduct(
   tx: any,
-  p: { name: string; code?: string; barcode?: string; price: number; cost?: number; stock?: number; ivaPercent?: number; currency?: string; description?: string | null; categoryId?: number | null },
+  p: {
+    businessId: number
+    name: string
+    code?: string
+    barcode?: string
+    price: number
+    cost?: number
+    stock?: number
+    ivaPercent?: number
+    currency?: string
+    description?: string | null
+    categoryId?: number | null
+    minStock?: number
+  },
   generalCategoryId: number,
-  nextId: { value: number },
-): Promise<'created' | 'updated'> {
+): Promise<{ status: 'created' | 'updated'; id: number }> {
   const name = (p.name || '').trim()
 
   let existing: any = null
-  if (p.code) existing = await tx.product.findUnique({ where: { code: p.code } })
+  if (p.code) existing = await tx.product.findFirst({ where: { businessId: p.businessId, code: p.code } })
   if (!existing && p.barcode) {
     existing = await tx.product.findFirst({
-      where: { OR: [{ barcode: p.barcode }, { barcodes: { some: { barcode: p.barcode } } }] },
+      where: { businessId: p.businessId, OR: [{ barcode: p.barcode }, { barcodes: { some: { barcode: p.barcode } } }] },
     })
   }
   if (!existing) {
-    existing = await tx.product.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+    existing = await tx.product.findFirst({
+      where: { businessId: p.businessId, name: { equals: name, mode: 'insensitive' } },
+    })
   }
 
   const base = {
@@ -213,34 +294,35 @@ async function upsertImportedProduct(
       where: { id: existing.id },
       data: {
         ...base,
-        stock: p.stock ?? existing.stock,
         active: p.price > 0,
         ...(p.barcode && !existing.barcode ? { barcode: p.barcode } : {}),
       },
     })
-    return 'updated'
+    return { status: 'updated', id: existing.id }
   }
 
-  const code = p.code || formatProductCode(nextId.value)
-  nextId.value++
-  await tx.product.create({
+  const last = await tx.product.findFirst({
+    where: { businessId: p.businessId },
+    orderBy: { id: 'desc' },
+    select: { id: true },
+  })
+  const code = p.code || formatProductCode((last?.id ?? 0) + 1)
+  const created = await tx.product.create({
     data: {
       ...base,
+      businessId: p.businessId,
       code,
       name,
-      stock: p.stock ?? 0,
-      active: p.price > 0,
       barcode: p.barcode ?? null,
     },
   })
-  return 'created'
+  return { status: 'created', id: created.id }
 }
 
 export async function importCsv(req: AuthRequest, res: Response) {
   const file = req.file
   if (!file) { res.status(400).json({ error: 'Archivo CSV requerido' }); return }
 
-  // Ensure csv-parse is imported
   const { parse } = require('csv-parse/sync')
   const content = file.buffer.toString('utf-8')
   let rows: any[]
@@ -251,20 +333,21 @@ export async function importCsv(req: AuthRequest, res: Response) {
     return
   }
 
-  // Resolve "General" category
-  let generalCategory = await prisma.category.findFirst({ where: { name: 'General' } })
+  const ctx = resolveContext(req)
+  if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  let generalCategory = await prisma.category.findFirst({ where: { businessId: ctx.businessId, name: 'General' } })
   if (!generalCategory) {
-    generalCategory = await prisma.category.create({ data: { name: 'General' } })
+    generalCategory = await prisma.category.create({ data: { businessId: ctx.businessId, name: 'General' } })
   }
 
-  const existingCategories = await prisma.category.findMany({ where: { active: true } })
+  const existingCategories = await prisma.category.findMany({ where: { businessId: ctx.businessId, active: true } })
   const categoryMap = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]))
 
   let created = 0
   let updated = 0
   let skipped = 0
   let errors: { row: number; name: string; error: string }[] = []
-  let nextId = await nextProductCode()
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
@@ -286,31 +369,44 @@ export async function importCsv(req: AuthRequest, res: Response) {
       if (categoryMap.has(key)) {
         categoryId = categoryMap.get(key)!
       } else {
-        const newCat = await prisma.category.create({ data: { name: toTitleCase(catName) } })
+        const newCat = await prisma.category.create({ data: { businessId: ctx.businessId, name: toTitleCase(catName) } })
         categoryMap.set(key, newCat.id)
         categoryId = newCat.id
       }
     }
 
     try {
-      const result = await upsertImportedProduct(
-        prisma,
-        {
-          name: normalizedName,
-          code: row.codigo_unico?.trim() || row.codigo?.trim() || undefined,
-          barcode,
-          price,
-          cost,
-          stock,
-          ivaPercent: iva,
-          currency: 'usd',
-          description,
-          categoryId: categoryId || generalCategory.id,
-        },
-        generalCategory.id,
-        { value: nextId },
-      )
-      if (result === 'created') created++
+      const { status, id } = await prisma.$transaction(async (tx) => {
+        const result = await upsertImportedProduct(
+          tx,
+          {
+            businessId: ctx.businessId!,
+            name: normalizedName,
+            code: row.codigo_unico?.trim() || row.codigo?.trim() || undefined,
+            barcode,
+            price,
+            cost,
+            stock,
+            ivaPercent: iva,
+            currency: 'usd',
+            description,
+            categoryId: categoryId || generalCategory.id,
+          },
+          generalCategory.id,
+        )
+        if (result.status === 'created' && ctx.branchId && stock > 0) {
+          await changeStock(tx, {
+            businessId: ctx.businessId!,
+            branchId: ctx.branchId,
+            productId: result.id,
+            type: 'import',
+            quantity: stock,
+            userId: req.user!.id,
+          })
+        }
+        return result
+      })
+      if (status === 'created') created++
       else updated++
     } catch (e) {
       errors.push({ row: i + 2, name: normalizedName, error: e instanceof Error ? e.message : 'Error desconocido' })
@@ -339,27 +435,29 @@ export async function bulkImport(req: AuthRequest, res: Response) {
     res.status(400).json({ error: 'Se requiere un array de productos' })
     return
   }
+  const ctx = resolveContext(req)
+  if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
 
   let created = 0
   let updated = 0
   let errors: { row: number; name: string; error: string }[] = []
 
-  let generalCategory = await prisma.category.findFirst({ where: { name: 'General' } })
+  let generalCategory = await prisma.category.findFirst({ where: { businessId: ctx.businessId, name: 'General' } })
   if (!generalCategory) {
-    generalCategory = await prisma.category.create({ data: { name: 'General' } })
+    generalCategory = await prisma.category.create({ data: { businessId: ctx.businessId, name: 'General' } })
   }
 
   await prisma.$transaction(async (tx) => {
-    const nextId = { value: await nextProductCode(tx) }
     for (let i = 0; i < products.length; i++) {
       const p = products[i]
       if (!p.name || !p.name.trim()) { errors.push({ row: i + 1, name: '', error: 'Nombre requerido' }); continue }
       if (p.price === undefined || p.price === null) { errors.push({ row: i + 1, name: p.name, error: 'Precio requerido' }); continue }
 
       try {
-        const result = await upsertImportedProduct(
+        const { status, id } = await upsertImportedProduct(
           tx,
           {
+            businessId: ctx.businessId!,
             name: p.name.trim(),
             code: p.code,
             barcode: p.barcode,
@@ -372,10 +470,20 @@ export async function bulkImport(req: AuthRequest, res: Response) {
             categoryId: p.categoryId,
           },
           generalCategory!.id,
-          nextId,
         )
-        if (result === 'created') created++
-        else updated++
+        if (status === 'created') {
+          created++
+          if (ctx.branchId && p.stock) {
+            await changeStock(tx, {
+              businessId: ctx.businessId!,
+              branchId: ctx.branchId,
+              productId: id,
+              type: 'import',
+              quantity: p.stock,
+              userId: req.user!.id,
+            })
+          }
+        } else updated++
       } catch (e) {
         errors.push({ row: i + 1, name: p.name, error: e instanceof Error ? e.message : 'Error desconocido' })
       }

@@ -6,8 +6,8 @@ const router = Router()
 router.use(authenticate)
 
 router.get('/', list)
-router.post('/', authorize('dueno', 'admin'), create)
-router.put('/:id', authorize('dueno', 'admin'), update)
-router.delete('/:id', authorize('dueno', 'admin'), remove)
+router.post('/', authorize('superadmin', 'dueno', 'admin'), create)
+router.put('/:id', authorize('superadmin', 'dueno', 'admin'), update)
+router.delete('/:id', authorize('superadmin', 'dueno', 'admin'), remove)
 
 export default router

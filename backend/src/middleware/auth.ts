@@ -3,8 +3,19 @@ import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production'
 
+export type RoleValue = 'superadmin' | 'dueno' | 'admin' | 'cajero'
+
+export interface AuthUser {
+  id: number
+  name: string
+  email: string
+  role: string
+  businessId?: number | null
+  branchId?: number | null
+}
+
 export interface AuthRequest extends Request {
-  user?: { id: number; name: string; email: string; role: string }
+  user?: AuthUser
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {

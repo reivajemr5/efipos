@@ -2,10 +2,12 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
+import { resolveContext } from '../lib/tenant'
 
 export async function receivable(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
-  const where: any = { balance: { gt: 0 }, status: { in: ['activa'] } }
+  const ctx = resolveContext(req)
+  const where: any = { businessId: ctx.businessId ?? 0, balance: { gt: 0 }, status: { in: ['activa'] } }
   if (q) {
     where.OR = [
       { client: { name: { contains: q, mode: 'insensitive' } } },
@@ -39,7 +41,8 @@ export async function receivable(req: AuthRequest, res: Response) {
 
 export async function payable(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
-  const where: any = { status: { in: ['pedido', 'recibido'] } }
+  const ctx = resolveContext(req)
+  const where: any = { businessId: ctx.businessId ?? 0, status: { in: ['pedido', 'recibido'] } }
   if (q) {
     where.OR = [
       { supplier: { name: { contains: q, mode: 'insensitive' } } },
