@@ -3,7 +3,7 @@ import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext } from '../lib/tenant'
-import { changeStock } from '../lib/stock'
+import { changeStock, setBranchStock } from '../lib/stock'
 
 const BASE_INCLUDE = {
   suppliers: { include: { supplier: { select: { id: true, name: true } } } },
@@ -226,6 +226,69 @@ export async function remove(req: AuthRequest, res: Response) {
   if (!existing) { res.status(404).json({ error: 'Producto no encontrado' }); return }
   await prisma.product.update({ where: { id }, data: { active: false } })
   res.status(204).send()
+}
+
+/** Per-branch stock for a product (all branches of the business, read + verify). */
+export async function getStocks(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const ctx = resolveContext(req)
+  if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  const product = await prisma.product.findFirst({ where: { id, businessId: ctx.businessId } })
+  if (!product) { res.status(404).json({ error: 'Producto no encontrado' }); return }
+
+  const branches = await prisma.branch.findMany({ where: { businessId: ctx.businessId, active: true }, orderBy: { name: 'asc' } })
+  const stocks = await prisma.branchStock.findMany({ where: { productId: id, branchId: { in: branches.map((b) => b.id) } } })
+  const map = new Map(stocks.map((s) => [s.branchId, s]))
+
+  res.json(branches.map((b) => {
+    const s = map.get(b.id)
+    return { branchId: b.id, branchName: b.name, stock: s ? Number(s.stock) : 0, minStock: s ? s.minStock : 5 }
+  }))
+}
+
+/** Owner/super sets absolute stock for one or more branches of this product. */
+export async function setStocks(req: AuthRequest, res: Response) {
+  const id = Number(req.params.id)
+  const ctx = resolveContext(req)
+  if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+  const { updates } = req.body
+  if (!Array.isArray(updates) || updates.length === 0) {
+    res.status(400).json({ error: 'Se requiere un array de updates' })
+    return
+  }
+
+  const product = await prisma.product.findFirst({ where: { id, businessId: ctx.businessId } })
+  if (!product) { res.status(404).json({ error: 'Producto no encontrado' }); return }
+
+  const branches = await prisma.branch.findMany({ where: { businessId: ctx.businessId, active: true }, select: { id: true } })
+  const branchIds = new Set(branches.map((b) => b.id))
+  const isAdmin = req.user!.role === 'admin'
+
+  for (const u of updates) {
+    const branchId = Number(u.branchId)
+    if (!branchIds.has(branchId)) { res.status(403).json({ error: 'Sucursal no autorizada' }); return }
+    if (isAdmin && branchId !== req.user!.branchId) {
+      res.status(403).json({ error: 'Un admin solo puede cargar stock en su propia sucursal' })
+      return
+    }
+  }
+
+  const result: any[] = []
+  await prisma.$transaction(async (tx) => {
+    for (const u of updates) {
+      const r = await setBranchStock(tx, {
+        businessId: ctx.businessId!,
+        branchId: Number(u.branchId),
+        productId: id,
+        stock: Number(u.stock),
+        minStock: u.minStock !== undefined ? Number(u.minStock) : undefined,
+        userId: req.user!.id,
+      })
+      result.push({ branchId: Number(u.branchId), before: r.before, after: r.after })
+    }
+  })
+  res.json(result)
 }
 
 function toTitleCase(str: string): string {

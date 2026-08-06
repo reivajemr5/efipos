@@ -76,3 +76,43 @@ export function stockInclude(branchId: number | null) {
     stocks: { where: { branchId }, select: { stock: true, minStock: true } },
   }
 }
+
+/**
+ * Sets the absolute stock for a specific branch and records an adjustment
+ * movement only when the value actually changes.
+ */
+export async function setBranchStock(
+  tx: Tx,
+  opts: { businessId: number; branchId: number; productId: number; stock: number; minStock?: number; userId?: number | null; notes?: string },
+): Promise<StockResult> {
+  const cur = await tx.branchStock.findUnique({
+    where: { branchId_productId: { branchId: opts.branchId, productId: opts.productId } },
+  })
+  const current = cur ? Number(cur.stock) : 0
+  const after = Math.max(0, Number(opts.stock) || 0)
+  const minStock = opts.minStock !== undefined ? opts.minStock : cur?.minStock ?? 5
+
+  await tx.branchStock.upsert({
+    where: { branchId_productId: { branchId: opts.branchId, productId: opts.productId } },
+    create: { branchId: opts.branchId, productId: opts.productId, stock: after, minStock },
+    update: { stock: after, minStock },
+  })
+
+  if (after !== current) {
+    await tx.stockMovement.create({
+      data: {
+        businessId: opts.businessId,
+        branchId: opts.branchId,
+        productId: opts.productId,
+        type: 'adjustment',
+        quantity: after - current,
+        stockBefore: current,
+        stockAfter: after,
+        userId: opts.userId ?? null,
+        notes: opts.notes ?? null,
+      },
+    })
+  }
+
+  return { before: current, after }
+}

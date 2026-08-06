@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import Tooltip from './Tooltip'
 import { useToastStore } from '../store/toast'
+import { useRole } from '../hooks/useRole'
+import { useAuthStore } from '../store/auth'
 
 interface Category { id: number; name: string }
 interface Supplier { id: number; name: string; documentType?: string; documentNumber?: string }
@@ -55,6 +57,10 @@ interface Props {
 
 export default function ProductFormModal({ open, onClose, editing, onSaved }: Props) {
   const addToast = useToastStore((s) => s.addToast)
+  const { manage, isAdmin } = useRole()
+  const myBranchId = useAuthStore((s) => s.user?.branchId ?? null)
+
+  const [branchStocks, setBranchStocks] = useState<{ branchId: number; name: string; stock: string; minStock: string; editable: boolean }[]>([])
 
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -135,7 +141,27 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
     setShowNewSupplier(false)
     setSupplierSearch('')
     setComponentSearch('')
-  }, [open, editing])
+    setBranchStocks([])
+    if (manage) {
+      const editable = (branchId: number) => (isAdmin ? branchId === myBranchId : true)
+      api.branches.list()
+        .then((brs: any) => {
+          const list = Array.isArray(brs) ? brs : []
+          if (editing) {
+            return api.products.getStocks(editing.id).then((st: any[]) => {
+              const arr = Array.isArray(st) ? st : []
+              const byId = new Map(arr.map((s) => [s.branchId, s]))
+              setBranchStocks(list.map((b) => {
+                const s = byId.get(b.id)
+                return { branchId: b.id, name: b.name, stock: s ? String(s.stock) : '0', minStock: s ? String(s.minStock) : '5', editable: editable(b.id) }
+              }))
+            })
+          }
+          setBranchStocks(list.map((b) => ({ branchId: b.id, name: b.name, stock: '0', minStock: '5', editable: editable(b.id) })))
+        })
+        .catch(() => {})
+    }
+  }, [open, editing, manage, isAdmin, myBranchId])
 
   function applyTemplate(t: { id: number; name: string; values: { id: number; value: string }[] }) {
     const existing = form.variations.find((v) => v.name === t.name)
@@ -257,6 +283,11 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
       const product = editing
         ? await api.products.update(editing.id, data)
         : await api.products.create(data)
+      if (manage && form.type !== 'servicio' && branchStocks.length > 0) {
+        const updates = branchStocks.filter((b) => b.editable)
+          .map((b) => ({ branchId: b.branchId, stock: Number(b.stock) || 0, minStock: Number(b.minStock) || 5 }))
+        if (updates.length) await api.products.setStocks(product.id, updates)
+      }
       addToast(editing ? 'Producto actualizado' : 'Producto creado', 'success')
       onSaved(product)
       onClose()
@@ -440,18 +471,56 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
                   <option value="0">0% (Exento)</option><option value="8">8%</option><option value="16">16%</option>
                 </select>
               </div>
-              <div>
+              <div className={form.type === 'servicio' ? 'hidden' : ''}>
                 <label className="text-xs text-gray-500 mb-0.5 block">Stock actual <Tooltip text={tips.stock} /></label>
                 <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} type="number" placeholder="0"
-                  disabled={form.type === 'servicio'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-400" />
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-500" />
               </div>
-              <div>
+              <div className={form.type === 'servicio' ? 'hidden' : ''}>
                 <label className="text-xs text-gray-500 mb-0.5 block">Stock mínimo <Tooltip text={tips.minStock} /></label>
                 <input value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} type="number" placeholder="5"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-500" />
               </div>
             </div>
+
+            {manage && form.type !== 'servicio' && (
+              <div className="mt-3">
+                <label className="text-xs text-gray-500 mb-1 block">Stock por sucursal {isAdmin && <span className="text-gray-400">(solo tu sucursal es editable)</span>}</label>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs text-gray-500">
+                        <th className="px-3 py-2">Sucursal</th>
+                        <th className="px-3 py-2 w-28">Stock</th>
+                        <th className="px-3 py-2 w-28">Mínimo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {branchStocks.length === 0 && (
+                        <tr><td colSpan={3} className="px-3 py-3 text-gray-400 text-center">Cargando sucursales…</td></tr>
+                      )}
+                      {branchStocks.map((b) => (
+                        <tr key={b.branchId} className="border-t border-gray-100">
+                          <td className="px-3 py-1.5 text-gray-700">{b.name}</td>
+                          <td className="px-2 py-1.5">
+                            <input type="number" min="0" value={b.stock} disabled={!b.editable}
+                              onChange={(e) => setBranchStocks((bs) => bs.map((x) => x.branchId === b.branchId ? { ...x, stock: e.target.value } : x))}
+                              className="w-full px-2 py-1 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-500 text-sm" />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input type="number" min="0" value={b.minStock} disabled={!b.editable}
+                              onChange={(e) => setBranchStocks((bs) => bs.map((x) => x.branchId === b.branchId ? { ...x, minStock: e.target.value } : x))}
+                              className="w-full px-2 py-1 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-500 text-sm" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Categoría + inline create */}

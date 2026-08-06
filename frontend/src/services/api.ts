@@ -9,8 +9,16 @@ async function request(path: string, options?: RequestInit) {
 
   let url = `${API_URL}${path}`
   // Append tenant context so superadmin/owner requests are scoped to the selected entity.
+  // Skip any param already present in the URL (avoids duplicate branchId/businessId).
   const t = tenantParams()
-  if (t) url += path.includes('?') ? t.replace('?', '&') : t
+  if (t) {
+    const lower = path.toLowerCase()
+    const add = t.slice(1).split('&').filter((seg) => {
+      const key = seg.split('=')[0].toLowerCase()
+      return !lower.includes(`${key}=`)
+    })
+    if (add.length) url += lower.includes('?') ? `&${add.join('&')}` : `?${add.join('&')}`
+  }
 
   const res = await fetch(url, { ...options, headers })
 
@@ -52,6 +60,8 @@ export const api = {
   products: {
     list: (params?: string) => request(`/products${params ? `?${params}` : ''}`),
     getById: (id: number) => request(`/products/${id}`),
+    getStocks: (id: number) => request(`/products/${id}/stocks`),
+    setStocks: (id: number, updates: any[]) => request(`/products/${id}/stocks`, { method: 'PUT', body: JSON.stringify({ updates }) }),
     create: (data: any) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/products/${id}`, { method: 'DELETE' }),

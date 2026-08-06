@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
-import { list, getById, create, update, remove, importCsv, bulkImport } from '../controllers/products'
+import { list, getById, create, update, remove, importCsv, bulkImport, getStocks, setStocks } from '../controllers/products'
 import { authenticate, authorize } from '../middleware/auth'
 
 const router = Router()
@@ -9,6 +9,8 @@ const upload = multer({ storage: multer.memoryStorage() })
 router.use(authenticate)
 
 router.get('/', list)
+router.get('/:id/stocks', authorize('superadmin', 'dueno', 'admin'), getStocks)
+router.put('/:id/stocks', authorize('superadmin', 'dueno', 'admin'), setStocks)
 router.get('/:id', getById)
 router.post('/', authorize('superadmin', 'dueno', 'admin'), create)
 router.post('/import-csv', authorize('superadmin', 'dueno', 'admin'), upload.single('file'), importCsv)
