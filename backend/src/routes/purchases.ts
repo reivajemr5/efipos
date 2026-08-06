@@ -1,15 +1,15 @@
 import { Router } from 'express'
 import { list, getById, create, receive, markAsPaid, cancel } from '../controllers/purchases'
-import { authenticate } from '../middleware/auth'
+import { authenticate, authorize } from '../middleware/auth'
 
 const router = Router()
 router.use(authenticate)
 
 router.get('/', list)
 router.get('/:id', getById)
-router.post('/', create)
-router.post('/:id/receive', receive)
-router.post('/:id/pay', markAsPaid)
-router.post('/:id/cancel', cancel)
+router.post('/', authorize('superadmin', 'dueno', 'admin'), create)
+router.post('/:id/receive', authorize('superadmin', 'dueno', 'admin'), receive)
+router.post('/:id/pay', authorize('superadmin', 'dueno', 'admin'), markAsPaid)
+router.post('/:id/cancel', authorize('superadmin', 'dueno', 'admin'), cancel)
 
 export default router

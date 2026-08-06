@@ -5,6 +5,7 @@ import ProductFormModal from '../components/ProductFormModal'
 import ImportCsvModal from '../components/ImportCsvModal'
 import PaginationBar from '../components/PaginationBar'
 import { useToastStore } from '../store/toast'
+import { useRole } from '../hooks/useRole'
 
 interface Category { id: number; name: string }
 interface Product {
@@ -35,6 +36,7 @@ export default function Products() {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const addToast = useToastStore((s) => s.addToast)
+  const { manage } = useRole()
 
   async function load() {
     const params = new URLSearchParams()
@@ -99,8 +101,10 @@ export default function Products() {
         <h1 className="text-2xl font-bold text-gray-800">Productos</h1>
         <div className="flex gap-2">
           <button onClick={exportCsv} className="btn-secondary">📤 Exportar CSV</button>
-          <button onClick={() => setImportOpen(true)} className="btn-secondary">📥 Importar CSV</button>
-          <button onClick={openNew} className="btn-primary">+ Nuevo</button>
+          {manage && <>
+            <button onClick={() => setImportOpen(true)} className="btn-secondary">📥 Importar CSV</button>
+            <button onClick={openNew} className="btn-primary">+ Nuevo</button>
+          </>}
         </div>
       </div>
 
@@ -140,8 +144,10 @@ export default function Products() {
                     <p className="text-xs text-gray-500 font-mono">{p.code}</p>
                   </div>
                   <div className="flex gap-2 ml-3">
-                    <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
-                    <button onClick={() => remove(p.id)} className="text-red-600 hover:text-red-800 text-sm font-medium">Eliminar</button>
+                    {manage && <>
+                      <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
+                      <button onClick={() => remove(p.id)} className="text-red-600 hover:text-red-800 text-sm font-medium">Eliminar</button>
+                    </>}
                   </div>
                 </div>
 

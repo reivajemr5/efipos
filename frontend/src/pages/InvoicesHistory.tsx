@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
 import PaginationBar from '../components/PaginationBar'
+import { useRole } from '../hooks/useRole'
 
 interface InvoiceListItem {
   id: number
@@ -63,6 +64,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function InvoicesHistory() {
+  const { canCancelInvoices } = useRole()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [invoicesTotal, setInvoicesTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -291,7 +293,7 @@ export default function InvoicesHistory() {
             </div>
             <div className="flex gap-3 p-5 border-t border-gray-100">
               <button onClick={reprint} className="btn btn-primary flex-1">Reimprimir</button>
-              {detail.status === 'activa' && (
+              {detail.status === 'activa' && canCancelInvoices && (
                 <button onClick={cancelInvoice} className="btn btn-danger flex-1">Anular</button>
               )}
               <button onClick={() => setDetail(null)} className="btn btn-secondary flex-1">Cerrar</button>

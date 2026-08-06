@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
+import { useRole } from '../hooks/useRole'
 import AbonarModal from '../components/AbonarModal'
 import InvoiceAbonos from '../components/InvoiceAbonos'
 
@@ -26,6 +27,7 @@ export default function Clients() {
   const [editing, setEditing] = useState<Client | null>(null)
   const [form, setForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const toast = useToastStore((s: any) => s.addToast)
+  const { manage } = useRole()
 
   const [statementClient, setStatementClient] = useState<Client | null>(null)
   const [statement, setStatement] = useState<any>(null)
@@ -94,8 +96,7 @@ export default function Clients() {
     <div className="page-container">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Clientes</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">+ Nuevo</button>
-      </div>
+        <button onClick={() => setShowForm(true)} className="btn-primary">+ Nuevo</button>      </div>
 
       <input className="input max-w-md" placeholder="Buscar clientes..." value={search} onChange={(e) => setSearch(e.target.value)} />
 
@@ -111,8 +112,10 @@ export default function Clients() {
               </div>
               <div className="flex gap-2 items-center">
                 <button onClick={() => openStatement(c)} className="text-sm text-green-700 hover:underline">Estado</button>
-                <button onClick={() => openEdit(c)} className="text-sm text-blue-600 hover:underline">Editar</button>
-                <button onClick={() => handleDelete(c.id)} className="text-sm text-red-600 hover:underline">Eliminar</button>
+                {manage && <>
+                  <button onClick={() => openEdit(c)} className="text-sm text-blue-600 hover:underline">Editar</button>
+                  <button onClick={() => handleDelete(c.id)} className="text-sm text-red-600 hover:underline">Eliminar</button>
+                </>}
               </div>
             </div>
           ))}

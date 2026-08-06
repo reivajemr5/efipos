@@ -5,10 +5,10 @@ import { authenticate, authorize } from '../middleware/auth'
 const router = Router()
 router.use(authenticate)
 
-router.get('/sales', salesReport)
-router.get('/top-products', topProducts)
-router.get('/cash-close', cashClose)
+router.get('/sales', authorize('superadmin', 'dueno', 'admin'), salesReport)
+router.get('/top-products', authorize('superadmin', 'dueno', 'admin'), topProducts)
+router.get('/cash-close', authorize('superadmin', 'dueno', 'admin'), cashClose)
 router.post('/cash-close', authorize('superadmin', 'dueno', 'admin'), saveCashClose)
-router.get('/dashboard', dashboard)
+router.get('/dashboard', authorize('superadmin', 'dueno', 'admin'), dashboard)
 
 export default router

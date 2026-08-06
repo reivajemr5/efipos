@@ -7,6 +7,7 @@ import OfflineIndicator from './OfflineIndicator'
 import GlobalSearch from './GlobalSearch'
 import ToastContainer from './ToastContainer'
 import TenantSwitcher from './TenantSwitcher'
+import { useRole, ADMIN_PATHS } from '../hooks/useRole'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '🏠' },
@@ -47,13 +48,22 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [navCompact, setNavCompact] = useState(false)
 
+  const { isCajero } = useRole()
+
+  useEffect(() => {
+    if (isCajero && ADMIN_PATHS.includes(location.pathname)) navigate('/', { replace: true })
+  }, [isCajero, location.pathname, navigate])
+
   const canManageUsers = user?.role === 'superadmin' || user?.role === 'dueno'
   const adminItems = [
     ...(user?.role === 'superadmin' ? [{ to: '/businesses', label: 'Negocios', icon: '🏢' }] : []),
     ...(canManageUsers ? [{ to: '/branches', label: 'Sucursales', icon: '🏬' }] : []),
     ...(canManageUsers ? [{ to: '/users', label: 'Usuarios', icon: '👤' }] : []),
   ]
-  const sideItems = [...navItems, ...moreItems, ...adminItems]
+
+  const visibleNav = isCajero ? navItems.filter((i) => !ADMIN_PATHS.includes(i.to)) : navItems
+  const visibleMore = isCajero ? moreItems.filter((i) => !ADMIN_PATHS.includes(i.to) && i.to !== '/settings') : moreItems
+  const sideItems = [...visibleNav, ...visibleMore, ...adminItems]
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -98,7 +108,7 @@ export default function Layout() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
-            {navItems.map((item) => (
+            {visibleNav.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
