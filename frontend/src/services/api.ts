@@ -24,7 +24,10 @@ async function request(path: string, options?: RequestInit) {
 
   if (res.status === 401) {
     localStorage.removeItem('token')
-    window.location.href = '/login'
+    if (!window.location.pathname.startsWith('/login')) {
+      window.history.pushState(null, '', '/login')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }
   }
 
   if (!res.ok) {
@@ -110,7 +113,7 @@ export const api = {
       request(`/invoices/${id}/complete`, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
     update: (id: number, data: any) =>
       request(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    abonar: (id: number, data: { amountBs: number; exchangeRate: number }) =>
+    abonar: (id: number, data: { amountBs: number; exchangeRate: number; requestKey?: string }) =>
       request(`/invoices/${id}/abonar`, { method: 'POST', body: JSON.stringify(data) }),
   },
   categories: {

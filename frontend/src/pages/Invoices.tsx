@@ -60,6 +60,8 @@ export default function Invoices() {
   const [showClientTable, setShowClientTable] = useState(false)
   const [showProductTable, setShowProductTable] = useState(false)
   const [offlineCount, setOfflineCount] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+  const idemRef = useRef<string | null>(null)
   const isOnline = useOnlineStatus()
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -89,7 +91,9 @@ export default function Invoices() {
   }
 
   async function createInvoice() {
-    if (!selectedClient || items.length === 0) return
+    if (!selectedClient || items.length === 0 || submitting) return
+    setSubmitting(true)
+    if (!idemRef.current) idemRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
     const data = {
       clientId: selectedClient.id,
       paymentMethod,
@@ -126,12 +130,12 @@ export default function Invoices() {
         createdAt: new Date().toISOString(),
         synced: false,
       })
-      setShowForm(false); setSelectedClient(null); setItems([]); load()
+      setShowForm(false); setSelectedClient(null); setItems([]); load(); setSubmitting(false)
       return
     }
 
-    await api.invoices.create(data)
-    setShowForm(false); setSelectedClient(null); setItems([]); load()
+    await api.invoices.create({ ...data, requestKey: idemRef.current })
+    setShowForm(false); setSelectedClient(null); setItems([]); load(); setSubmitting(false)
   }
 
   async function cancelInvoice(id: number) {
@@ -303,7 +307,7 @@ export default function Invoices() {
             </div>
 
             <div className="flex gap-2 pt-3">
-              <button onClick={createInvoice} disabled={!selectedClient || items.length === 0}
+              <button onClick={createInvoice} disabled={!selectedClient || items.length === 0 || submitting}
                 className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">Confirmar Factura</button>
               <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
             </div>

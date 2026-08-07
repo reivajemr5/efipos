@@ -50,6 +50,11 @@ export default function Layout() {
 
   const { isCajero } = useRole()
 
+  function handleLogout() {
+    logout()
+    navigate('/login')
+  }
+
   useEffect(() => {
     if (isCajero && ADMIN_PATHS.includes(location.pathname)) navigate('/', { replace: true })
   }, [isCajero, location.pathname, navigate])
@@ -151,7 +156,7 @@ export default function Layout() {
           {user && (
             <div className="hidden sm:flex items-center gap-2 ml-1">
               <span className="text-xs text-blue-200 hidden lg:inline">{user.name}</span>
-              <button onClick={logout} className="p-1.5 hover:bg-blue-800 rounded-lg text-blue-100 hover:text-white touch-manipulation" title="Cerrar sesión">
+              <button onClick={handleLogout} className="p-1.5 hover:bg-blue-800 rounded-lg text-blue-100 hover:text-white touch-manipulation" title="Cerrar sesión">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               </button>
             </div>
@@ -192,7 +197,7 @@ export default function Layout() {
                 <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-amber-500'}`} />
                 {isOnline ? 'En línea' : 'Offline'}
               </div>
-              <button onClick={logout} className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors text-sm w-full">
+              <button onClick={handleLogout} className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors text-sm w-full">
                 <span>🚪</span>
                 <span>Cerrar Sesión</span>
               </button>

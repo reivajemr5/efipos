@@ -316,6 +316,7 @@ model Invoice {
   balance       Decimal        @default(0) @db.Decimal(12, 2)
   createdAt     DateTime       @default(now()) @map("created_at")
   cancelledAt   DateTime?      @map("cancelled_at")
+  requestKey    String?        @map("request_key")
   business      Business       @relation(fields: [businessId], references: [id])
   branch        Branch         @relation(fields: [branchId], references: [id])
   client        Client         @relation(fields: [clientId], references: [id])
@@ -325,6 +326,7 @@ model Invoice {
   payments      Payment[]
 
   @@unique([businessId, number])
+  @@unique([businessId, requestKey])
   @@map("invoices")
 }
 
@@ -362,6 +364,7 @@ model PurchaseInvoice {
   notes         String?
   createdAt     DateTime         @default(now()) @map("created_at")
   cancelledAt   DateTime?        @map("cancelled_at")
+  requestKey    String?          @map("request_key")
   business      Business         @relation(fields: [businessId], references: [id])
   branch        Branch           @relation(fields: [branchId], references: [id])
   supplier      Supplier         @relation(fields: [supplierId], references: [id])
@@ -370,6 +373,7 @@ model PurchaseInvoice {
   payments      Payment[]
 
   @@unique([businessId, number])
+  @@unique([businessId, requestKey])
   @@map("purchase_invoices")
 }
 
@@ -420,12 +424,14 @@ model Payment {
   notes             String?
   userId            Int              @map("user_id")
   createdAt         DateTime         @default(now()) @map("created_at")
+  requestKey        String?          @map("request_key")
   business          Business         @relation(fields: [businessId], references: [id])
   branch            Branch           @relation(fields: [branchId], references: [id])
   invoice           Invoice?         @relation(fields: [invoiceId], references: [id])
   purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
   user              User             @relation(fields: [userId], references: [id])
 
+  @@unique([businessId, requestKey])
   @@map("payments")
 }
 

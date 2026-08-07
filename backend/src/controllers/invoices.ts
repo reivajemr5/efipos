@@ -63,7 +63,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { clientId, quoteId, paymentMethod, currency, exchangeRate, items, payments, status, discount } = req.body
+  const { clientId, quoteId, paymentMethod, currency, exchangeRate, items, payments, status, discount, requestKey } = req.body
   const ctx = resolveContext(req)
   const isDraft = status === 'borrador'
 
@@ -72,6 +72,18 @@ export async function create(req: AuthRequest, res: Response) {
     return
   }
   if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  if (requestKey) {
+    const existing = await prisma.invoice.findFirst({ where: { businessId: ctx.businessId, requestKey } })
+    if (existing) {
+      const dup = await prisma.invoice.findFirst({
+        where: { id: existing.id },
+        include: { client: { select: { id: true, name: true } }, items: true, payments: true },
+      })
+      res.status(200).json({ ...dup, _dup: true })
+      return
+    }
+  }
 
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
@@ -142,6 +154,7 @@ export async function create(req: AuthRequest, res: Response) {
       totalBs,
       paymentMethod: paymentMethod || 'efectivo',
       status: isDraft ? 'borrador' : undefined,
+      requestKey: requestKey || null,
       items: { create: invoiceItems },
       payments: payments?.length ? {
         create: payments.map((p: any) => ({
@@ -362,7 +375,7 @@ export async function cancel(req: AuthRequest, res: Response) {
 
 export async function abonar(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
-  const { amountBs, exchangeRate } = req.body
+  const { amountBs, exchangeRate, requestKey } = req.body
   const ctx = resolveContext(req)
   if (!amountBs || amountBs <= 0) {
     res.status(400).json({ error: 'Monto inválido' })
@@ -371,6 +384,11 @@ export async function abonar(req: AuthRequest, res: Response) {
   if (!exchangeRate || exchangeRate <= 0) {
     res.status(400).json({ error: 'Tasa de cambio inválida' })
     return
+  }
+
+  if (requestKey) {
+    const existing = await prisma.payment.findFirst({ where: { businessId: ctx.businessId ?? 0, requestKey } })
+    if (existing) { res.status(200).json({ message: 'Abono ya registrado', payment: existing, _dup: true }); return }
   }
 
   const invoice = await prisma.invoice.findFirst({ where: { id, businessId: ctx.businessId ?? 0 } })
@@ -397,6 +415,7 @@ export async function abonar(req: AuthRequest, res: Response) {
         businessId: invoice.businessId,
         branchId: invoice.branchId,
         userId: req.user!.id,
+        requestKey: requestKey || null,
       },
     }),
     prisma.invoice.update({

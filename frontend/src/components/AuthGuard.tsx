@@ -6,9 +6,9 @@ import { api } from '../services/api'
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { token, user, setAuth } = useAuthStore()
   const navigate = useNavigate()
+  const savedToken = localStorage.getItem('token')
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('token')
     if (!savedToken) {
       navigate('/login')
       return
@@ -22,9 +22,9 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           navigate('/login')
         })
     }
-  }, [])
+  }, [token, user, savedToken])
 
-  if (!localStorage.getItem('token')) return null
+  if (!savedToken) return null
 
   return <>{children}</>
 }

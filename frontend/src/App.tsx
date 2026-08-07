@@ -7,6 +7,7 @@ import Clients from './pages/Clients'
 import Suppliers from './pages/Suppliers'
 import Products from './pages/Products'
 import Purchases from './pages/Purchases'
+import PurchaseFormPage from './pages/PurchaseFormPage'
 import Quotes from './pages/Quotes'
 import POSPage from './pages/POSPage'
 import InvoicePrint from './pages/InvoicePrint'
@@ -42,6 +43,7 @@ function App() {
           <Route path="quotes" element={<Quotes />} />
           <Route path="products" element={<Products />} />
           <Route path="purchases" element={<Purchases />} />
+          <Route path="purchases/new" element={<PurchaseFormPage />} />
           <Route path="clients" element={<Clients />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="categories" element={<Categories />} />

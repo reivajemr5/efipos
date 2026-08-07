@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
 
@@ -18,6 +18,7 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
   const [amount, setAmount] = useState(0)
   const [rate, setRate] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const idemRef = useRef<string | null>(null)
   const toast = useToastStore((s: any) => s.addToast)
 
   useEffect(() => {
@@ -28,11 +29,12 @@ export default function AbonarModal({ invoice, onClose, onSuccess }: Props) {
   const amountBs = type === 'usd' ? amount * rate : amount
 
   async function handleAbonar() {
-    if (!invoice || amount <= 0 || rate <= 0 || amountUsd > Number(invoice.balance)) return
+    if (!invoice || amount <= 0 || rate <= 0 || amountUsd > Number(invoice.balance) || submitting) return
     setSubmitting(true)
+    if (!idemRef.current) idemRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
     try {
       const bs = Math.round(amountBs * 100) / 100
-      await api.invoices.abonar(invoice.id, { amountBs: bs, exchangeRate: rate })
+      await api.invoices.abonar(invoice.id, { amountBs: bs, exchangeRate: rate, requestKey: idemRef.current })
       toast('Abono registrado', 'success')
       onSuccess()
     } catch (e: any) {

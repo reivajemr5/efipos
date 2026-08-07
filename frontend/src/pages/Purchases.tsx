@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
@@ -74,7 +75,7 @@ export default function Purchases() {
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [confirmStep, setConfirmStep] = useState(false)
-  const [rate, setRate] = useState(0)
+  const [rate] = useState(0)
   const [sourceOrderId, setSourceOrderId] = useState<number | null>(null)
   const [showLoadOrder, setShowLoadOrder] = useState(false)
   const [filterStatus, setFilterStatus] = useState('')
@@ -89,6 +90,13 @@ export default function Purchases() {
   const [newSupplierForm, setNewSupplierForm] = useState({ name: '', documentType: 'V', documentNumber: '', phone: '', address: '' })
   const [showNewProductForm, setShowNewProductForm] = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const idemRef = useRef<string | null>(null)
+
+  function uuid() {
+    return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
+  }
 
   function filteredProducts() {
     let list = products
@@ -180,19 +188,27 @@ export default function Purchases() {
   }
 
   async function createPurchase() {
-    if (!selectedSupplier || items.length === 0) return
-    await api.purchases.create({
-      supplierId: selectedSupplier.id,
-      paymentMethod,
-      dueDate: dueDate || null,
-      notes: notes || null,
-      type: purchaseType,
-      currency: 'usd',
-      exchangeRate: rate || undefined,
-      sourceOrderId: sourceOrderId || undefined,
-      items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: lineUsdPrice(i) })),
-    })
-    setShowForm(false); setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); setConfirmStep(false); setSourceOrderId(null); load()
+    if (!selectedSupplier || items.length === 0 || submitting) return
+    setSubmitting(true)
+    if (!idemRef.current) idemRef.current = uuid()
+    try {
+      await api.purchases.create({
+        supplierId: selectedSupplier.id,
+        paymentMethod,
+        dueDate: dueDate || null,
+        notes: notes || null,
+        type: purchaseType,
+        currency: 'usd',
+        exchangeRate: rate || undefined,
+        sourceOrderId: sourceOrderId || undefined,
+        requestKey: idemRef.current,
+        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: lineUsdPrice(i) })),
+      })
+      setShowForm(false); setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); setConfirmStep(false); setSourceOrderId(null); load(); setSubmitting(false)
+    } catch (e: any) {
+      alert('No se pudo registrar: ' + (e?.message || 'error'))
+      setSubmitting(false)
+    }
   }
 
   function onLoadOrder(order: any) {
@@ -203,10 +219,6 @@ export default function Purchases() {
     }))
     setSourceOrderId(order.id)
     setShowLoadOrder(false)
-  }
-
-  function resetForm() {
-    setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); setConfirmStep(false); setPaymentMethod('efectivo_bs'); setSourceOrderId(null); setNotes('')
   }
 
   async function markAsPaid(id: number) {
@@ -311,7 +323,7 @@ export default function Purchases() {
     <div className="page-container">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Compras</h1>
-        <button onClick={() => { resetForm(); setShowForm(true); api.exchangeRate.get().then((r: any) => setRate(Number(r?.rate) || 0)).catch(() => setRate(0)) }} className="btn-primary">+ Nueva</button>
+        <button onClick={() => navigate('/purchases/new')} className="btn-primary">+ Nueva</button>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -525,9 +537,9 @@ export default function Purchases() {
 
                 <div className="flex gap-2 pt-3">
                   <button onClick={() => setConfirmStep(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">← Volver</button>
-                  <button onClick={createPurchase} disabled={!selectedSupplier || items.length === 0}
+                  <button onClick={createPurchase} disabled={!selectedSupplier || items.length === 0 || submitting}
                     className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">
-                    Registrar {purchaseType === 'factura' ? 'Compra' : 'Pedido'}
+                    {submitting ? 'Registrando...' : `Registrar ${purchaseType === 'factura' ? 'Compra' : 'Pedido'}`}
                   </button>
                 </div>
               </>

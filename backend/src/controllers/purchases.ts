@@ -11,7 +11,10 @@ export async function list(req: AuthRequest, res: Response) {
   const where: any = { businessId: ctx.businessId ?? 0 }
   if (status) where.status = status
 
-  const include = { supplier: { select: { id: true, name: true, documentType: true, documentNumber: true } } }
+  const include = {
+    supplier: { select: { id: true, name: true, documentType: true, documentNumber: true } },
+    items: { include: { product: { select: { id: true, name: true, code: true } } } },
+  }
   const orderBy = { createdAt: 'desc' as const }
   const { limit, offset, hasPagination } = parsePagination(req.query)
   if (hasPagination) {
@@ -42,7 +45,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type, sourceOrderId } = req.body
+  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type, sourceOrderId, requestKey } = req.body
   const ctx = resolveContext(req)
 
   if (!supplierId || !items?.length) {
@@ -50,6 +53,18 @@ export async function create(req: AuthRequest, res: Response) {
     return
   }
   if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  if (requestKey) {
+    const existing = await prisma.purchaseInvoice.findFirst({ where: { businessId: ctx.businessId, requestKey } })
+    if (existing) {
+      const dup = await prisma.purchaseInvoice.findFirst({
+        where: { id: existing.id },
+        include: { supplier: { select: { id: true, name: true } }, items: { include: { product: { select: { id: true, name: true } } } } },
+      })
+      res.status(200).json({ ...dup, _dup: true })
+      return
+    }
+  }
 
   const branchId = ctx.branchId ?? (await prisma.branch.findFirst({ where: { businessId: ctx.businessId, active: true }, select: { id: true }, orderBy: { id: 'asc' } }))?.id ?? 0
   if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
@@ -91,30 +106,43 @@ export async function create(req: AuthRequest, res: Response) {
   const number = `${prefix}${String(count + 1).padStart(4, '0')}`
   const status = type === 'factura' ? 'recibido' : 'pedido'
 
-  const purchase = await prisma.purchaseInvoice.create({
-    data: {
-      businessId: ctx.businessId,
-      branchId,
-      number,
-      supplierId,
-      userId: req.user!.id,
-      currency: invCurrency,
-      exchangeRate: exchangeRate || null,
-      subtotal,
-      ivaTotal,
-      total,
-      totalBs,
-      status,
-      paymentMethod: paymentMethod || 'efectivo_bs',
-      dueDate: dueDate ? new Date(dueDate) : null,
-      notes: notes || null,
-      items: { create: purchaseItems },
-    },
-    include: {
-      supplier: { select: { id: true, name: true } },
-      items: { include: { product: { select: { id: true, name: true } } } },
-    },
-  })
+  let purchase: any
+  try {
+    purchase = await prisma.purchaseInvoice.create({
+      data: {
+        businessId: ctx.businessId,
+        branchId,
+        number,
+        supplierId,
+        userId: req.user!.id,
+        currency: invCurrency,
+        exchangeRate: exchangeRate || null,
+        subtotal,
+        ivaTotal,
+        total,
+        totalBs,
+        status,
+        paymentMethod: paymentMethod || 'efectivo_bs',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        notes: notes || null,
+        requestKey: requestKey || null,
+        items: { create: purchaseItems },
+      },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        items: { include: { product: { select: { id: true, name: true } } } },
+      },
+    })
+  } catch (e: any) {
+    if (requestKey && e?.code === 'P2002') {
+      const dup = await prisma.purchaseInvoice.findFirst({
+        where: { businessId: ctx.businessId, requestKey },
+        include: { supplier: { select: { id: true, name: true } }, items: { include: { product: { select: { id: true, name: true } } } } },
+      })
+      if (dup) { res.status(200).json({ ...dup, _dup: true }); return }
+    }
+    throw e
+  }
 
   if (type === 'factura') {
     await prisma.$transaction(async (tx) => {
