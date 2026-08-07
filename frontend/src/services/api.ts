@@ -3,9 +3,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'
 import { tenantParams } from './tenant'
 
 async function request(path: string, options?: RequestInit) {
+  const token = localStorage.getItem('token')
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options?.headers as Record<string, string> | undefined,
   }
 
