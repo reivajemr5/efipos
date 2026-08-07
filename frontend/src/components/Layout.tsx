@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
+import { api } from '../services/api'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
-import { syncCatalogs, processPendingChanges } from '../services/sync'
+import { syncCatalogs, processPendingChanges, getPendingCount } from '../services/sync'
 import OfflineIndicator from './OfflineIndicator'
 import GlobalSearch from './GlobalSearch'
 import ToastContainer from './ToastContainer'
@@ -47,10 +48,12 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [navCompact, setNavCompact] = useState(false)
+  const [pendingSync, setPendingSync] = useState(0)
 
   const { isCajero } = useRole()
 
   function handleLogout() {
+    api.logout().catch(() => {})
     logout()
     navigate('/login')
   }
@@ -88,6 +91,15 @@ export default function Layout() {
       processPendingChanges()
     }
   }, [isOnline])
+
+  useEffect(() => {
+    async function refresh() {
+      setPendingSync(await getPendingCount())
+    }
+    refresh()
+    const t = setInterval(refresh, 30000)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -196,6 +208,11 @@ export default function Layout() {
               <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
                 <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-amber-500'}`} />
                 {isOnline ? 'En línea' : 'Offline'}
+                {pendingSync > 0 && (
+                  <span className="ml-auto flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                    <span className="font-semibold">{pendingSync}</span> pendientes
+                  </span>
+                )}
               </div>
               <button onClick={handleLogout} className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors text-sm w-full">
                 <span>🚪</span>

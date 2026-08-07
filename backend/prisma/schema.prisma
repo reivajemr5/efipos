@@ -471,3 +471,10 @@ model CashClose {
 
   @@map("cash_closes")
 }
+
+model Counter {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("counters")
+}

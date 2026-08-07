@@ -1,10 +1,21 @@
 import { Router } from 'express'
-import { login, me } from '../controllers/auth'
+import rateLimit from 'express-rate-limit'
+import { login, logout, me } from '../controllers/auth'
 import { authenticate } from '../middleware/auth'
 
 const router = Router()
 
-router.post('/login', login)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Demasiados intentos fallidos. Intente de nuevo en 15 minutos.' },
+})
+
+router.post('/login', loginLimiter, login)
+router.post('/logout', logout)
 router.get('/me', authenticate, me)
 
 export default router

@@ -3,9 +3,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'
 import { tenantParams } from './tenant'
 
 async function request(path: string, options?: RequestInit) {
-  const token = localStorage.getItem('token')
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options?.headers as Record<string, string> | undefined }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    ...options?.headers as Record<string, string> | undefined,
+  }
 
   let url = `${API_URL}${path}`
   // Append tenant context so superadmin/owner requests are scoped to the selected entity.
@@ -30,6 +32,11 @@ async function request(path: string, options?: RequestInit) {
     }
   }
 
+  if (res.status === 429) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error || 'Demasiadas peticiones. Intente más tarde.')
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Error de conexión' }))
     throw new Error(err.error || 'Error desconocido')
@@ -44,6 +51,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
   me: () => request('/auth/me'),
   clients: {
     list: (q?: string) => request(`/clients${q ? `?q=${q}` : ''}`),

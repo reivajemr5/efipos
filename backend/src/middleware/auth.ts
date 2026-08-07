@@ -20,12 +20,18 @@ export interface AuthRequest extends Request {
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization
-  if (!header || !header.startsWith('Bearer ')) {
+  let token: string | undefined
+  if (header && header.startsWith('Bearer ')) {
+    token = header.split(' ')[1]
+  } else if (req.cookies?.token) {
+    token = req.cookies.token
+  }
+
+  if (!token) {
     res.status(401).json({ error: 'Token requerido' })
     return
   }
 
-  const token = header.split(' ')[1]
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthRequest['user']
     req.user = decoded

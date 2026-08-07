@@ -36,7 +36,20 @@ export async function login(req: AuthRequest, res: Response) {
   }
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })
 
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+    path: '/',
+  })
+
   res.json({ token, user: payload })
+}
+
+export async function logout(req: AuthRequest, res: Response) {
+  res.clearCookie('token', { path: '/', sameSite: 'lax' })
+  res.json({ message: 'Sesión cerrada' })
 }
 
 export async function me(req: AuthRequest, res: Response) {

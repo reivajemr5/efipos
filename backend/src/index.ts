@@ -1,5 +1,8 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import cookieParser from 'cookie-parser'
+import rateLimit from 'express-rate-limit'
 import dotenv from 'dotenv'
 import cron from 'node-cron'
 import authRoutes from './routes/auth'
@@ -22,14 +25,32 @@ import businessRoutes from './routes/businesses'
 import branchRoutes from './routes/branches'
 import userRoutes from './routes/users'
 import { updateBCVRate } from './services/exchangeRateUpdater'
+import { requireAppHeader } from './middleware/csrf'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
-app.use(cors())
+app.use(helmet())
+app.use(cookieParser())
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : true,
+    credentials: true,
+  })
+)
 app.use(express.json({ limit: '50mb' }))
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones. Intente de nuevo en unos minutos.' },
+})
+app.use('/api/v1', globalLimiter)
+app.use('/api/v1', requireAppHeader)
 
 app.get('/api/v1/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

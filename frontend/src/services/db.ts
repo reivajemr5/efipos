@@ -55,6 +55,7 @@ export interface PendingChange {
   localId?: string
   createdAt: string
   retries: number
+  lastAttempt?: string
 }
 
 class EfiPosDB extends Dexie {

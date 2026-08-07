@@ -6,6 +6,7 @@ import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
 import ClientFormModal from '../components/ClientFormModal'
 import TablePickerModal from '../components/TablePickerModal'
+import { downloadPdf } from '../utils/pdf'
 
 interface Product {
   id: number; name: string; code: string; price: number; currency: string; ivaPercent: number; stock: number
@@ -400,6 +401,18 @@ export default function Invoices() {
           </div>
           <div className="flex gap-2 mt-6 max-w-sm mx-auto">
             <button onClick={() => window.print()} className="flex-1 bg-blue-900 text-white py-2 rounded-lg">Imprimir</button>
+            <button onClick={() => downloadPdf({
+              title: 'Factura',
+              number: showPrint.number,
+              clientName: showPrint.client.name,
+              date: new Date(showPrint.createdAt).toLocaleString(),
+              items: showPrint.items.map((i) => ({ name: i.product?.name || '', quantity: i.quantity, unitPrice: Number(i.unitPrice), subtotal: Number(i.subtotal) })),
+              subtotal: Number(showPrint.subtotal),
+              ivaTotal: Number(showPrint.ivaTotal),
+              total: Number(showPrint.total),
+              currency: showPrint.currency,
+              paymentMethod: showPrint.paymentMethod,
+            })} className="flex-1 bg-gray-700 text-white py-2 rounded-lg">Descargar PDF</button>
             <button onClick={() => setShowPrint(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cerrar</button>
           </div>
         </div>

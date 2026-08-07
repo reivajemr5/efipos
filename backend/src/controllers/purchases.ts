@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
+import { validateItems } from '../lib/validation'
+import { nextDocumentNumber } from '../lib/numbering'
 
 export async function list(req: AuthRequest, res: Response) {
   const { status } = req.query
@@ -72,6 +74,18 @@ export async function create(req: AuthRequest, res: Response) {
   const branchId = ctx.branchId ?? (await prisma.branch.findFirst({ where: { businessId: ctx.businessId, active: true }, select: { id: true }, orderBy: { id: 'asc' } }))?.id ?? 0
   if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
 
+  const itemsError = validateItems(items)
+  if (itemsError) {
+    res.status(400).json({ error: itemsError })
+    return
+  }
+
+  const supplier = await prisma.supplier.findUnique({ where: { id: Number(supplierId) } })
+  if (!supplier) {
+    res.status(400).json({ error: 'Proveedor no válido' })
+    return
+  }
+
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
@@ -106,9 +120,8 @@ export async function create(req: AuthRequest, res: Response) {
     totalBs = total
   }
 
-  const count = await prisma.purchaseInvoice.count({ where: { businessId: ctx.businessId } })
   const prefix = type === 'factura' ? 'FACT-C' : 'PED-'
-  const number = `${prefix}${String(count + 1).padStart(4, '0')}`
+  const number = await nextDocumentNumber(prefix, String(ctx.businessId))
   const isFactura = type === 'factura'
   const status = isFactura ? (paid ? 'pagada' : 'recibido') : 'pedido'
 
@@ -231,6 +244,12 @@ export async function receive(req: AuthRequest, res: Response) {
   if (purchase.status !== 'pedido') { res.status(400).json({ error: 'Solo se pueden recibir pedidos pendientes' }); return }
 
   if (receivedItems?.length) {
+    const itemsError = validateItems(receivedItems)
+    if (itemsError) {
+      res.status(400).json({ error: itemsError })
+      return
+    }
+
     const receivedIds = receivedItems.map((i: any) => i.productId)
     const products = await prisma.product.findMany({ where: { id: { in: receivedIds }, businessId: ctx.businessId ?? 0 } })
     const productMap = new Map(products.map((p) => [p.id, p]))

@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import { list, create, totals } from '../controllers/payments'
-import { authenticate } from '../middleware/auth'
+import { authenticate, authorize } from '../middleware/auth'
 
 const router = Router()
 router.use(authenticate)
 
 router.get('/', list)
-router.post('/', create)
+router.post('/', authorize('dueno', 'admin'), create)
 router.get('/totals', totals)
 
 export default router

@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
+import { validateItems } from '../lib/validation'
+import { nextDocumentNumber } from '../lib/numbering'
 
 export async function list(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
@@ -50,6 +52,18 @@ export async function create(req: AuthRequest, res: Response) {
   }
   if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
 
+  const itemsError = validateItems(items)
+  if (itemsError) {
+    res.status(400).json({ error: itemsError })
+    return
+  }
+
+  const client = await prisma.client.findUnique({ where: { id: Number(clientId) } })
+  if (!client) {
+    res.status(400).json({ error: 'Cliente no válido' })
+    return
+  }
+
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
@@ -85,8 +99,7 @@ export async function create(req: AuthRequest, res: Response) {
     totalBs = total
   }
 
-  const count = await prisma.quote.count({ where: { businessId: ctx.businessId } })
-  const number = `COTI-${String(count + 1).padStart(4, '0')}`
+  const number = await nextDocumentNumber('COTI-', String(ctx.businessId))
 
   const quote = await prisma.quote.create({
     data: {
@@ -192,8 +205,7 @@ export async function convertToInvoice(req: AuthRequest, res: Response) {
   if (!quote) { res.status(404).json({ error: 'Cotización no encontrada' }); return }
   if (quote.status !== 'activa') { res.status(400).json({ error: 'La cotización no está activa' }); return }
 
-  const invoiceCount = await prisma.invoice.count({ where: { businessId: quote.businessId } })
-  const invoiceNumber = `FACT-${String(invoiceCount + 1).padStart(4, '0')}`
+  const invoiceNumber = await nextDocumentNumber('FACT-', String(quote.businessId))
 
   const invoice = await prisma.$transaction(async (tx) => {
     const inv = await tx.invoice.create({

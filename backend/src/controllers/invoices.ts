@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
+import { validateItems } from '../lib/validation'
+import { nextDocumentNumber } from '../lib/numbering'
 
 async function creditClientError(paymentMethod: string | undefined, clientId: number): Promise<string | null> {
   if (!(paymentMethod || '').includes('credito')) return null
@@ -88,6 +90,20 @@ export async function create(req: AuthRequest, res: Response) {
     }
   }
 
+  const itemsError = validateItems(items)
+  if (itemsError) {
+    res.status(400).json({ error: itemsError })
+    return
+  }
+
+  if (clientId) {
+    const client = await prisma.client.findUnique({ where: { id: Number(clientId) } })
+    if (!client) {
+      res.status(400).json({ error: 'Cliente no válido' })
+      return
+    }
+  }
+
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
@@ -123,8 +139,7 @@ export async function create(req: AuthRequest, res: Response) {
     totalBs = total
   }
 
-  const count = await prisma.invoice.count({ where: { businessId: ctx.businessId } })
-  const number = `FACT-${String(count + 1).padStart(4, '0')}`
+  const number = await nextDocumentNumber('FACT-', String(ctx.businessId))
 
   let finalClientId = clientId
   if (!finalClientId) {

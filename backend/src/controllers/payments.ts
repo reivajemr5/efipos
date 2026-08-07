@@ -2,6 +2,7 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { resolveContext } from '../lib/tenant'
+import { isPositiveNumber } from '../lib/validation'
 
 export async function list(req: AuthRequest, res: Response) {
   const { invoice_id, purchase_invoice_id } = req.query
@@ -23,6 +24,10 @@ export async function create(req: AuthRequest, res: Response) {
   const ctx = resolveContext(req)
   if (!amount || (!invoiceId && !purchaseInvoiceId)) {
     res.status(400).json({ error: 'Monto y referencia requeridos' })
+    return
+  }
+  if (!isPositiveNumber(Number(amount))) {
+    res.status(400).json({ error: 'El monto debe ser un número mayor a 0' })
     return
   }
 
