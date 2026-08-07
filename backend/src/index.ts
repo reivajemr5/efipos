@@ -43,6 +43,14 @@ app.use(
 )
 app.use(express.json({ limit: '50mb' }))
 
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    const extra = req.path.includes('/auth/login') ? ` email=${req.body?.email || '?'}` : ''
+    console.log(`[req] ${req.method} ${req.originalUrl} -> ${res.statusCode} ip=${req.ip}${extra}`)
+  })
+  next()
+})
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 1000,
