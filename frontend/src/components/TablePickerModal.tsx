@@ -25,6 +25,8 @@ interface TablePickerModalProps<T> {
   filters?: FilterDef<T>[]
   searchPlaceholder?: string
   emptyText?: string
+  sortFn?: (items: T[]) => T[]
+  headerExtra?: React.ReactNode
 }
 
 export default function TablePickerModal<T>({
@@ -32,6 +34,8 @@ export default function TablePickerModal<T>({
   filterFn, filters,
   searchPlaceholder = 'Buscar...',
   emptyText = 'Sin resultados',
+  sortFn,
+  headerExtra,
 }: TablePickerModalProps<T>) {
   const [query, setQuery] = useState('')
   const [filterValues, setFilterValues] = useState<Record<string, string>>({})
@@ -45,8 +49,9 @@ export default function TablePickerModal<T>({
         if (val) result = result.filter((item) => f.filter(item, val))
       }
     }
+    if (sortFn) result = sortFn(result)
     return result
-  }, [items, query, filterFn, filters, filterValues])
+  }, [items, query, filterFn, filters, filterValues, sortFn])
 
   if (!open) return null
 
@@ -55,7 +60,10 @@ export default function TablePickerModal<T>({
       <div className="bg-white p-6 rounded-2xl w-full max-w-3xl mx-4 max-h-[80vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="flex items-center gap-3">
+            {headerExtra}
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          </div>
         </div>
 
         {filters && filters.length > 0 && (

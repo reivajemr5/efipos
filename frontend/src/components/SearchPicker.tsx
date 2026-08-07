@@ -14,6 +14,7 @@ interface SearchPickerProps<T> {
   className?: string
   absolute?: boolean
   onAdvancedSearch?: () => void
+  showOnFocus?: boolean
 }
 
 export default function SearchPicker<T>({
@@ -26,6 +27,7 @@ export default function SearchPicker<T>({
   className = '',
   absolute = false,
   onAdvancedSearch,
+  showOnFocus = false,
 }: SearchPickerProps<T>) {
   const [query, setQuery] = useState('')
   const [show, setShow] = useState(false)
@@ -82,7 +84,7 @@ export default function SearchPicker<T>({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const dropdownContent = show && query.length >= minQueryLength && (
+  const dropdownContent = show && (query.length >= minQueryLength || showOnFocus) && (
     <div className={absolute
       ? 'absolute top-full left-0 right-0 bg-white border rounded-lg mt-1 max-h-40 overflow-y-auto z-10 shadow'
       : 'max-h-40 overflow-y-auto border rounded-lg mb-3'}>
@@ -116,9 +118,10 @@ export default function SearchPicker<T>({
       <input
         ref={inputRef}
         value={query}
+        onFocus={() => { if (showOnFocus) setShow(true) }}
         onChange={(e) => {
           setQuery(e.target.value)
-          setShow(e.target.value.length >= minQueryLength)
+          setShow(showOnFocus || e.target.value.length >= minQueryLength)
           setIdx(0)
         }}
         onKeyDown={handleKeyDown}

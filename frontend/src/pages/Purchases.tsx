@@ -4,6 +4,7 @@ import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
 import TablePickerModal from '../components/TablePickerModal'
 import PaginationBar from '../components/PaginationBar'
+import LoadPurchaseOrderModal from '../components/LoadPurchaseOrderModal'
 
 interface Purchase {
   id: number
@@ -41,13 +42,20 @@ interface Product {
   name: string
   code: string
   price: number
+  cost?: number | null
   currency: string
   ivaPercent: number
   stock: number
   minStock: number
   barcode?: string | null
-  cost?: number | null
   suppliers: { supplier: { id: number; name: string } }[]
+}
+
+interface LineItem {
+  productId: number
+  quantity: number
+  unitPrice: number
+  cur: 'usd' | 'bs'
 }
 
 export default function Purchases() {
@@ -60,15 +68,20 @@ export default function Purchases() {
   const [showForm, setShowForm] = useState(false)
   const [showDetail, setShowDetail] = useState<Purchase | null>(null)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
-  const [items, setItems] = useState<{ productId: number; quantity: number }[]>([])
+  const [items, setItems] = useState<LineItem[]>([])
   const [purchaseType, setPurchaseType] = useState('pedido')
   const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [confirmStep, setConfirmStep] = useState(false)
+  const [rate, setRate] = useState(0)
+  const [sourceOrderId, setSourceOrderId] = useState<number | null>(null)
+  const [showLoadOrder, setShowLoadOrder] = useState(false)
   const [filterStatus, setFilterStatus] = useState('')
   const [showLowStock, setShowLowStock] = useState(false)
   const [showSupplierTable, setShowSupplierTable] = useState(false)
   const [showProductTable, setShowProductTable] = useState(false)
+  const [productFilterOn, setProductFilterOn] = useState(true)
   const [showReceiveForm, setShowReceiveForm] = useState(false)
   const [receiveItems, setReceiveItems] = useState<{ productId: number; quantity: number }[]>([])
   const [receiveId, setReceiveId] = useState<number | null>(null)
@@ -85,7 +98,21 @@ export default function Purchases() {
     if (showLowStock) {
       list = list.filter((p) => p.stock <= p.minStock)
     }
-    return list.sort((a, b) => a.stock / (a.minStock || 1) - b.stock / (b.minStock || 1))
+    return list.sort((a, b) => a.stock - b.stock)
+  }
+
+  function productTableItems() {
+    let list = products
+    if (selectedSupplier && productFilterOn) {
+      list = list.filter((p) => p.suppliers?.some((s) => s.supplier.id === selectedSupplier.id))
+    } else if (selectedSupplier && !productFilterOn) {
+      list = list.filter((p) => !p.suppliers?.some((s) => s.supplier.id === selectedSupplier.id))
+    }
+    return list
+  }
+
+  function sortByStock(items: any[]) {
+    return [...items].sort((a, b) => Number(a.stock) - Number(b.stock))
   }
 
   async function load() {
@@ -160,9 +187,26 @@ export default function Purchases() {
       dueDate: dueDate || null,
       notes: notes || null,
       type: purchaseType,
-      items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      currency: 'usd',
+      exchangeRate: rate || undefined,
+      sourceOrderId: sourceOrderId || undefined,
+      items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: lineUsdPrice(i) })),
     })
-    setShowForm(false); setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); load()
+    setShowForm(false); setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); setConfirmStep(false); setSourceOrderId(null); load()
+  }
+
+  function onLoadOrder(order: any) {
+    setItems(order.items.map((i: any) => {
+      const p = products.find((x) => x.id === i.productId)
+      const unitPrice = i.unitPrice > 0 ? Number(i.unitPrice) : (p ? defaultPrice(p) : 0)
+      return { productId: i.productId, quantity: i.quantity, unitPrice, cur: 'usd' }
+    }))
+    setSourceOrderId(order.id)
+    setShowLoadOrder(false)
+  }
+
+  function resetForm() {
+    setSelectedSupplier(null); setItems([]); setDueDate(''); setNotes(''); setPurchaseType('pedido'); setConfirmStep(false); setPaymentMethod('efectivo_bs'); setSourceOrderId(null); setNotes('')
   }
 
   async function markAsPaid(id: number) {
@@ -183,10 +227,20 @@ export default function Purchases() {
     if (existingOrder) {
       setDuplicateWarning(`"${products.find((p) => p.id === productId)?.name}" ya tiene un pedido pendiente con ${existingOrder.supplier.name} (${existingOrder.number})`)
     }
+    addLine(productId, 1)
+  }
+
+  function defaultPrice(p: Product): number {
+    const c = Number(p.cost)
+    return c > 0 ? c : Number(p.price)
+  }
+
+  function addLine(productId: number, quantity: number, unitPrice?: number) {
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === productId)
-      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
-      return [...prev, { productId, quantity: 1 }]
+      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + quantity } : i)
+      const p = products.find((x) => x.id === productId)
+      return [...prev, { productId, quantity, unitPrice: unitPrice ?? (p ? defaultPrice(p) : 0), cur: 'usd' }]
     })
   }
 
@@ -195,17 +249,37 @@ export default function Purchases() {
     setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity } : i))
   }
 
-  function calcItemTotal(item: { productId: number; quantity: number }) {
+  function updateLinePrice(productId: number, rawValue: number) {
+    setItems((prev) => prev.map((i) => {
+      if (i.productId !== productId) return i
+      const unitPrice = i.cur === 'bs' && rate > 0 ? rawValue / rate : rawValue
+      return { ...i, unitPrice }
+    }))
+  }
+
+  function toggleCur(productId: number) {
+    setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, cur: i.cur === 'usd' ? 'bs' : 'usd' } : i))
+  }
+
+  function lineDisplayPrice(item: LineItem): number {
+    return item.cur === 'bs' ? item.unitPrice * rate : item.unitPrice
+  }
+
+  function lineUsdPrice(item: LineItem): number {
+    return item.cur === 'bs' ? item.unitPrice * rate : item.unitPrice
+  }
+
+  function calcItemTotal(item: LineItem) {
     const p = products.find((x) => x.id === item.productId)
     if (!p) return 0
-    return Number(p.price) * item.quantity * (1 + Number(p.ivaPercent) / 100)
+    return lineUsdPrice(item) * item.quantity * (1 + Number(p.ivaPercent) / 100)
   }
 
   function calcSubtotal() {
     return items.reduce((sum, item) => {
       const p = products.find((x) => x.id === item.productId)
       if (!p) return sum
-      return sum + Number(p.price) * item.quantity
+      return sum + lineUsdPrice(item) * item.quantity
     }, 0)
   }
 
@@ -213,7 +287,7 @@ export default function Purchases() {
     return items.reduce((sum, item) => {
       const p = products.find((x) => x.id === item.productId)
       if (!p) return sum
-      return sum + Number(p.price) * item.quantity * Number(p.ivaPercent) / 100
+      return sum + lineUsdPrice(item) * item.quantity * Number(p.ivaPercent) / 100
     }, 0)
   }
 
@@ -237,7 +311,7 @@ export default function Purchases() {
     <div className="page-container">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Compras</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">+ Nueva</button>
+        <button onClick={() => { resetForm(); setShowForm(true); api.exchangeRate.get().then((r: any) => setRate(Number(r?.rate) || 0)).catch(() => setRate(0)) }} className="btn-primary">+ Nueva</button>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -251,126 +325,213 @@ export default function Purchases() {
 
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-card p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Nueva Compra</h3>
-
-            <label className="block text-sm font-medium mb-1">Proveedor</label>
-            {selectedSupplier ? (
-              <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg mb-2">
-                <span>{selectedSupplier.name}</span>
-                <button onClick={() => setSelectedSupplier(null)} className="text-red-500 text-sm">Cambiar</button>
-              </div>
-            ) : (
-              <SearchPicker
-                items={suppliers}
-                onSelect={setSelectedSupplier}
-                filter={(s, q) => s.name.toLowerCase().includes(q.toLowerCase()) || s.documentNumber.includes(q)}
-                renderItem={(s) => <span>{s.name} - {s.documentType}{s.documentNumber}</span>}
-                keyExtractor={(s) => s.id}
-                placeholder="Buscar proveedor (nombre o RIF)..."
-                onCreateNew={() => setShowNewSupplierForm(true)}
-                createNewLabel="+ Nuevo proveedor"
-                onAdvancedSearch={() => setShowSupplierTable(true)}
-                absolute
-                className="mb-2"
-              />
-            )}
-
-            <div className="flex gap-2 mb-3">
-              <button onClick={() => setPurchaseType('pedido')}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'pedido' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Pedido</button>
-              <button onClick={() => setPurchaseType('factura')}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'factura' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Factura de Compra</button>
-            </div>
-            {purchaseType === 'pedido' && <p className="text-xs text-gray-500 mb-2">El pedido no afecta el stock. Al recibirlo se incrementará automáticamente.</p>}
-
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg mb-3">
-              <option value="efectivo_bs">Efectivo Bs</option>
-              <option value="efectivo_usd">Efectivo $</option>
-              <option value="credito">Crédito</option>
-              <option value="tarjeta_debito">Tarjeta de Débito</option>
-              <option value="tarjeta_credito">Tarjeta de Crédito</option>
-              <option value="cheque">Cheque</option>
-              <option value="pago_movil">Pago Móvil</option>
-              <option value="biopago">Biopago</option>
-            </select>
-
-            <div className="flex gap-2 mb-3">
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
-                className="flex-1 px-3 py-2 border rounded-lg text-sm" placeholder="Fecha vencimiento" />
+          <div className="modal-card p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">Nueva Compra</h3>
+              <div className="text-xs text-gray-400 font-medium">{confirmStep ? 'Paso 2 de 2 · Confirmar' : 'Paso 1 de 2 · Productos'}</div>
             </div>
 
-            <label className="block text-sm font-medium mb-1">Productos</label>
-            <div className="space-y-2 mb-3">
-              {items.map((item) => {
-                const p = products.find((x) => x.id === item.productId)
-                if (!p) return null
-                return (
-                  <div key={item.productId} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
-                    <span className="flex-1 text-sm">{p.name}</span>
-                    <input type="number" value={item.quantity} min="1"
-                      onChange={(e) => updateQty(item.productId, Number(e.target.value))}
-                      className="w-16 px-2 py-1 border rounded text-center text-sm" />
-                    <span className="text-sm font-mono w-20 text-right">${calcItemTotal(item).toFixed(2)}</span>
-                    <button onClick={() => updateQty(item.productId, 0)} className="text-red-500 text-sm">✕</button>
+            {!confirmStep ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Proveedor</label>
+                      {selectedSupplier ? (
+                        <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                          <span className="text-sm">{selectedSupplier.name}</span>
+                          <button onClick={() => setSelectedSupplier(null)} className="text-red-500 text-sm">Cambiar</button>
+                        </div>
+                      ) : (
+                        <SearchPicker
+                          items={suppliers}
+                          onSelect={setSelectedSupplier}
+                          filter={(s, q) => s.name.toLowerCase().includes(q.toLowerCase()) || s.documentNumber.includes(q)}
+                          renderItem={(s) => <span>{s.name} - {s.documentType}{s.documentNumber}</span>}
+                          keyExtractor={(s) => s.id}
+                          placeholder="Buscar proveedor (nombre o RIF)..."
+                          onCreateNew={() => setShowNewSupplierForm(true)}
+                          createNewLabel="+ Crear proveedor"
+                          onAdvancedSearch={() => setShowSupplierTable(true)}
+                          showOnFocus
+                          absolute
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Tipo</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => setPurchaseType('pedido')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'pedido' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Pedido</button>
+                        <button onClick={() => setPurchaseType('factura')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'factura' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Factura de Compra</button>
+                      </div>
+                    </div>
+                    {purchaseType === 'pedido' && <p className="text-xs text-gray-500">El pedido no afecta el stock. Al recibirlo se incrementará automáticamente.</p>}
+                    {purchaseType === 'factura' && (
+                      <button onClick={() => selectedSupplier ? setShowLoadOrder(true) : null}
+                        disabled={!selectedSupplier}
+                        className="w-full py-2 rounded-lg bg-sky-100 text-sky-800 hover:bg-sky-200 text-sm font-medium disabled:opacity-50">
+                        📦 Cargar pedido del proveedor
+                      </button>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Notas</label>
+                      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas (opcional)" rows={2}
+                        className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    </div>
                   </div>
-                )
-              })}
-            </div>
 
-            <div className="flex items-center gap-2 mb-2">
-              {selectedSupplier && (
-                <span className="text-xs text-gray-500">Productos de: <strong>{selectedSupplier.name}</strong></span>
-              )}
-              <label className="ml-auto flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
-                <input type="checkbox" checked={showLowStock} onChange={(e) => setShowLowStock(e.target.checked)} className="rounded" />
-                Solo bajo stock
-              </label>
-            </div>
-            {duplicateWarning && (
-              <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs px-3 py-2 rounded-lg mb-2 flex justify-between items-center">
-                <span>⚠️ {duplicateWarning}</span>
-                <button onClick={() => setDuplicateWarning(null)} className="text-amber-600 font-bold ml-2">✕</button>
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Productos agregados</label>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-gray-500">
+                          <th className="text-left py-1.5 font-medium">Producto</th>
+                          <th className="text-center py-1.5 font-medium w-14">Precio</th>
+                          <th className="text-center py-1.5 font-medium w-16">Mon</th>
+                          <th className="text-center py-1.5 font-medium w-16">Cant</th>
+                          <th className="text-right py-1.5 font-medium">Subtotal</th>
+                          <th className="w-6"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((item) => {
+                          const p = products.find((x) => x.id === item.productId)
+                          if (!p) return null
+                          const lowStock = Number(p.stock) <= Number(p.minStock)
+                          return (
+                            <tr key={item.productId} className="border-b border-gray-100">
+                              <td className="py-1.5 pr-2">
+                                <span className="block font-medium text-gray-800">{p.name}</span>
+                                <span className="block text-xs text-gray-400">
+                                  Costo ${Number(p.cost || 0).toFixed(2)} · Venta ${Number(p.price).toFixed(2)}
+                                  <span className={lowStock ? 'text-amber-700' : ''}> · stock {p.stock}</span>
+                                </span>
+                              </td>
+                              <td className="py-1.5">
+                                <input type="number" min="0" step="0.01" value={item.cur === 'bs' ? Number(lineDisplayPrice(item)).toFixed(2) : item.unitPrice || ''}
+                                  onChange={(e) => updateLinePrice(item.productId, Number(e.target.value))}
+                                  className="w-full px-1.5 py-1 border rounded text-right text-sm" />
+                              </td>
+                              <td className="py-1.5 text-center">
+                                <button onClick={() => toggleCur(item.productId)}
+                                  className={`px-1.5 py-0.5 rounded text-xs font-semibold ${item.cur === 'usd' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {item.cur === 'usd' ? '$' : 'Bs'}
+                                </button>
+                              </td>
+                              <td className="py-1.5 text-center">
+                                <input type="number" min="1" value={item.quantity}
+                                  onChange={(e) => updateQty(item.productId, Number(e.target.value))}
+                                  className="w-14 px-1.5 py-1 border rounded text-center text-sm" />
+                              </td>
+                              <td className="py-1.5 text-right font-mono">${calcItemTotal(item).toFixed(2)}</td>
+                              <td className="py-1.5 text-center">
+                                <button onClick={() => updateQty(item.productId, 0)} className="text-red-500 text-sm">✕</button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {items.length === 0 && (
+                          <tr><td colSpan={6} className="text-center py-6 text-gray-400">Agrega productos con el buscador</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-2">
+                  {selectedSupplier && (
+                    <button onClick={() => { setProductFilterOn(true); setShowProductTable(true) }} className="ml-1 text-sm font-medium text-gray-500 hover:text-blue-800">
+                      🔍 {selectedSupplier.name}
+                    </button>
+                  )}
+                  <label className="mx-2 flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+                    <input type="checkbox" checked={showLowStock} onChange={(e) => setShowLowStock(e.target.checked)} className="rounded" />
+                    Solo bajo stock
+                  </label>
+                </div>
+                {duplicateWarning && (
+                  <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs px-3 py-2 rounded-lg mb-2 flex justify-between items-center">
+                    <span>⚠️ {duplicateWarning}</span>
+                    <button onClick={() => setDuplicateWarning(null)} className="text-amber-600 font-bold ml-2">✕</button>
+                  </div>
+                )}
+                <SearchPicker
+                  items={filteredProducts()}
+                  onSelect={(p) => addItem(p.id)}
+                  filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
+                  renderItem={(p) => {
+                    const lowStock = p.stock <= p.minStock
+                    return (
+                      <span className="flex justify-between w-full text-xs">
+                        <span>{p.code} - {p.name}</span>
+                        <span className={lowStock ? 'text-amber-700' : 'text-gray-500'}>
+                          costo ${Number(p.cost || 0).toFixed(2)} · venta ${Number(p.price).toFixed(2)} {lowStock && `· stock ${p.stock}`}
+                        </span>
+                      </span>
+                    )
+                  }}
+                  keyExtractor={(p) => p.id}
+                  placeholder="Buscar producto por nombre o código..."
+                  onCreateNew={() => setShowNewProductForm(true)}
+                  createNewLabel="+ Nuevo producto"
+                  onAdvancedSearch={() => { setProductFilterOn(true); setShowProductTable(true) }}
+                />
+
+                <div className="border-t pt-3 mt-3 text-right space-y-1">
+                  <p className="text-sm text-gray-600">Subtotal: <span className="font-mono">${calcSubtotal().toFixed(2)}</span></p>
+                  <p className="text-sm text-gray-600">IVA: <span className="font-mono">${calcIva().toFixed(2)}</span></p>
+                  <p className="text-lg font-bold">Total: <span className="font-mono">${(calcSubtotal() + calcIva()).toFixed(2)}</span></p>
+                </div>
+
+                <div className="flex gap-2 pt-3">
+                  <button onClick={() => setConfirmStep(true)} disabled={!selectedSupplier || items.length === 0}
+                    className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">Continuar ➜</button>
+                  <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700 mb-1"><strong>Proveedor:</strong> {selectedSupplier?.name}</p>
+                  <p className="text-sm text-gray-700"><strong>Tipo:</strong> {purchaseType === 'factura' ? 'Factura de Compra' : 'Pedido'}</p>
+                  <p className="text-sm text-gray-700"><strong>Items:</strong> {items.reduce((c, i) => c + i.quantity, 0)} unidades</p>
+                  {sourceOrderId && <p className="text-xs text-sky-700 mt-1">Se cargó desde un pedido; al registrar, este pedido se marca como despachado.</p>}
+                  <p className="text-lg font-bold mt-1">Total: <span className="font-mono">${(calcSubtotal() + calcIva()).toFixed(2)}</span></p>
+                </div>
+
+                {purchaseType === 'factura' ? (
+                  <>
+                    <label className="block text-sm font-medium mb-1">Forma de pago</label>
+                    <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg mb-3">
+                      <option value="efectivo_bs">Efectivo Bs</option>
+                      <option value="efectivo_usd">Efectivo $</option>
+                      <option value="credito">Crédito</option>
+                      <option value="tarjeta_debito">Tarjeta de Débito</option>
+                      <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="pago_movil">Pago Móvil</option>
+                      <option value="biopago">Biopago</option>
+                    </select>
+                    <label className="block text-sm font-medium mb-1">Fecha de vencimiento</label>
+                    <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg mb-3" />
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500 mb-3">Los pedidos no requieren forma de pago ni fecha.</p>
+                )}
+
+                <div className="flex gap-2 pt-3">
+                  <button onClick={() => setConfirmStep(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">← Volver</button>
+                  <button onClick={createPurchase} disabled={!selectedSupplier || items.length === 0}
+                    className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">
+                    Registrar {purchaseType === 'factura' ? 'Compra' : 'Pedido'}
+                  </button>
+                </div>
+              </>
             )}
-            <SearchPicker
-              items={filteredProducts()}
-              onSelect={(p) => addItem(p.id)}
-              filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
-              renderItem={(p) => {
-                const lowStock = p.stock <= p.minStock
-                return (
-                  <span className="flex justify-between w-full">
-                    <span>{p.code} - {p.name}</span>
-                    <span className={`text-gray-500 ${lowStock ? 'text-amber-700 font-semibold' : ''}`}>
-                      ${Number(p.price).toFixed(2)} {lowStock && <span className="text-amber-700">stock: {p.stock}</span>}
-                    </span>
-                  </span>
-                )
-              }}
-              keyExtractor={(p) => p.id}
-              placeholder="Buscar por nombre o código..."
-              onCreateNew={() => setShowNewProductForm(true)}
-              createNewLabel="+ Nuevo producto"
-              onAdvancedSearch={() => setShowProductTable(true)}
-              className="mb-3"
-            />
-
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas (opcional)"
-              className="w-full px-3 py-2 border rounded-lg mb-3" />
-
-            <div className="border-t pt-3 text-right space-y-1">
-              <p className="text-sm text-gray-600">Subtotal: <span className="font-mono">${calcSubtotal().toFixed(2)}</span></p>
-              <p className="text-sm text-gray-600">IVA: <span className="font-mono">${calcIva().toFixed(2)}</span></p>
-              <p className="text-lg font-bold">Total: <span className="font-mono">${(calcSubtotal() + calcIva()).toFixed(2)}</span></p>
-            </div>
-
-            <div className="flex gap-2 pt-3">
-              <button onClick={createPurchase} disabled={!selectedSupplier || items.length === 0}
-                className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">Registrar Compra</button>
-              <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
-            </div>
           </div>
         </div>
       )}
@@ -418,7 +579,7 @@ export default function Purchases() {
               placeholder="Agregar productos adicionales..."
               onCreateNew={() => setShowNewProductForm(true)}
               createNewLabel="+ Nuevo producto"
-              onAdvancedSearch={() => setShowProductTable(true)}
+              onAdvancedSearch={() => { setProductFilterOn(true); setShowProductTable(true) }}
               className="mb-3"
             />
 
@@ -450,22 +611,33 @@ export default function Purchases() {
 
       <TablePickerModal
         open={showProductTable} onClose={() => setShowProductTable(false)}
-        title="Productos"
-        items={products}
+        title={selectedSupplier && productFilterOn ? `Productos de ${selectedSupplier.name}` : 'Productos'}
+        items={productTableItems()}
+        sortFn={sortByStock}
         columns={[
           { key: 'code', label: 'Código', render: (p: any) => p.code },
           { key: 'name', label: 'Nombre', render: (p: any) => p.name },
-          { key: 'price', label: 'Precio', render: (p: any) => `${p.currency === 'usd' ? '$' : 'Bs.'}${Number(p.price).toFixed(2)}` },
+          { key: 'cost', label: 'Costo', render: (p: any) => <span className="text-emerald-700">${Number(p.cost || 0).toFixed(2)}</span> },
+          { key: 'price', label: 'Venta', render: (p: any) => `${p.currency === 'usd' ? '$' : 'Bs.'}${Number(p.price).toFixed(2)}` },
           { key: 'stock', label: 'Stock', render: (p: any) => p.stock <= 0 ? <span className="text-red-500">{p.stock}</span> : p.stock },
         ]}
         filters={[
           { key: 'currency', label: 'Moneda', options: [{ value: 'usd', label: '$ USD' }, { value: 'bs', label: 'Bs' }], filter: (p: any, v: string) => p.currency === v },
           { key: 'stock', label: 'Stock', options: [{ value: 'yes', label: 'Con stock' }, { value: 'no', label: 'Sin stock' }], filter: (p: any, v: string) => v === 'yes' ? p.stock > 0 : p.stock <= 0 },
         ]}
+        headerExtra={selectedSupplier ? (
+          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
+            <input type="checkbox" checked={productFilterOn} onChange={(e) => setProductFilterOn(e.target.checked)} className="rounded" />
+            {productFilterOn ? `Solo ${selectedSupplier.name}` : 'Otros proveedores'}
+          </label>
+        ) : undefined}
         filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
         onSelect={(p: any) => { addItem(p.id); setShowProductTable(false) }}
         searchPlaceholder="Buscar producto..."
       />
+
+      <LoadPurchaseOrderModal open={showLoadOrder} onClose={() => setShowLoadOrder(false)}
+        supplierId={selectedSupplier?.id} onLoad={onLoadOrder} />
 
       {showNewSupplierForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewSupplierForm(false)}>

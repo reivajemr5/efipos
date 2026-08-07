@@ -42,7 +42,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type } = req.body
+  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type, sourceOrderId } = req.body
   const ctx = resolveContext(req)
 
   if (!supplierId || !items?.length) {
@@ -50,6 +50,9 @@ export async function create(req: AuthRequest, res: Response) {
     return
   }
   if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  const branchId = ctx.branchId ?? (await prisma.branch.findFirst({ where: { businessId: ctx.businessId, active: true }, select: { id: true }, orderBy: { id: 'asc' } }))?.id ?? 0
+  if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
 
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
@@ -91,7 +94,7 @@ export async function create(req: AuthRequest, res: Response) {
   const purchase = await prisma.purchaseInvoice.create({
     data: {
       businessId: ctx.businessId,
-      branchId: ctx.branchId ?? 0,
+      branchId,
       number,
       supplierId,
       userId: req.user!.id,
@@ -118,7 +121,7 @@ export async function create(req: AuthRequest, res: Response) {
       for (const item of purchaseItems) {
         await changeStock(tx, {
           businessId: ctx.businessId!,
-          branchId: ctx.branchId ?? 0,
+          branchId,
           productId: item.productId,
           type: 'purchase',
           quantity: item.quantity,
@@ -128,6 +131,21 @@ export async function create(req: AuthRequest, res: Response) {
         })
       }
     })
+  }
+
+  if (type === 'factura' && sourceOrderId) {
+    const source = await prisma.purchaseInvoice.findFirst({
+      where: { id: Number(sourceOrderId), businessId: ctx.businessId, supplierId, status: 'pedido' },
+    })
+    if (source) {
+      await prisma.purchaseInvoice.update({
+        where: { id: source.id },
+        data: {
+          status: 'anulada',
+          notes: source.notes ? `${source.notes} | Convertido a factura ${number}` : `Convertido a factura ${number}`,
+        },
+      })
+    }
   }
 
   res.status(201).json(purchase)
