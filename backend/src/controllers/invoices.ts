@@ -17,6 +17,7 @@ export async function list(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
   const ctx = resolveContext(req)
   const where: any = { businessId: ctx.businessId ?? 0 }
+  if (ctx.branchId) where.branchId = ctx.branchId
   if (date_from || date_to) {
     where.createdAt = {}
     if (date_from) where.createdAt.gte = new Date(String(date_from))
@@ -47,8 +48,10 @@ export async function list(req: AuthRequest, res: Response) {
 export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const ctx = resolveContext(req)
+  const where: any = { id, businessId: ctx.businessId ?? 0 }
+  if (ctx.branchId) where.branchId = ctx.branchId
   const invoice = await prisma.invoice.findFirst({
-    where: { id, businessId: ctx.businessId ?? 0 },
+    where,
     include: {
       client: true,
       user: { select: { id: true, name: true } },

@@ -8,6 +8,7 @@ export async function receivable(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
   const ctx = resolveContext(req)
   const where: any = { businessId: ctx.businessId ?? 0, balance: { gt: 0 }, status: { in: ['activa'] } }
+  if (ctx.branchId) where.branchId = ctx.branchId
   if (q) {
     where.OR = [
       { client: { name: { contains: q, mode: 'insensitive' } } },
@@ -43,6 +44,7 @@ export async function payable(req: AuthRequest, res: Response) {
   const q = String(req.query.q || '').trim()
   const ctx = resolveContext(req)
   const where: any = { businessId: ctx.businessId ?? 0, status: { in: ['pedido', 'recibido'] } }
+  if (ctx.branchId) where.branchId = ctx.branchId
   if (q) {
     where.OR = [
       { supplier: { name: { contains: q, mode: 'insensitive' } } },

@@ -5,6 +5,7 @@ import ProductFormModal from '../components/ProductFormModal'
 import SearchPicker from '../components/SearchPicker'
 import TablePickerModal from '../components/TablePickerModal'
 import LoadPurchaseOrderModal from '../components/LoadPurchaseOrderModal'
+import DistributeStockModal from '../components/DistributeStockModal'
 
 interface Supplier { id: number; name: string; documentType: string; documentNumber: string }
 interface Product {
@@ -12,7 +13,9 @@ interface Product {
   currency: string; ivaPercent: number; stock: number; minStock: number
   suppliers: { supplier: { id: number; name: string } }[]
 }
-interface LineItem { productId: number; quantity: number; unitPrice: number; cur: 'usd' | 'bs' }
+interface Branch { id: number; name: string }
+interface Distribution { branchId: number; quantity: number }
+interface LineItem { productId: number; quantity: number; unitPrice: number; salePrice?: number; distribution?: Distribution[] }
 
 function uuid() {
   return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
@@ -22,9 +25,12 @@ export default function PurchaseFormPage() {
   const navigate = useNavigate()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const [items, setItems] = useState<LineItem[]>([])
   const [purchaseType, setPurchaseType] = useState('pedido')
+  const [docCur, setDocCur] = useState<'bs' | 'usd'>('usd')
+  const [alreadyPaid, setAlreadyPaid] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -40,20 +46,32 @@ export default function PurchaseFormPage() {
   const [productFilterOn, setProductFilterOn] = useState(true)
   const [showLowStock, setShowLowStock] = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
+  const [distributeTarget, setDistributeTarget] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const idemRef = useRef<string | null>(null)
 
   async function load() {
-    const [sup, prods, r] = await Promise.all([
-      api.suppliers.list(), api.products.list(), api.exchangeRate.get().catch(() => null),
+    const [sup, prods, r, br] = await Promise.all([
+      api.suppliers.list(), api.products.list(), api.exchangeRate.get().catch(() => null), api.branches.list().catch(() => []),
     ])
     setSuppliers(Array.isArray(sup) ? sup : [])
     setProducts(Array.isArray(prods) ? prods : [])
     setRate(Number(r?.rate) || 0)
+    setBranches(Array.isArray(br) ? br : [])
   }
   useEffect(() => { load() }, [])
 
+  useEffect(() => {
+    const target = purchaseType === 'factura' ? 'bs' : 'usd'
+    if (target !== docCur && rate > 0 && items.length) {
+      setItems((prev) => prev.map((i) => ({ ...i, unitPrice: target === 'usd' ? i.unitPrice / rate : i.unitPrice * rate })))
+    }
+    setDocCur(target)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purchaseType])
+
   function defaultPrice(p: Product) { const c = Number(p.cost); return c > 0 ? c : Number(p.price) }
+  function toDocCur(usd: number) { return docCur === 'bs' && rate > 0 ? usd * rate : usd }
 
   function filteredProducts() {
     let list = products
@@ -74,7 +92,7 @@ export default function PurchaseFormPage() {
       const existing = prev.find((i) => i.productId === productId)
       if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + quantity } : i)
       const p = products.find((x) => x.id === productId)
-      return [...prev, { productId, quantity, unitPrice: p ? defaultPrice(p) : 0, cur: 'usd' }]
+      return [...prev, { productId, quantity, unitPrice: p ? toDocCur(defaultPrice(p)) : 0 }]
     })
   }
   function updateQty(productId: number, q: number) {
@@ -82,22 +100,24 @@ export default function PurchaseFormPage() {
     setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity: q } : i))
   }
   function updateLinePrice(productId: number, raw: number) {
-    setItems((prev) => prev.map((i) => i.productId !== productId ? i : { ...i, unitPrice: i.cur === 'bs' && rate > 0 ? raw / rate : raw }))
+    setItems((prev) => prev.map((i) => i.productId !== productId ? i : { ...i, unitPrice: raw }))
   }
-  function toggleCur(productId: number) {
-    setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, cur: i.cur === 'usd' ? 'bs' : 'usd' } : i))
+  function switchCurrency(next: 'bs' | 'usd') {
+    if (next === docCur || rate <= 0) return
+    setItems((prev) => prev.map((i) => ({ ...i, unitPrice: next === 'usd' ? i.unitPrice / rate : i.unitPrice * rate })))
+    setDocCur(next)
   }
-  function lineUsd(item: LineItem) { return item.cur === 'bs' ? item.unitPrice * rate : item.unitPrice }
-  function lineDisplay(item: LineItem) { return item.cur === 'bs' ? item.unitPrice * rate : item.unitPrice }
-  function calcItemTotal(item: LineItem) { const p = products.find((x) => x.id === item.productId); return p ? lineUsd(item) * item.quantity * (1 + Number(p.ivaPercent) / 100) : 0 }
-  function calcSubtotal() { return items.reduce((s, it) => { const p = products.find((x) => x.id === it.productId); return p ? s + lineUsd(it) * it.quantity : s }, 0) }
-  function calcIva() { return items.reduce((s, it) => { const p = products.find((x) => x.id === it.productId); return p ? s + lineUsd(it) * it.quantity * Number(p.ivaPercent) / 100 : s }, 0) }
+  function calcSubtotal() { return items.reduce((s, it) => s + it.unitPrice * it.quantity, 0) }
+  function calcIva() { return items.reduce((s, it) => { const p = products.find((x) => x.id === it.productId); return p ? s + it.unitPrice * it.quantity * Number(p.ivaPercent) / 100 : s }, 0) }
+  function updateSalePrice(productId: number, v: number) { setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, salePrice: v } : i)) }
+  function setLineDistribution(productId: number, dist: Distribution[]) { setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, distribution: dist } : i)) }
+  function distributedQty(item: LineItem) { return (item.distribution || []).reduce((s, d) => s + (Number(d.quantity) || 0), 0) }
 
   function onLoadOrder(order: any) {
     setItems((order.items || []).map((i: any) => {
       const p = products.find((x) => x.id === i.productId)
-      const unitPrice = i.unitPrice > 0 ? Number(i.unitPrice) : (p ? defaultPrice(p) : 0)
-      return { productId: i.productId, quantity: i.quantity, unitPrice, cur: 'usd' }
+      const unitPrice = i.unitPrice > 0 ? toDocCur(Number(i.unitPrice)) : (p ? toDocCur(defaultPrice(p)) : 0)
+      return { productId: i.productId, quantity: i.quantity, unitPrice }
     }))
     setSourceOrderId(order.id)
     setShowLoadOrder(false)
@@ -119,17 +139,25 @@ export default function PurchaseFormPage() {
     setSubmitting(true)
     if (!idemRef.current) idemRef.current = uuid()
     try {
+      const isFactura = purchaseType === 'factura'
       await api.purchases.create({
         supplierId: selectedSupplier.id,
         paymentMethod,
         dueDate: dueDate || null,
         notes: notes || null,
         type: purchaseType,
-        currency: 'usd',
+        currency: docCur,
         exchangeRate: rate || undefined,
         sourceOrderId: sourceOrderId || undefined,
         requestKey: idemRef.current,
-        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: lineUsd(i) })),
+        paid: isFactura ? alreadyPaid : undefined,
+        items: items.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          ...(isFactura && i.salePrice !== undefined ? { salePrice: i.salePrice } : {}),
+          ...(isFactura && Array.isArray(i.distribution) && i.distribution.length ? { distribution: i.distribution } : {}),
+        })),
       })
       navigate('/purchases')
     } catch (e: any) {
@@ -138,7 +166,7 @@ export default function PurchaseFormPage() {
     }
   }
 
-  const money = (n: number) => `$${n.toFixed(2)}`
+  const money = (n: number) => `${docCur === 'bs' ? 'Bs.' : '$'}${n.toFixed(2)}`
   return (
     <div className="page-container" onClick={() => setDuplicateWarning(null)}>
       <div className="flex items-center justify-between mb-4">
@@ -155,6 +183,7 @@ export default function PurchaseFormPage() {
             <p className="text-sm text-gray-700 mb-1"><strong>Proveedor:</strong> {selectedSupplier?.name}</p>
             <p className="text-sm text-gray-700 mb-1"><strong>Tipo:</strong> {purchaseType === 'factura' ? 'Factura de Compra' : 'Pedido'}</p>
             <p className="text-sm text-gray-700 mb-1"><strong>Items:</strong> {items.reduce((c, i) => c + i.quantity, 0)} unidades</p>
+            <p className="text-sm text-gray-700 mb-1"><strong>Moneda:</strong> {docCur === 'bs' ? 'Bolívares (Bs)' : 'Dólares ($)'}</p>
             {sourceOrderId && <p className="text-xs text-sky-700 mb-1">Se cargó desde un pedido; al registrar, este pedido se marca como despachado.</p>}
             <p className="text-lg font-bold">Total: <span className="font-mono">{money(calcSubtotal() + calcIva())}</span></p>
           </div>
@@ -170,6 +199,15 @@ export default function PurchaseFormPage() {
               </select>
               <label className="block text-sm font-medium mb-1">Fecha de vencimiento</label>
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg mb-3" />
+              {(!dueDate || (dueDate && new Date(dueDate) <= new Date(new Date().setHours(0, 0, 0, 0)))) && (
+                <label className="flex items-start gap-2 mb-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
+                  <input type="checkbox" checked={alreadyPaid} onChange={(e) => setAlreadyPaid(e.target.checked)} className="mt-1 rounded" />
+                  <span className="text-sm text-emerald-900">
+                    <strong>¿Ya se pagó esta factura?</strong><br />
+                    <span className="text-xs text-emerald-700">Sin vencimiento o con vencimiento hoy. Si está pagada, quedará registrada como "pagada".</span>
+                  </span>
+                </label>
+              )}
             </>
           ) : (
             <p className="text-xs text-gray-500 mb-3">Los pedidos no requieren forma de pago ni fecha.</p>
@@ -213,6 +251,15 @@ export default function PurchaseFormPage() {
                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'pedido' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Pedido</button>
                 <button onClick={() => setPurchaseType('factura')}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${purchaseType === 'factura' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>Factura de Compra</button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Moneda de la compra</label>
+              <div className="flex gap-2">
+                <button onClick={() => switchCurrency('bs')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${docCur === 'bs' ? 'bg-amber-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Bs</button>
+                <button onClick={() => switchCurrency('usd')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${docCur === 'usd' ? 'bg-emerald-700 text-white' : 'bg-gray-200 text-gray-700'}`}>$</button>
               </div>
             </div>
             {purchaseType === 'factura' && (
@@ -280,9 +327,10 @@ export default function PurchaseFormPage() {
                 <tr className="border-b border-gray-200 text-gray-500">
                   <th className="text-left py-1.5 font-medium">Producto</th>
                   <th className="text-center py-1.5 font-medium w-24">Precio</th>
-                  <th className="text-center py-1.5 font-medium w-16">Mon</th>
+                  {purchaseType === 'factura' && <th className="text-center py-1.5 font-medium w-24">P. Venta</th>}
                   <th className="text-center py-1.5 font-medium w-20">Cant</th>
                   <th className="text-right py-1.5 font-medium">Subtotal</th>
+                  {purchaseType === 'factura' && <th className="text-center py-1.5 font-medium w-20">Dist.</th>}
                   <th className="w-6"></th>
                 </tr>
               </thead>
@@ -291,6 +339,8 @@ export default function PurchaseFormPage() {
                   const p = products.find((x) => x.id === item.productId)
                   if (!p) return null
                   const lowStock = Number(p.stock) <= Number(p.minStock)
+                  const isFactura = purchaseType === 'factura'
+                  const distQty = distributedQty(item)
                   return (
                     <tr key={item.productId} className="border-b border-gray-100">
                       <td className="py-1.5 pr-2">
@@ -300,20 +350,34 @@ export default function PurchaseFormPage() {
                         </span>
                       </td>
                       <td className="py-1.5">
-                        <input type="number" min="0" step="0.01" value={item.cur === 'bs' ? Number(lineDisplay(item)).toFixed(2) : item.unitPrice || ''}
+                        <input type="number" min="0" step="0.01" value={item.unitPrice || ''}
                           onChange={(e) => updateLinePrice(item.productId, Number(e.target.value))} className="w-full px-1.5 py-1 border rounded text-right text-sm" />
                       </td>
-                      <td className="py-1.5 text-center">
-                        <button onClick={() => toggleCur(item.productId)}
-                          className={`px-1.5 py-0.5 rounded text-xs font-semibold ${item.cur === 'usd' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {item.cur === 'usd' ? '$' : 'Bs'}
-                        </button>
-                      </td>
+                      {isFactura && (
+                        <td className="py-1.5">
+                          <input type="number" min="0" step="0.01" value={item.salePrice ?? ''}
+                            onChange={(e) => updateSalePrice(item.productId, Number(e.target.value))}
+                            placeholder={money(toDocCur(Number(p.price)))} className="w-full px-1.5 py-1 border rounded text-right text-sm" />
+                        </td>
+                      )}
                       <td className="py-1.5 text-center">
                         <input type="number" min="1" value={item.quantity} onChange={(e) => updateQty(item.productId, Number(e.target.value))}
                           className="w-14 px-1.5 py-1 border rounded text-center text-sm" />
                       </td>
-                      <td className="py-1.5 text-right font-mono">{money(calcItemTotal(item))}</td>
+                      <td className="py-1.5 text-right font-mono">{money(item.unitPrice * item.quantity * (1 + Number(p.ivaPercent) / 100))}</td>
+                      {isFactura && (
+                        <td className="py-1.5 text-center">
+                          {distQty > 0 ? (
+                            <button onClick={() => setDistributeTarget(item.productId)}
+                              className="px-1.5 py-0.5 rounded text-xs font-semibold bg-sky-100 text-sky-800" title="Editar distribución">
+                              {distQty}/{item.quantity}
+                            </button>
+                          ) : (
+                            <button onClick={() => setDistributeTarget(item.productId)}
+                              className="px-1.5 py-0.5 rounded text-xs font-medium text-gray-400 hover:bg-sky-100 hover:text-sky-800">Repartir</button>
+                          )}
+                        </td>
+                      )}
                       <td className="py-1.5 text-center">
                         <button onClick={() => updateQty(item.productId, 0)} className="text-red-500 text-sm">✕</button>
                       </td>
@@ -321,7 +385,7 @@ export default function PurchaseFormPage() {
                   )
                 })}
                 {items.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-6 text-gray-400">Agrega productos con el buscador (requiere proveedor)</td></tr>
+                  <tr><td colSpan={purchaseType === 'factura' ? 7 : 5} className="text-center py-6 text-gray-400">Agrega productos con el buscador (requiere proveedor)</td></tr>
                 )}
               </tbody>
             </table>
@@ -376,6 +440,22 @@ export default function PurchaseFormPage() {
 
       <LoadPurchaseOrderModal open={showLoadOrder} onClose={() => setShowLoadOrder(false)}
         supplierId={selectedSupplier?.id} onLoad={onLoadOrder} />
+
+      {distributeTarget !== null && (() => {
+        const line = items.find((i) => i.productId === distributeTarget)
+        if (!line) return null
+        return (
+          <DistributeStockModal
+            open
+            onClose={() => setDistributeTarget(null)}
+            branches={branches}
+            quantity={line.quantity}
+            initial={line.distribution || []}
+            productName={products.find((x) => x.id === line.productId)?.name || ''}
+            onSave={(dist) => { setLineDistribution(line.productId, dist); setDistributeTarget(null) }}
+          />
+        )
+      })()}
 
       {showNewSupplierForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowNewSupplierForm(false)}>

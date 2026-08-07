@@ -10,6 +10,7 @@ export async function list(req: AuthRequest, res: Response) {
   const ctx = resolveContext(req)
   const where: any = { businessId: ctx.businessId ?? 0 }
   if (status) where.status = status
+  if (ctx.branchId) where.branchId = ctx.branchId
 
   const include = {
     supplier: { select: { id: true, name: true, documentType: true, documentNumber: true } },
@@ -30,8 +31,10 @@ export async function list(req: AuthRequest, res: Response) {
 export async function getById(req: AuthRequest, res: Response) {
   const id = Number(req.params.id)
   const ctx = resolveContext(req)
+  const where: any = { id, businessId: ctx.businessId ?? 0 }
+  if (ctx.branchId) where.branchId = ctx.branchId
   const purchase = await prisma.purchaseInvoice.findFirst({
-    where: { id, businessId: ctx.businessId ?? 0 },
+    where,
     include: {
       supplier: true,
       user: { select: { id: true, name: true } },
@@ -45,7 +48,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type, sourceOrderId, requestKey } = req.body
+  const { supplierId, currency, exchangeRate, paymentMethod, dueDate, notes, items, type, sourceOrderId, requestKey, paid } = req.body
   const ctx = resolveContext(req)
 
   if (!supplierId || !items?.length) {
@@ -89,6 +92,8 @@ export async function create(req: AuthRequest, res: Response) {
       unitPrice,
       ivaPercent: product.ivaPercent,
       subtotal: itemSubtotal,
+      salePrice: i.salePrice,
+      distribution: Array.isArray(i.distribution) ? i.distribution : undefined,
     }
   })
 
@@ -104,7 +109,8 @@ export async function create(req: AuthRequest, res: Response) {
   const count = await prisma.purchaseInvoice.count({ where: { businessId: ctx.businessId } })
   const prefix = type === 'factura' ? 'FACT-C' : 'PED-'
   const number = `${prefix}${String(count + 1).padStart(4, '0')}`
-  const status = type === 'factura' ? 'recibido' : 'pedido'
+  const isFactura = type === 'factura'
+  const status = isFactura ? (paid ? 'pagada' : 'recibido') : 'pedido'
 
   let purchase: any
   try {
@@ -126,7 +132,7 @@ export async function create(req: AuthRequest, res: Response) {
         dueDate: dueDate ? new Date(dueDate) : null,
         notes: notes || null,
         requestKey: requestKey || null,
-        items: { create: purchaseItems },
+        items: { create: purchaseItems.map((it: any) => { const { salePrice: _sp, distribution: _d, ...rest } = it; return rest }) },
       },
       include: {
         supplier: { select: { id: true, name: true } },
@@ -144,24 +150,56 @@ export async function create(req: AuthRequest, res: Response) {
     throw e
   }
 
-  if (type === 'factura') {
+  if (isFactura) {
+    const branches = await prisma.branch.findMany({ where: { businessId: ctx.businessId, active: true }, select: { id: true } })
+    const branchIds = new Set(branches.map((b) => b.id))
+
     await prisma.$transaction(async (tx) => {
-      for (const item of purchaseItems) {
-        await changeStock(tx, {
-          businessId: ctx.businessId!,
-          branchId,
-          productId: item.productId,
-          type: 'purchase',
-          quantity: item.quantity,
-          reference: number,
-          notes: `Compra #${number}`,
-          userId: req.user!.id,
-        })
+      for (const it of purchaseItems) {
+        const dist = Array.isArray(it.distribution) && it.distribution.length
+          ? it.distribution
+          : [{ branchId, quantity: it.quantity }]
+        let allocated = 0
+        for (const d of dist) {
+          const q = Math.max(0, Number(d.quantity) || 0)
+          if (q <= 0) continue
+          if (!branchIds.has(Number(d.branchId))) throw new Error(`Sucursal ${d.branchId} no pertenece al negocio`)
+          allocated += q
+          await changeStock(tx, {
+            businessId: ctx.businessId!,
+            branchId: Number(d.branchId),
+            productId: it.productId,
+            type: 'purchase',
+            quantity: q,
+            reference: number,
+            notes: `Compra #${number}`,
+            userId: req.user!.id,
+          })
+        }
+        if (allocated !== it.quantity) throw new Error(`La distribución del producto ${it.productId} no suma ${it.quantity}`)
       }
     })
+
+    for (const it of purchaseItems) {
+      if (it.salePrice !== undefined && it.salePrice !== null) {
+        const product = productMap.get(it.productId)
+        const saleVal = Number(it.salePrice)
+        const invRate = exchangeRate ? Number(exchangeRate) : null
+        const costUsd = invCurrency === 'bs' && invRate ? it.unitPrice / invRate : it.unitPrice
+        let priceVal = saleVal
+        if (product && invRate) {
+          if (product.currency === 'usd' && invCurrency === 'bs') priceVal = saleVal / invRate
+          else if (product.currency === 'bs' && invCurrency === 'usd') priceVal = saleVal * invRate
+        }
+        await prisma.product.update({
+          where: { id: it.productId },
+          data: { price: priceVal, cost: Number(costUsd) || it.unitPrice },
+        })
+      }
+    }
   }
 
-  if (type === 'factura' && sourceOrderId) {
+  if (isFactura && sourceOrderId) {
     const source = await prisma.purchaseInvoice.findFirst({
       where: { id: Number(sourceOrderId), businessId: ctx.businessId, supplierId, status: 'pedido' },
     })
