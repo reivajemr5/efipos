@@ -373,6 +373,7 @@ export default function Quotes() {
 
   const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
   const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0) + cart.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
+  const bs = (n: number) => exchangeRate > 0 ? `Bs.${(n * exchangeRate).toFixed(2)}` : ''
 
   return (
     <>
@@ -451,8 +452,8 @@ export default function Quotes() {
                     <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                        <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u</p>
-                        {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}</p>}
+                        <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u{exchangeRate > 0 && ` · Bs.${(item.unitPrice * exchangeRate).toFixed(2)}`}</p>
+                        {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(lineDisc * exchangeRate).toFixed(2)}`}</p>}
                       </div>
                       <button
                         onClick={() => setLineDiscountProduct(item.productId)}
@@ -473,7 +474,10 @@ export default function Quotes() {
                           className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 touch-manipulation"
                         >+</button>
                       </div>
-                      <p className="w-20 text-right text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
+                      <div className="w-24 text-right shrink-0">
+                        <p className="text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
+                        {exchangeRate > 0 && <p className="text-[10px] text-gray-400">Bs.{(lineTotal * exchangeRate).toFixed(2)}</p>}
+                      </div>
                       <button
                         onClick={() => handleRemove(item.productId)}
                         className="p-1 text-red-400 hover:text-red-600 touch-manipulation"
@@ -489,11 +493,11 @@ export default function Quotes() {
                 <div className="px-4 py-3 space-y-1">
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Subtotal ({cartItemCount} items)</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    <span className="font-medium text-right">${subtotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(subtotal)}</span>}</span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>IVA</span>
-                    <span className="font-medium">${ivaTotal.toFixed(2)}</span>
+                    <span className="font-medium text-right">${ivaTotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(ivaTotal)}</span>}</span>
                   </div>
                   <button
                     onClick={() => setShowDiscount(true)}
@@ -509,7 +513,7 @@ export default function Quotes() {
                   </button>
                   <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
                     <span>Total</span>
-                    <span className="font-medium">${total.toFixed(2)}</span>
+                    <span className="font-medium text-right">${total.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-500 text-sm font-semibold">{bs(total)}</span>}</span>
                   </div>
                 </div>
                 <button
@@ -517,7 +521,7 @@ export default function Quotes() {
                   disabled={cart.length === 0 || loading}
                   className="w-full py-4 bg-blue-900 text-white text-lg font-bold hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
                 >
-                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}`}
+                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}${exchangeRate > 0 ? ` (${bs(total)})` : ''}`}
                 </button>
               </div>
               <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
@@ -550,7 +554,7 @@ export default function Quotes() {
             className="md:hidden fixed bottom-20 right-4 z-[60] bg-blue-900 text-white rounded-full shadow-lg flex items-center gap-2 px-4 py-3 touch-manipulation"
           >
             <span className="bg-white text-blue-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{cartItemCount}</span>
-            <span className="font-bold">${cartTotal.toFixed(2)}</span>
+            <span className="font-bold">${cartTotal.toFixed(2)}{exchangeRate > 0 && ` · ${bs(cartTotal)}`}</span>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
           </button>
         )}
@@ -584,8 +588,8 @@ export default function Quotes() {
                   <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                      <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u</p>
-                      {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}</p>}
+                      <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u{exchangeRate > 0 && ` · Bs.${(item.unitPrice * exchangeRate).toFixed(2)}`}</p>
+                      {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(lineDisc * exchangeRate).toFixed(2)}`}</p>}
                     </div>
                     <button
                       onClick={() => setLineDiscountProduct(item.productId)}
@@ -600,7 +604,10 @@ export default function Quotes() {
                       <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
                       <button onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">+</button>
                     </div>
-                    <p className="w-20 text-right text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
+                    <div className="w-20 text-right shrink-0">
+                      <p className="text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
+                      {exchangeRate > 0 && <p className="text-[10px] text-gray-400">Bs.{(lineTotal * exchangeRate).toFixed(2)}</p>}
+                    </div>
                     <button onClick={() => handleRemove(item.productId)} className="p-1 text-red-400 hover:text-red-600 touch-manipulation">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
@@ -612,11 +619,11 @@ export default function Quotes() {
                 <div className="px-4 py-3 space-y-1 border-t border-gray-200">
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Subtotal ({cartItemCount} items)</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    <span className="font-medium text-right">${subtotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(subtotal)}</span>}</span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>IVA</span>
-                    <span className="font-medium">${ivaTotal.toFixed(2)}</span>
+                    <span className="font-medium text-right">${ivaTotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(ivaTotal)}</span>}</span>
                   </div>
                   <button
                     onClick={() => setShowDiscount(true)}
@@ -632,7 +639,7 @@ export default function Quotes() {
                   </button>
                   <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
                     <span>Total</span>
-                    <span className="font-medium">${total.toFixed(2)}</span>
+                    <span className="font-medium text-right">${total.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-500 text-sm font-semibold">{bs(total)}</span>}</span>
                   </div>
                 </div>
                 <button
@@ -640,7 +647,7 @@ export default function Quotes() {
                   disabled={cart.length === 0 || loading}
                   className="w-full py-4 bg-blue-900 text-white text-lg font-bold hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
                 >
-                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}`}
+                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}${exchangeRate > 0 ? ` (${bs(total)})` : ''}`}
                 </button>
                 <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
                   <button onClick={() => { setShowCartMobile(false); handleCancel() }} className="flex-1 py-2.5 px-3 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 touch-manipulation">Cancelar</button>
@@ -771,7 +778,7 @@ export default function Quotes() {
                         <p className="text-sm font-medium text-gray-800">{q.number}</p>
                         <p className="text-xs text-gray-400">{q.client?.name || 'Consumidor Final'} · {new Date(q.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <span className="text-sm font-mono font-semibold text-gray-700">${Number(q.total).toFixed(2)}</span>
+                      <span className="text-sm font-mono font-semibold text-gray-700 text-right">${Number(q.total).toFixed(2)}{exchangeRate > 0 && <span className="block text-[10px] text-gray-400">{bs(Number(q.total))}</span>}</span>
                       <button
                         onClick={() => setPrintModal({ id: q.id })}
                         className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation"

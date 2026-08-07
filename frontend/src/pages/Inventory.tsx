@@ -120,6 +120,7 @@ export default function Inventory() {
       </div>
 
       <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="table-modern">
           <thead>
             <tr>
@@ -152,6 +153,7 @@ export default function Inventory() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       <PaginationBar page={page} onPage={setPage} total={movementsTotal} pageSize={PAGE_SIZE} />
 

@@ -396,6 +396,7 @@ export default function Purchases() {
 
                   <div>
                     <label className="block text-sm font-medium mb-1">Productos agregados</label>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 text-gray-500">
@@ -449,6 +450,7 @@ export default function Purchases() {
                         )}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 </div>
 
@@ -644,6 +646,8 @@ export default function Purchases() {
           </label>
         ) : undefined}
         filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
+        multiSelect
+        onMultiSelect={(sel: any[]) => { sel.forEach((p: any) => addItem(p.id)) }}
         onSelect={(p: any) => { addItem(p.id); setShowProductTable(false) }}
         searchPlaceholder="Buscar producto..."
       />
@@ -688,6 +692,7 @@ export default function Purchases() {
             <p className="text-sm mb-1"><strong>Pago:</strong> {showDetail.paymentMethod}</p>
             {showDetail.dueDate && <p className="text-sm mb-3"><strong>Vence:</strong> {new Date(showDetail.dueDate).toLocaleDateString()}</p>}
             {showDetail.notes && <p className="text-sm mb-3 text-gray-600">{showDetail.notes}</p>}
+            <div className="overflow-x-auto">
             <table className="w-full text-sm mb-3">
               <thead><tr className="border-b"><th className="text-left py-1">Producto</th><th className="text-right py-1">Cant</th><th className="text-right py-1">Total</th></tr></thead>
               <tbody>
@@ -700,6 +705,7 @@ export default function Purchases() {
                 ))}
               </tbody>
             </table>
+            </div>
             <div className="text-right space-y-1 border-t pt-2">
               <p className="text-sm">Subtotal: ${Number(showDetail.subtotal).toFixed(2)}</p>
               <p className="text-sm">IVA: ${Number(showDetail.ivaTotal).toFixed(2)}</p>

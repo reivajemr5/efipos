@@ -53,6 +53,7 @@ export default function Payments() {
       </div>
 
       <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="table-modern">
           <thead>
             <tr>
@@ -79,6 +80,7 @@ export default function Payments() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showForm && (

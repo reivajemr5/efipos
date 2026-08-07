@@ -68,6 +68,7 @@ export default function AccountsReceivable() {
       />
 
       <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="table-modern">
           <thead>
             <tr>
@@ -111,6 +112,7 @@ export default function AccountsReceivable() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       <PaginationBar page={page} onPage={setPage} total={Number(data?.total || 0)} pageSize={PAGE_SIZE} />
 

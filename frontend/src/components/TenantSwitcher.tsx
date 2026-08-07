@@ -10,38 +10,49 @@ export default function TenantSwitcher() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const role = user?.role
+  const locked = role === 'admin' || role === 'cajero'
 
   useEffect(() => {
-    if (role === 'superadmin') {
-      api.businesses.list().then((b: any) => setBusinesses(Array.isArray(b) ? b.filter((x: any) => x.active) : [])).catch(() => {})
-      return () => { setBusinesses([]) }
-    }
+    api.businesses.list()
+      .then((b: any) => setBusinesses(Array.isArray(b) ? (role === 'superadmin' ? b.filter((x: any) => x.active) : b) : []))
+      .catch(() => setBusinesses([]))
   }, [role])
 
   useEffect(() => {
-    if (role === 'superadmin' && activeBusinessId) {
-      api.branches.byBusiness(activeBusinessId).then((b: any) => setBranches(Array.isArray(b) ? b : [])).catch(() => setBranches([]))
-    } else if (role === 'dueno') {
+    if (role === 'superadmin') {
+      if (activeBusinessId) {
+        api.branches.byBusiness(activeBusinessId).then((b: any) => setBranches(Array.isArray(b) ? b : [])).catch(() => setBranches([]))
+      } else {
+        setBranches([])
+      }
+    } else {
       api.branches.list().then((b: any) => setBranches(Array.isArray(b) ? b : [])).catch(() => setBranches([]))
     }
   }, [role, activeBusinessId])
 
-  const currentBusiness = businesses.find((b) => b.id === activeBusinessId)
+  const businessId = activeBusinessId ?? user?.businessId ?? null
+  const currentBusiness = businesses.find((b) => b.id === businessId)
   const currentBranch = branches.find((b) => b.id === activeBranchId)
 
+  const displayLabel = [currentBusiness?.name, currentBranch?.name].filter(Boolean).join(' · ')
+
   function applyActive(b: Business | null, br: Branch | null) {
-    const nextBusinessId = b ? b.id : (user?.businessId ?? null)
+    const nextBusinessId = b ? b.id : businessId
     const nextBranchId = br ? br.id : (user?.branchId ?? null)
     setActive(nextBusinessId, nextBranchId)
     window.location.reload()
   }
 
-  if (role === 'admin' || role === 'cajero') {
-    return <span className="text-xs text-blue-200 hidden lg:inline">{(currentBranch && currentBusiness) ? `${currentBusiness?.name}` : ''}</span>
+  if (locked) {
+    return (
+      <span className="text-xs text-white/95 bg-blue-800 rounded-lg px-2 py-1 max-w-[45vw] truncate shrink-0" title={displayLabel || 'Sin sucursal'}>
+        {displayLabel ? `🏬 ${displayLabel}` : 'Sin sucursal'}
+      </span>
+    )
   }
 
   return (
-    <div className="flex items-center gap-1.5 mr-1">
+    <div className="flex items-center gap-1.5 mr-1 min-w-0">
       {role === 'superadmin' && (
         <select
           value={activeBusinessId ?? ''}
@@ -55,7 +66,7 @@ export default function TenantSwitcher() {
             })
             else applyActive(null, null)
           }}
-          className="bg-blue-800 text-white text-xs rounded-lg px-2 py-1.5 border border-blue-700 focus:outline-none max-w-[140px]"
+          className="bg-blue-800 text-white text-xs rounded-lg px-2 py-1.5 border border-blue-700 focus:outline-none max-w-[130px]"
         >
           <option value="">Negocio…</option>
           {businesses.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -69,15 +80,21 @@ export default function TenantSwitcher() {
             const br = branches.find((x) => x.id === Number(e.target.value)) || null
             applyActive(null, br)
           }}
-          className="bg-blue-800 text-white text-xs rounded-lg px-2 py-1.5 border border-blue-700 focus:outline-none max-w-[140px]"
+          className="bg-blue-800 text-white text-xs rounded-lg px-2 py-1.5 border border-blue-700 focus:outline-none max-w-[130px]"
         >
           <option value="">Sucursal…</option>
           {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       )}
 
+      {(currentBusiness || currentBranch) && (
+        <span className="text-xs text-white/95 bg-blue-700 rounded-lg px-2 py-1 max-w-[160px] truncate shrink-0 hidden sm:inline" title={displayLabel}>
+          {displayLabel}
+        </span>
+      )}
+
       {!currentBusiness && !currentBranch && (
-        <span className="text-xs text-amber-200 hidden lg:inline">Selecciona negocio y sucursal</span>
+        <span className="text-xs text-amber-200">Selecciona negocio y sucursal</span>
       )}
     </div>
   )

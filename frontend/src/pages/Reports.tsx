@@ -76,6 +76,7 @@ export default function Reports() {
 
           <div className="card overflow-hidden">
             <div className="card-header"><h3 className="font-semibold text-gray-700">Facturas del período</h3></div>
+            <div className="overflow-x-auto">
             <table className="table-modern">
               <thead>
                 <tr>
@@ -100,6 +101,7 @@ export default function Reports() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

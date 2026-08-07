@@ -254,6 +254,7 @@ export default function InvoicesHistory() {
                 <p className="text-sm text-gray-600">Cotización de referencia: <span className="font-medium">{detail.quote.number}</span></p>
               )}
 
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 text-left text-xs text-gray-400">
@@ -278,6 +279,7 @@ export default function InvoicesHistory() {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               <div className="text-right space-y-1 border-t border-gray-200 pt-3">
                 <p className="text-sm text-gray-600">Subtotal: {sym(detail)}{Number(detail.subtotal).toFixed(2)}</p>

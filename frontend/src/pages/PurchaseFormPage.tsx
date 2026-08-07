@@ -358,6 +358,7 @@ export default function PurchaseFormPage() {
 
           <div className="md:col-span-3 bg-white rounded-2xl p-4 shadow-sm h-fit">
             <div className="text-sm font-medium mb-2">Productos agregados</div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-500">
@@ -425,6 +426,7 @@ export default function PurchaseFormPage() {
                 )}
               </tbody>
             </table>
+            </div>
 
             <div className="border-t pt-3 mt-3 text-right space-y-1">
               <p className="text-sm text-gray-600">Subtotal: <span className="font-mono">{money(calcSubtotal())}</span></p>
@@ -472,6 +474,8 @@ export default function PurchaseFormPage() {
           </label>
         ) : undefined}
         filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
+        multiSelect
+        onMultiSelect={(sel: any[]) => { sel.forEach((p: any) => addLine(p.id)) }}
         onSelect={(p: any) => { if (selectedSupplier) addLine(p.id); setShowProductTable(false) }} searchPlaceholder="Buscar producto..." />
 
       <LoadPurchaseOrderModal open={showLoadOrder} onClose={() => setShowLoadOrder(false)}

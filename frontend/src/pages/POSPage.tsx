@@ -851,6 +851,7 @@ export default function POSPage() {
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 sticky top-0">
                     <tr className="text-left text-gray-500 text-xs uppercase">
@@ -897,6 +898,7 @@ export default function POSPage() {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           </div>
