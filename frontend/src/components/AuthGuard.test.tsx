@@ -23,6 +23,7 @@ describe('AuthGuard', () => {
     const { api } = await import('../services/api')
     ;(api.me as any).mockRejectedValue(new Error('no autenticado'))
     useAuthStore.setState({ user: null })
+    localStorage.removeItem('token')
 
     renderInside()
     await waitFor(() => {
@@ -34,6 +35,7 @@ describe('AuthGuard', () => {
     const { api } = await import('../services/api')
     ;(api.me as any).mockResolvedValue({ id: 1, name: 'Carlos', role: 'dueno' })
     useAuthStore.setState({ user: null })
+    localStorage.setItem('token', 'test-token')
 
     renderInside()
     expect(await screen.findByText('Contenido protegido')).toBeInTheDocument()

@@ -18,7 +18,7 @@ export default function Login() {
 
     try {
       const data = await api.login(email, password)
-      setAuth(data.user)
+      setAuth(data.token, data.user)
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
