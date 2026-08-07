@@ -30,6 +30,7 @@ import { requireAppHeader } from './middleware/csrf'
 dotenv.config()
 
 const app = express()
+app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3001
 
 app.use(helmet())
@@ -44,7 +45,7 @@ app.use(express.json({ limit: '50mb' }))
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: 1000,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Demasiadas peticiones. Intente de nuevo en unos minutos.' },
