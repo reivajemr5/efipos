@@ -183,13 +183,13 @@ export async function create(req: AuthRequest, res: Response) {
     for (const it of purchaseItems) {
       if (it.salePrice !== undefined && it.salePrice !== null) {
         const product = productMap.get(it.productId)
-        const saleVal = Number(it.salePrice)
+        const saleVal = Math.round(Number(it.salePrice) * 100) / 100
         const invRate = exchangeRate ? Number(exchangeRate) : null
-        const costUsd = invCurrency === 'bs' && invRate ? it.unitPrice / invRate : it.unitPrice
+        const costUsd = invCurrency === 'bs' && invRate ? Math.round((it.unitPrice / invRate) * 100) / 100 : Math.round(it.unitPrice * 100) / 100
         let priceVal = saleVal
         if (product && invRate) {
-          if (product.currency === 'usd' && invCurrency === 'bs') priceVal = saleVal / invRate
-          else if (product.currency === 'bs' && invCurrency === 'usd') priceVal = saleVal * invRate
+          if (product.currency === 'usd' && invCurrency === 'bs') priceVal = Math.round((saleVal / invRate) * 100) / 100
+          else if (product.currency === 'bs' && invCurrency === 'usd') priceVal = Math.round((saleVal * invRate) * 100) / 100
         }
         await prisma.product.update({
           where: { id: it.productId },

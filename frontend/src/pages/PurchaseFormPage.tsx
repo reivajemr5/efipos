@@ -30,7 +30,9 @@ export default function PurchaseFormPage() {
   const [items, setItems] = useState<LineItem[]>([])
   const [purchaseType, setPurchaseType] = useState('pedido')
   const [docCur, setDocCur] = useState<'bs' | 'usd'>('usd')
-  const [alreadyPaid, setAlreadyPaid] = useState(false)
+  const [paymentPrompt, setPaymentPrompt] = useState(false)
+  const [dateHint, setDateHint] = useState(false)
+  const dateInputRef = useRef<HTMLInputElement | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -64,14 +66,19 @@ export default function PurchaseFormPage() {
   useEffect(() => {
     const target = purchaseType === 'factura' ? 'bs' : 'usd'
     if (target !== docCur && rate > 0 && items.length) {
-      setItems((prev) => prev.map((i) => ({ ...i, unitPrice: target === 'usd' ? i.unitPrice / rate : i.unitPrice * rate })))
+      setItems((prev) => prev.map((i) => ({
+        ...i,
+        unitPrice: round2(target === 'usd' ? i.unitPrice / rate : i.unitPrice * rate),
+        ...(i.salePrice !== undefined ? { salePrice: round2(target === 'usd' ? i.salePrice / rate : i.salePrice * rate) } : {}),
+      })))
     }
     setDocCur(target)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseType])
 
+  function round2(n: number) { return Math.round((Number(n) || 0) * 100) / 100 }
   function defaultPrice(p: Product) { const c = Number(p.cost); return c > 0 ? c : Number(p.price) }
-  function toDocCur(usd: number) { return docCur === 'bs' && rate > 0 ? usd * rate : usd }
+  function toDocCur(usd: number) { return round2(docCur === 'bs' && rate > 0 ? usd * rate : usd) }
 
   function filteredProducts() {
     let list = products
@@ -92,7 +99,11 @@ export default function PurchaseFormPage() {
       const existing = prev.find((i) => i.productId === productId)
       if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + quantity } : i)
       const p = products.find((x) => x.id === productId)
-      return [...prev, { productId, quantity, unitPrice: p ? toDocCur(defaultPrice(p)) : 0 }]
+      return [...prev, {
+        productId, quantity,
+        unitPrice: p ? round2(toDocCur(defaultPrice(p))) : 0,
+        salePrice: p && purchaseType === 'factura' ? round2(toDocCur(Number(p.price))) : undefined,
+      }]
     })
   }
   function updateQty(productId: number, q: number) {
@@ -104,11 +115,15 @@ export default function PurchaseFormPage() {
   }
   function switchCurrency(next: 'bs' | 'usd') {
     if (next === docCur || rate <= 0) return
-    setItems((prev) => prev.map((i) => ({ ...i, unitPrice: next === 'usd' ? i.unitPrice / rate : i.unitPrice * rate })))
+    setItems((prev) => prev.map((i) => ({
+      ...i,
+      unitPrice: round2(next === 'usd' ? i.unitPrice / rate : i.unitPrice * rate),
+      ...(i.salePrice !== undefined ? { salePrice: round2(next === 'usd' ? i.salePrice / rate : i.salePrice * rate) } : {}),
+    })))
     setDocCur(next)
   }
-  function calcSubtotal() { return items.reduce((s, it) => s + it.unitPrice * it.quantity, 0) }
-  function calcIva() { return items.reduce((s, it) => { const p = products.find((x) => x.id === it.productId); return p ? s + it.unitPrice * it.quantity * Number(p.ivaPercent) / 100 : s }, 0) }
+  function calcSubtotal() { return round2(items.reduce((s, it) => s + it.unitPrice * it.quantity, 0)) }
+  function calcIva() { return round2(items.reduce((s, it) => { const p = products.find((x) => x.id === it.productId); return p ? s + it.unitPrice * it.quantity * Number(p.ivaPercent) / 100 : s }, 0)) }
   function updateSalePrice(productId: number, v: number) { setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, salePrice: v } : i)) }
   function setLineDistribution(productId: number, dist: Distribution[]) { setItems((prev) => prev.map((i) => i.productId === productId ? { ...i, distribution: dist } : i)) }
   function distributedQty(item: LineItem) { return (item.distribution || []).reduce((s, d) => s + (Number(d.quantity) || 0), 0) }
@@ -117,7 +132,7 @@ export default function PurchaseFormPage() {
     setItems((order.items || []).map((i: any) => {
       const p = products.find((x) => x.id === i.productId)
       const unitPrice = i.unitPrice > 0 ? toDocCur(Number(i.unitPrice)) : (p ? toDocCur(defaultPrice(p)) : 0)
-      return { productId: i.productId, quantity: i.quantity, unitPrice }
+      return { productId: i.productId, quantity: i.quantity, unitPrice, salePrice: p && purchaseType === 'factura' ? round2(toDocCur(Number(p.price))) : undefined }
     }))
     setSourceOrderId(order.id)
     setShowLoadOrder(false)
@@ -134,7 +149,7 @@ export default function PurchaseFormPage() {
     } catch { }
   }
 
-  async function createPurchase() {
+  async function createPurchase(paidConfirmed?: boolean) {
     if (!selectedSupplier || items.length === 0 || submitting) return
     setSubmitting(true)
     if (!idemRef.current) idemRef.current = uuid()
@@ -150,12 +165,12 @@ export default function PurchaseFormPage() {
         exchangeRate: rate || undefined,
         sourceOrderId: sourceOrderId || undefined,
         requestKey: idemRef.current,
-        paid: isFactura ? alreadyPaid : undefined,
+        paid: isFactura ? !!paidConfirmed : undefined,
         items: items.map((i) => ({
           productId: i.productId,
           quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          ...(isFactura && i.salePrice !== undefined ? { salePrice: i.salePrice } : {}),
+          unitPrice: round2(i.unitPrice),
+          ...(isFactura && i.salePrice !== undefined ? { salePrice: round2(i.salePrice) } : {}),
           ...(isFactura && Array.isArray(i.distribution) && i.distribution.length ? { distribution: i.distribution } : {}),
         })),
       })
@@ -164,6 +179,25 @@ export default function PurchaseFormPage() {
       alert('No se pudo registrar: ' + (e?.message || 'error'))
       setSubmitting(false)
     }
+  }
+
+  function handleRegister() {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const needsPrompt = purchaseType === 'factura' && (!dueDate || new Date(dueDate) <= today)
+    if (needsPrompt) { setPaymentPrompt(true); return }
+    createPurchase()
+  }
+
+  function setQuickDue(days: number, months: number) {
+    const d = new Date()
+    if (months) { d.setMonth(d.getMonth() + months) } else { d.setDate(d.getDate() + days) }
+    setDueDate(d.toISOString().slice(0, 10))
+    setDateHint(false)
+  }
+  function quickIs(days: number, months: number) {
+    if (!dueDate) return false
+    const d = new Date(); if (months) { d.setMonth(d.getMonth() + months) } else { d.setDate(d.getDate() + days) }
+    return dueDate === d.toISOString().slice(0, 10)
   }
 
   const money = (n: number) => `${docCur === 'bs' ? 'Bs.' : '$'}${n.toFixed(2)}`
@@ -198,15 +232,17 @@ export default function PurchaseFormPage() {
                 <option value="pago_movil">Pago Móvil</option><option value="biopago">Biopago</option>
               </select>
               <label className="block text-sm font-medium mb-1">Fecha de vencimiento</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg mb-3" />
-              {(!dueDate || (dueDate && new Date(dueDate) <= new Date(new Date().setHours(0, 0, 0, 0)))) && (
-                <label className="flex items-start gap-2 mb-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer">
-                  <input type="checkbox" checked={alreadyPaid} onChange={(e) => setAlreadyPaid(e.target.checked)} className="mt-1 rounded" />
-                  <span className="text-sm text-emerald-900">
-                    <strong>¿Ya se pagó esta factura?</strong><br />
-                    <span className="text-xs text-emerald-700">Sin vencimiento o con vencimiento hoy. Si está pagada, quedará registrada como "pagada".</span>
-                  </span>
-                </label>
+              <input ref={dateInputRef} type="date" value={dueDate} onChange={(e) => { setDueDate(e.target.value); setDateHint(false) }}
+                className="w-full px-3 py-2 border rounded-lg mb-2" />
+              <div className="flex gap-2 mb-3">
+                <button type="button" onClick={() => setQuickDue(15, 0)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${quickIs(15, 0) ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>15 días</button>
+                <button type="button" onClick={() => setQuickDue(0, 1)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${quickIs(0, 1) ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>1 mes</button>
+                <button type="button" onClick={() => setQuickDue(0, 2)} className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${quickIs(0, 2) ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>2 meses</button>
+              </div>
+              {dateHint && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+                  Para registrar la factura como pendiente, elige una fecha de vencimiento (o usa una opción rápida).
+                </p>
               )}
             </>
           ) : (
@@ -215,7 +251,7 @@ export default function PurchaseFormPage() {
 
           <div className="flex gap-2 pt-3">
             <button onClick={() => setConfirmStep(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">← Volver</button>
-            <button onClick={createPurchase} disabled={!selectedSupplier || items.length === 0 || submitting}
+            <button onClick={handleRegister} disabled={!selectedSupplier || items.length === 0 || submitting}
               className="flex-1 bg-blue-900 text-white py-2 rounded-lg disabled:opacity-50 hover:bg-blue-800">
               {submitting ? 'Registrando...' : `Registrar ${purchaseType === 'factura' ? 'Compra' : 'Pedido'}`}
             </button>
@@ -476,6 +512,24 @@ export default function PurchaseFormPage() {
                 <button type="button" onClick={() => setShowNewSupplierForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300">Cancelar</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {paymentPrompt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setPaymentPrompt(false)}>
+          <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-2">¿Ya pagó esta factura?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              La factura no tiene fecha de vencimiento (o vence hoy). Si ya fue pagada (compra de contado), quedará como
+              <strong> "pagada"</strong>. Si aún no la paga, ingresa la fecha de vencimiento para registrarla como pendiente.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => { setPaymentPrompt(false); createPurchase(true) }}
+                className="flex-1 bg-emerald-700 text-white py-2 rounded-lg hover:bg-emerald-600 text-sm">Sí, ya está pagada</button>
+              <button onClick={() => { setPaymentPrompt(false); setConfirmStep(true); setDateHint(true); setTimeout(() => dateInputRef.current?.focus(), 50) }}
+                className="flex-1 bg-gray-200 py-2 rounded-lg hover:bg-gray-300 text-sm">No, ingresar vencimiento</button>
+            </div>
           </div>
         </div>
       )}
