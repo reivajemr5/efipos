@@ -86,7 +86,10 @@ export const api = {
       const token = localStorage.getItem('token')
       return fetch(`${API_URL}/products/import-csv${tenantParams()}`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
         body: formData,
       }).then(async (res) => {
         if (res.status === 401) { localStorage.removeItem('token'); window.location.href = '/login' }
