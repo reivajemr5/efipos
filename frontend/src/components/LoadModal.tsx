@@ -18,6 +18,7 @@ interface DraftLike {
   clientId: number
   items: LoadItem[]
   total: string
+  totalBs?: string | number | null
   exchangeRate?: string | number | null
   discount?: string | number | null
 }
@@ -219,7 +220,10 @@ export default function LoadModal({ open, onClose, onLoad }: LoadModalProps) {
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-xs text-gray-400">{itemCount} items</span>
-                    <span className="font-bold text-gray-800">${Number(item.total).toFixed(2)}</span>
+                    <span className="text-right">
+                      <span className="block font-bold text-gray-800">${Number(item.total).toFixed(2)}</span>
+                      {Number(item.totalBs) > 0 && <span className="block text-xs text-gray-400">Bs.{Number(item.totalBs).toFixed(2)}</span>}
+                    </span>
                   </div>
                 </button>
               )

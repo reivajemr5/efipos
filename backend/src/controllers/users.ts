@@ -65,7 +65,7 @@ export async function create(req: AuthRequest, res: Response) {
       data: {
         name, email,
         passwordHash: hash,
-        role, businessId: targetBusinessId, branchId: role === 'dueno' ? null : targetBranchId,
+        role, businessId: targetBusinessId, branchId: targetBranchId,
       },
       select: USER_SELECT,
     })
@@ -94,10 +94,18 @@ export async function update(req: AuthRequest, res: Response) {
 
   if (req.user!.role === 'superadmin') {
     data.businessId = businessId ?? null
-    data.branchId = (role === 'dueno' || role === 'superadmin') ? null : (branchId ?? null)
+    data.branchId = role === 'superadmin' ? null : (branchId ?? null)
   } else {
     data.businessId = req.user!.businessId ?? null
-    data.branchId = (role === 'dueno') ? null : (branchId ?? existing.branchId)
+    data.branchId = branchId ?? existing.branchId
+  }
+
+  if (data.branchId) {
+    const effBusinessId = (data.businessId ?? existing.businessId) ?? 0
+    const branch = await prisma.branch.findFirst({
+      where: { id: data.branchId, businessId: effBusinessId, active: true },
+    })
+    if (!branch) data.branchId = null
   }
 
   try {

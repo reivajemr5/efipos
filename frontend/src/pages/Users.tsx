@@ -167,9 +167,9 @@ export default function Users() {
                   </select>
                 </div>
               )}
-              {form.role !== 'dueno' && form.role !== 'superadmin' && (
+              {form.role !== 'superadmin' && (
                 <div>
-                  <label className="label">Sucursal</label>
+                  <label className="label">Sucursal{form.role === 'dueno' ? ' (por defecto)' : ''}</label>
                   <select className="input" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
                     <option value="">— Sin sucursal —</option>
                     {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}

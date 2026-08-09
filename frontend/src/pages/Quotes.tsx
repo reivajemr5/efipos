@@ -374,6 +374,11 @@ export default function Quotes() {
   const cartItemCount = cart.reduce((c, i) => c + i.quantity, 0)
   const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - (i.discount || 0), 0) + cart.reduce((s, i) => s + ((i.unitPrice * i.quantity - (i.discount || 0)) * i.ivaPercent) / 100, 0)
   const bs = (n: number) => exchangeRate > 0 ? `Bs.${(n * exchangeRate).toFixed(2)}` : ''
+  const quoteBs = (q: any) => {
+    const stored = q?.totalBs && Number(q.totalBs) > 0 ? Number(q.totalBs) : 0
+    const v = stored || (exchangeRate > 0 ? Number(q.total) * exchangeRate : 0)
+    return v > 0 ? `Bs.${v.toFixed(2)}` : ''
+  }
 
   return (
     <>
@@ -778,7 +783,7 @@ export default function Quotes() {
                         <p className="text-sm font-medium text-gray-800">{q.number}</p>
                         <p className="text-xs text-gray-400">{q.client?.name || 'Consumidor Final'} · {new Date(q.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <span className="text-sm font-mono font-semibold text-gray-700 text-right">${Number(q.total).toFixed(2)}{exchangeRate > 0 && <span className="block text-[10px] text-gray-400">{bs(Number(q.total))}</span>}</span>
+                      <span className="text-sm font-mono font-semibold text-gray-700 text-right">${Number(q.total).toFixed(2)}{quoteBs(q) && <span className="block text-xs text-gray-400">{quoteBs(q)}</span>}</span>
                       <button
                         onClick={() => setPrintModal({ id: q.id })}
                         className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation"
