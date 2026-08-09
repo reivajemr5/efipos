@@ -4,6 +4,8 @@ import POSHeader from '../components/pos/POSHeader'
 import DiscountModal from '../components/pos/DiscountModal'
 import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
+import TicketItem from '../components/pos/TicketItem'
+import TicketFooter from '../components/pos/TicketFooter'
 import ClientFormModal from '../components/ClientFormModal'
 import LoadModal from '../components/LoadModal'
 import PaginationBar from '../components/PaginationBar'
@@ -65,6 +67,8 @@ export default function Quotes() {
   const QUOTE_PAGE_SIZE = 25
   const [printModal, setPrintModal] = useState<{ id: number } | null>(null)
   const [exchangeRate, setExchangeRate] = useState(0)
+  const [rateChecked, setRateChecked] = useState(false)
+  const [manualRate, setManualRate] = useState(0)
   const [discount, setDiscount] = useState(0)
   const [showDiscount, setShowDiscount] = useState(false)
   const [lineDiscountProduct, setLineDiscountProduct] = useState<number | null>(null)
@@ -87,9 +91,17 @@ export default function Quotes() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  useEffect(() => {
-    api.exchangeRate.get().then((d: any) => { if (d?.rate) setExchangeRate(Number(d.rate)) }).catch(() => {})
+  const loadRate = useCallback(async () => {
+    const data = await api.exchangeRate.get().catch(() => ({ rate: 0 }))
+    if (data?.rate) setExchangeRate(Number(data.rate))
+    else {
+      const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+      if (auto?.rate) setExchangeRate(Number(auto.rate))
+    }
+    setRateChecked(true)
   }, [])
+
+  useEffect(() => { loadRate() }, [loadRate])
 
   useEffect(() => { clientInputRef.current?.focus() }, [])
 
@@ -400,9 +412,42 @@ export default function Quotes() {
           onSearchArrowDown={handleSearchArrowDown}
           clientInputRef={clientInputRef}
           onClientSubmit={handleClientSubmit}
-          exchangeRate={0}
+          exchangeRate={exchangeRate}
+          onUpdateRate={async () => {
+            const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+            if (auto?.rate) setExchangeRate(Number(auto.rate))
+          }}
           onLoadDraft={() => setShowLoadModal(true)}
         />
+
+        {rateChecked && exchangeRate === 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 shrink-0">
+            <span>Tasa BCV no disponible. Ingresa la tasa manualmente:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-amber-600">1$ = Bs.</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={manualRate || ''}
+                onChange={(e) => setManualRate(Number(e.target.value))}
+                onBlur={() => { if (manualRate > 0) { setExchangeRate(manualRate); api.exchangeRate.update(manualRate).catch(() => {}) } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && manualRate > 0) { setExchangeRate(manualRate); api.exchangeRate.update(manualRate).catch(() => {}); (e.target as HTMLInputElement).blur() } }}
+                className="w-24 border border-amber-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                placeholder="46.50"
+              />
+            </div>
+            <button
+              onClick={async () => {
+                const auto = await api.exchangeRate.autoUpdate().catch(() => null)
+                if (auto?.rate) setExchangeRate(Number(auto.rate))
+              }}
+              className="px-2 py-1 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700 touch-manipulation"
+            >
+              Auto
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-between px-4 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
           <span className="text-xs text-gray-500">Cotizaciones</span>
@@ -450,84 +495,41 @@ export default function Quotes() {
                     Selecciona productos del catálogo para añadirlos a la cotización
                   </div>
                 ) : (
-                  cart.map((item) => {
-                    const lineDisc = item.discount || 0
-                    const lineTotal = Math.max(0, item.unitPrice * item.quantity - lineDisc)
-                    return (
-                    <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                        <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u{exchangeRate > 0 && ` · Bs.${(item.unitPrice * exchangeRate).toFixed(2)}`}</p>
-                        {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(lineDisc * exchangeRate).toFixed(2)}`}</p>}
-                      </div>
-                      <button
-                        onClick={() => setLineDiscountProduct(item.productId)}
-                        className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border touch-manipulation ${
-                          lineDisc > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
-                        }`}
-                      >
-                        {lineDisc > 0 ? 'Descto. ✓' : 'Descto.'}
-                      </button>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
-                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 touch-manipulation"
-                        >-</button>
-                        <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                        <button
-                          onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
-                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 font-bold text-sm hover:bg-gray-200 touch-manipulation"
-                        >+</button>
-                      </div>
-                      <div className="w-24 text-right shrink-0">
-                        <p className="text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
-                        {exchangeRate > 0 && <p className="text-[10px] text-gray-400">Bs.{(lineTotal * exchangeRate).toFixed(2)}</p>}
-                      </div>
-                      <button
-                        onClick={() => handleRemove(item.productId)}
-                        className="p-1 text-red-400 hover:text-red-600 touch-manipulation"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                    </div>
-                    )
-                  })
+                  cart.map((item) => (
+                    <TicketItem
+                      key={item.productId}
+                      item={item}
+                      onUpdateQuantity={handleUpdateQuantity}
+                      onRemove={handleRemove}
+                      onLineDiscount={setLineDiscountProduct}
+                      exchangeRate={exchangeRate}
+                    />
+                  ))
                 )}
               </div>
               <div className="bg-white border-t border-gray-200">
-                <div className="px-4 py-3 space-y-1">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Subtotal ({cartItemCount} items)</span>
-                    <span className="font-medium text-right">${subtotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(subtotal)}</span>}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>IVA</span>
-                    <span className="font-medium text-right">${ivaTotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(ivaTotal)}</span>}</span>
-                  </div>
-                  <button
-                    onClick={() => setShowDiscount(true)}
-                    disabled={cart.length === 0}
-                    className={`w-full flex justify-between items-center py-2 px-3 rounded-lg text-sm font-medium border touch-manipulation disabled:opacity-40 ${
-                      discount > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
-                    }`}
-                  >
-                    <span>{discount > 0 ? 'Descuento aplicado ✓' : 'Aplicar descuento'}</span>
-                    {discount > 0 && (
-                      <span className="font-mono">-${discount.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(discount * exchangeRate).toFixed(2)}`}</span>
-                    )}
-                  </button>
-                  <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
-                    <span>Total</span>
-                    <span className="font-medium text-right">${total.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-500 text-sm font-semibold">{bs(total)}</span>}</span>
-                  </div>
-                </div>
                 <button
-                  onClick={handleCreateQuote}
-                  disabled={cart.length === 0 || loading}
-                  className="w-full py-4 bg-blue-900 text-white text-lg font-bold hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                  onClick={() => setShowDiscount(true)}
+                  disabled={cart.length === 0}
+                  className={`w-full flex justify-between items-center py-2 px-3 text-sm font-medium border-b touch-manipulation disabled:opacity-40 ${
+                    discount > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                  }`}
                 >
-                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}${exchangeRate > 0 ? ` (${bs(total)})` : ''}`}
+                  <span>{discount > 0 ? 'Descuento aplicado ✓' : 'Aplicar descuento'}</span>
+                  {discount > 0 && (
+                    <span className="font-mono">-${discount.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(discount * exchangeRate).toFixed(2)}`}</span>
+                  )}
                 </button>
+                <TicketFooter
+                  subtotal={subtotal}
+                  ivaTotal={ivaTotal}
+                  discount={discount}
+                  total={total}
+                  onCheckout={handleCreateQuote}
+                  itemCount={cartItemCount}
+                  exchangeRate={exchangeRate}
+                  buttonLabel={loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}${exchangeRate > 0 ? ` (${bs(total)})` : ''}`}
+                />
               </div>
               <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
                 <button
@@ -548,7 +550,7 @@ export default function Quotes() {
               onSelectProduct={handleSelectProduct}
               onSelectProductQuantity={(p) => { handleSelectProductQuantity(p) }}
               onArrowUpFromFirst={() => searchInputRef.current?.focus()}
-              exchangeRate={0}
+              exchangeRate={exchangeRate}
             />
           </div>
         </div>
@@ -586,74 +588,40 @@ export default function Quotes() {
                 <span className="text-xs text-gray-500 ml-1">días</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
-                {cart.map((item) => {
-                  const lineDisc = item.discount || 0
-                  const lineTotal = Math.max(0, item.unitPrice * item.quantity - lineDisc)
-                  return (
-                  <div key={item.productId} className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                      <p className="text-xs text-gray-400">${item.unitPrice.toFixed(2)} c/u{exchangeRate > 0 && ` · Bs.${(item.unitPrice * exchangeRate).toFixed(2)}`}</p>
-                      {lineDisc > 0 && <p className="text-[10px] text-amber-600">Descto: -${lineDisc.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(lineDisc * exchangeRate).toFixed(2)}`}</p>}
-                    </div>
-                    <button
-                      onClick={() => setLineDiscountProduct(item.productId)}
-                      className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border touch-manipulation ${
-                        lineDisc > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
-                      }`}
-                    >
-                      {lineDisc > 0 ? 'Descto. ✓' : 'Descto.'}
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">-</button>
-                      <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                      <button onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 touch-manipulation">+</button>
-                    </div>
-                    <div className="w-20 text-right shrink-0">
-                      <p className="text-sm font-mono font-medium">${lineTotal.toFixed(2)}</p>
-                      {exchangeRate > 0 && <p className="text-[10px] text-gray-400">Bs.{(lineTotal * exchangeRate).toFixed(2)}</p>}
-                    </div>
-                    <button onClick={() => handleRemove(item.productId)} className="p-1 text-red-400 hover:text-red-600 touch-manipulation">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                  )
-                })}
+                {cart.map((item) => (
+                  <TicketItem
+                    key={item.productId}
+                    item={item}
+                    onUpdateQuantity={handleUpdateQuantity}
+                    onRemove={handleRemove}
+                    onLineDiscount={setLineDiscountProduct}
+                    exchangeRate={exchangeRate}
+                  />
+                ))}
               </div>
               <div className="shrink-0">
-                <div className="px-4 py-3 space-y-1 border-t border-gray-200">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Subtotal ({cartItemCount} items)</span>
-                    <span className="font-medium text-right">${subtotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(subtotal)}</span>}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>IVA</span>
-                    <span className="font-medium text-right">${ivaTotal.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-400 text-xs">{bs(ivaTotal)}</span>}</span>
-                  </div>
-                  <button
-                    onClick={() => setShowDiscount(true)}
-                    disabled={cart.length === 0}
-                    className={`w-full flex justify-between items-center py-2 px-3 rounded-lg text-sm font-medium border touch-manipulation disabled:opacity-40 ${
-                      discount > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
-                    }`}
-                  >
-                    <span>{discount > 0 ? 'Descuento aplicado ✓' : 'Aplicar descuento'}</span>
-                    {discount > 0 && (
-                      <span className="font-mono">-${discount.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(discount * exchangeRate).toFixed(2)}`}</span>
-                    )}
-                  </button>
-                  <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-1">
-                    <span>Total</span>
-                    <span className="font-medium text-right">${total.toFixed(2)}{exchangeRate > 0 && <span className="ml-2 text-gray-500 text-sm font-semibold">{bs(total)}</span>}</span>
-                  </div>
-                </div>
                 <button
-                  onClick={() => { setShowCartMobile(false); handleCreateQuote() }}
-                  disabled={cart.length === 0 || loading}
-                  className="w-full py-4 bg-blue-900 text-white text-lg font-bold hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                  onClick={() => setShowDiscount(true)}
+                  disabled={cart.length === 0}
+                  className={`w-full flex justify-between items-center py-2 px-4 text-sm font-medium border-b touch-manipulation disabled:opacity-40 ${
+                    discount > 0 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50'
+                  }`}
                 >
-                  {loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}${exchangeRate > 0 ? ` (${bs(total)})` : ''}`}
+                  <span>{discount > 0 ? 'Descuento aplicado ✓' : 'Aplicar descuento'}</span>
+                  {discount > 0 && (
+                    <span className="font-mono">-${discount.toFixed(2)}{exchangeRate > 0 && ` · -Bs.${(discount * exchangeRate).toFixed(2)}`}</span>
+                  )}
                 </button>
+                <TicketFooter
+                  subtotal={subtotal}
+                  ivaTotal={ivaTotal}
+                  discount={discount}
+                  total={total}
+                  onCheckout={() => { setShowCartMobile(false); handleCreateQuote() }}
+                  itemCount={cartItemCount}
+                  exchangeRate={exchangeRate}
+                  buttonLabel={loading ? 'Generando...' : `Generar Cotización $${total.toFixed(2)}${exchangeRate > 0 ? ` (${bs(total)})` : ''}`}
+                />
                 <div className="flex gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
                   <button onClick={() => { setShowCartMobile(false); handleCancel() }} className="flex-1 py-2.5 px-3 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 touch-manipulation">Cancelar</button>
                 </div>
@@ -720,7 +688,10 @@ export default function Quotes() {
                         <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
                         <p className="text-xs text-gray-400">{p.code} · Stock: {p.stock}</p>
                       </div>
-                      <span className="text-sm font-mono font-semibold text-gray-800">${Number(p.price).toFixed(2)}</span>
+                      <span className="text-right shrink-0">
+                        <span className="block text-sm font-mono font-semibold text-gray-800">${Number(p.price).toFixed(2)}</span>
+                        {exchangeRate > 0 && <span className="block text-[10px] text-gray-400">Bs.{(Number(p.price) * exchangeRate).toFixed(2)}</span>}
+                      </span>
                     </button>
                   ))
                 )}

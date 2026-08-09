@@ -108,7 +108,7 @@ export default function Layout() {
     return () => clearInterval(interval)
   }, [])
 
-  const isPOS = location.pathname === '/invoices'
+  const isPOS = location.pathname === '/invoices' || location.pathname === '/quotes'
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
