@@ -19,26 +19,28 @@ interface DocData {
   total: number
   currency: string
   paymentMethod?: string
+  company?: { name: string; rif: string; address: string; phone: string }
 }
 
 const COMPANY = {
-  name: 'Efi- Pos',
-  rif: 'J-12345678-9',
-  address: 'Av. Principal, Local 1',
-  phone: '0412-1234567',
+  name: 'EfiPos',
+  rif: '',
+  address: '',
+  phone: '',
 }
 
 const symbol = (c: string) => (c === 'usd' ? '$' : 'Bs.')
 
 export function downloadPdf(data: DocData) {
   const doc = new jsPDF({ unit: 'mm', format: [80, 160] })
+  const cmp = data.company || COMPANY
 
   doc.setFontSize(13)
-  doc.text(COMPANY.name, 40, 18, { align: 'center' })
+  doc.text(cmp.name, 40, 18, { align: 'center' })
   doc.setFontSize(8)
-  doc.text(`RIF: ${COMPANY.rif}`, 40, 26, { align: 'center' })
-  doc.text(COMPANY.address, 40, 31, { align: 'center' })
-  doc.text(`Tel: ${COMPANY.phone}`, 40, 36, { align: 'center' })
+  if (cmp.rif) doc.text(`RIF: ${cmp.rif}`, 40, 26, { align: 'center' })
+  if (cmp.address) doc.text(cmp.address, 40, cmp.rif ? 31 : 26, { align: 'center' })
+  if (cmp.phone) doc.text(`Tel: ${cmp.phone}`, 40, cmp.rif && cmp.address ? 36 : 31, { align: 'center' })
 
   doc.setFontSize(10)
   doc.text(`${data.title}: ${data.number}`, 40, 46, { align: 'center' })

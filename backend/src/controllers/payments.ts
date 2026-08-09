@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
-import { resolveContext } from '../lib/tenant'
+import { resolveContext, resolveEffectiveBranchId } from '../lib/tenant'
 import { isPositiveNumber } from '../lib/validation'
 
 export async function list(req: AuthRequest, res: Response) {
@@ -31,6 +31,9 @@ export async function create(req: AuthRequest, res: Response) {
     return
   }
 
+  const branchId = await resolveEffectiveBranchId(ctx)
+  if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
+
   const payment = await prisma.payment.create({
     data: {
       invoiceId: invoiceId || null,
@@ -40,7 +43,7 @@ export async function create(req: AuthRequest, res: Response) {
       reference,
       notes,
       businessId: ctx.businessId ?? 0,
-      branchId: ctx.branchId ?? 0,
+      branchId,
       userId: req.user!.id,
     },
     include: { user: { select: { id: true, name: true } } },

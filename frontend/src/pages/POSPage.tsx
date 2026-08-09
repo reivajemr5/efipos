@@ -8,6 +8,7 @@ import type { CartItem } from '../components/pos/TicketPanel'
 import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
 import LoadModal from '../components/LoadModal'
+import InvoicePrintLayout, { type PrintData } from '../components/InvoicePrintLayout'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
@@ -46,6 +47,8 @@ export default function POSPage() {
   const [manualRate, setManualRate] = useState(0)
 
   const [successSale, setSuccessSale] = useState<{ number: string; id: number } | null>(null)
+  const [printData, setPrintData] = useState<PrintData | null>(null)
+  const [printing, setPrinting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [notes, setNotes] = useState('')
@@ -329,10 +332,19 @@ export default function POSPage() {
     }
   }
 
-  function handlePrint() {
-    const afterPrint = () => { window.removeEventListener('afterprint', afterPrint); startNewSale() }
-    window.addEventListener('afterprint', afterPrint)
-    setTimeout(() => window.print(), 300)
+  async function handlePrint() {
+    if (!successSale || printing) return
+    setPrinting(true)
+    try {
+      const data = await api.invoices.print(successSale.id).catch(() => null)
+      if (!data) { setPrinting(false); alert('Error al generar la factura para imprimir'); return }
+      setPrintData(data)
+      const afterPrint = () => { window.removeEventListener('afterprint', afterPrint); setPrinting(false); startNewSale() }
+      window.addEventListener('afterprint', afterPrint)
+      setTimeout(() => window.print(), 300)
+    } catch {
+      setPrinting(false)
+    }
   }
 
   async function loadClients(q?: string) {
@@ -359,6 +371,7 @@ export default function POSPage() {
 
   function startNewSale() {
     setSuccessSale(null)
+    setPrintData(null)
     setCart([])
     setDiscount(0)
     setLineDiscountProduct(null)
@@ -383,7 +396,7 @@ export default function POSPage() {
         @media print {
           body { background: white !important; }
           .no-print { display: none !important; }
-          .print-area { display: block !important; position: fixed; top: 0; left: 0; right: 0; background: white; z-index: 9999; padding: 20px; font-size: 12px; }
+          .print-area { display: block !important; position: fixed; top: 0; left: 0; right: 0; background: white; z-index: 9999; }
         }
         .print-area { display: none; }
       `}</style>
@@ -1019,66 +1032,13 @@ export default function POSPage() {
       </div>
 
       <div className="print-area" id="print-area">
-        <div style={{ maxWidth: 300, margin: '0 auto', fontFamily: 'monospace' }}>
-          <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>EfiPOS</h2>
-          <p style={{ textAlign: 'center', fontSize: 11, margin: '0 0 8px', color: '#666' }}>
-            {successSale?.number || 'Factura'}
-          </p>
-          {exchangeRate > 0 && (
-            <p style={{ textAlign: 'center', fontSize: 10, margin: '0 0 4px', color: '#888' }}>
-              Tasa BCV: Bs.{exchangeRate.toFixed(2)}/$
-            </p>
-          )}
-          <hr style={{ border: 'none', borderTop: '1px dashed #999' }} />
-          <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #999' }}>
-                <th style={{ textAlign: 'left', padding: '2px 0' }}>Prod</th>
-                <th style={{ textAlign: 'center', padding: '2px 0' }}>Qty</th>
-                <th style={{ textAlign: 'right', padding: '2px 0' }}>P/U Bs.</th>
-                <th style={{ textAlign: 'right', padding: '2px 0' }}>Total Bs.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cart.map((item) => {
-                const lineDisc = item.discount || 0
-                const netUsd = Math.max(0, item.unitPrice * item.quantity - lineDisc)
-                const puBs = exchangeRate > 0 ? item.unitPrice * exchangeRate : item.unitPrice
-                const totBs = exchangeRate > 0 ? netUsd * exchangeRate : netUsd
-                return (
-                  <tr key={item.productId}>
-                    <td style={{ padding: '2px 0' }}>{item.name}</td>
-                    <td style={{ textAlign: 'center', padding: '2px 0' }}>{item.quantity}</td>
-                    <td style={{ textAlign: 'right', padding: '2px 0' }}>Bs.{puBs.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', padding: '2px 0' }}>Bs.{totBs.toFixed(2)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <hr style={{ border: 'none', borderTop: '1px dashed #999' }} />
-          <div style={{ fontSize: 11 }}>
-            <p style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
-              <span>Subtotal</span><span>Bs.{(exchangeRate > 0 ? subtotal * exchangeRate : subtotal).toFixed(2)}</span>
-            </p>
-            <p style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
-              <span>IVA</span><span>Bs.{(exchangeRate > 0 ? ivaTotal * exchangeRate : ivaTotal).toFixed(2)}</span>
-            </p>
-            {discount > 0 && (
-              <p style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0', color: '#d97706' }}>
-                <span>Descuento</span><span>-Bs.{(exchangeRate > 0 ? discount * exchangeRate : discount).toFixed(2)}</span>
-              </p>
-            )}
-            <p style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', fontSize: 14, fontWeight: 'bold' }}>
-              <span>Total Bs.</span><span>Bs.{(exchangeRate > 0 ? lastSaleAmount * exchangeRate : lastSaleAmount).toFixed(2)}</span>
-            </p>
+        {printData ? (
+          <InvoicePrintLayout data={printData} />
+        ) : (
+          <div style={{ maxWidth: 300, margin: '0 auto', textAlign: 'center', color: '#999', padding: 40, fontFamily: 'monospace' }}>
+            Generando factura para imprimir...
           </div>
-          <hr style={{ border: 'none', borderTop: '1px dashed #999' }} />
-          <p style={{ textAlign: 'center', fontSize: 10, color: '#999', marginTop: 8 }}>
-            {selectedClient.id > 0 ? selectedClient.name : 'Consumidor Final'}<br />
-            {new Date().toLocaleDateString('es')} {new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
-          </p>
-        </div>
+        )}
       </div>
     </>
   )

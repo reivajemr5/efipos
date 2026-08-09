@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
-import { resolveContext } from '../lib/tenant'
+import { resolveContext, resolveEffectiveBranchId } from '../lib/tenant'
 
 function baseWhere(ctx: { businessId: number | null; branchId: number | null }): any {
   const w: any = { businessId: ctx.businessId ?? 0 }
@@ -115,10 +115,13 @@ export async function saveCashClose(req: AuthRequest, res: Response) {
   const expectedTotal = invoices.reduce((sum, inv) => sum + Number(inv.total), 0)
   const difference = declaredTotal - expectedTotal
 
+  const branchId = await resolveEffectiveBranchId(ctx)
+  if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
+
   const close = await prisma.cashClose.create({
     data: {
       businessId: ctx.businessId ?? 0,
-      branchId: ctx.branchId ?? 0,
+      branchId,
       userId: req.user!.id,
       expectedTotal,
       declaredTotal,

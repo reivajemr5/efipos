@@ -2,7 +2,7 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
-import { resolveContext } from '../lib/tenant'
+import { resolveContext, resolveEffectiveBranchId } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
 import { validateItems } from '../lib/validation'
 import { nextDocumentNumber } from '../lib/numbering'
@@ -77,6 +77,9 @@ export async function create(req: AuthRequest, res: Response) {
     return
   }
   if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  const branchId = await resolveEffectiveBranchId(ctx)
+  if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
 
   if (requestKey) {
     const existing = await prisma.invoice.findFirst({ where: { businessId: ctx.businessId, requestKey } })
@@ -158,7 +161,7 @@ export async function create(req: AuthRequest, res: Response) {
   const invoice = await prisma.invoice.create({
     data: {
       businessId: ctx.businessId,
-      branchId: ctx.branchId ?? 0,
+      branchId,
       number,
       clientId: finalClientId,
       userId: req.user!.id,
@@ -180,7 +183,7 @@ export async function create(req: AuthRequest, res: Response) {
           method: p.method,
           reference: p.reference || null,
           businessId: ctx.businessId,
-          branchId: ctx.branchId ?? 0,
+          branchId,
           userId: req.user!.id,
         })),
       } : undefined,
@@ -202,7 +205,7 @@ export async function create(req: AuthRequest, res: Response) {
       for (const item of invoiceItems) {
         await changeStock(tx, {
           businessId: ctx.businessId!,
-          branchId: ctx.branchId ?? 0,
+          branchId,
           productId: item.productId,
           type: 'sale',
           quantity: -item.quantity,

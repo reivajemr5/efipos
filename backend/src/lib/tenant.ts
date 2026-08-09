@@ -1,4 +1,5 @@
 import { AuthRequest } from '../middleware/auth'
+import prisma from './prisma'
 
 export interface TenantContext {
   businessId: number | null
@@ -39,4 +40,20 @@ export function isSuperAdmin(req: AuthRequest): boolean {
 export function canSwitchBranch(req: AuthRequest): boolean {
   const r = req.user?.role
   return r === 'superadmin' || r === 'dueno'
+}
+
+/**
+ * Resolves the branch to use for branch-scoped writes.
+ * Uses the request context branch when present, otherwise falls back to the
+ * business's first active branch (mirrors the pattern used in purchases).
+ */
+export async function resolveEffectiveBranchId(ctx: TenantContext): Promise<number | null> {
+  if (ctx.branchId) return ctx.branchId
+  if (!ctx.businessId) return null
+  const branch = await prisma.branch.findFirst({
+    where: { businessId: ctx.businessId, active: true },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  })
+  return branch?.id ?? null
 }

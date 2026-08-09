@@ -366,7 +366,6 @@ export default function Quotes() {
         <table><thead><tr><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Código</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Producto</th><th style="padding:6px;font-size:10px;background:#1E40AF;color:#fff">Cant</th>${thPrecio}</tr></thead><tbody>${itemsHtml}</tbody></table>
         <div class="totals">${totalsHtml}</div>
         <hr>
-        <p class="footer">Tasa BCV: Bs.${rate.toFixed(2)}/$</p>
         <p class="footer">Gracias por su preferencia</p>
       </body></html>`)
       win.document.close()

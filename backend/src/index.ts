@@ -43,14 +43,6 @@ app.use(
 )
 app.use(express.json({ limit: '50mb' }))
 
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    const extra = req.path.includes('/auth/login') ? ` email=${req.body?.email || '?'}` : ''
-    console.log(`[req] ${req.method} ${req.originalUrl} -> ${res.statusCode} ip=${req.ip}${extra}`)
-  })
-  next()
-})
-
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 1000,
@@ -94,6 +86,12 @@ cron.schedule('0 10 * * *', async () => {
   } else {
     console.log('[cron] No se pudo actualizar la tasa')
   }
+})
+
+// JSON error handler so the API never returns HTML/empty bodies.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[error]', err?.message || err)
+  res.status(err?.status || err?.statusCode || 500).json({ error: err?.message || 'Error interno del servidor' })
 })
 
 app.listen(PORT, () => {

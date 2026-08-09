@@ -2,7 +2,7 @@ import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
-import { resolveContext } from '../lib/tenant'
+import { resolveContext, resolveEffectiveBranchId } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
 import { validateItems } from '../lib/validation'
 import { nextDocumentNumber } from '../lib/numbering'
@@ -51,6 +51,9 @@ export async function create(req: AuthRequest, res: Response) {
     return
   }
   if (!ctx.businessId) { res.status(403).json({ error: 'Se requiere un negocio activo' }); return }
+
+  const branchId = await resolveEffectiveBranchId(ctx)
+  if (!branchId) { res.status(403).json({ error: 'La empresa no tiene sucursales activas' }); return }
 
   const itemsError = validateItems(items)
   if (itemsError) {
@@ -104,7 +107,7 @@ export async function create(req: AuthRequest, res: Response) {
   const quote = await prisma.quote.create({
     data: {
       businessId: ctx.businessId,
-      branchId: ctx.branchId ?? 0,
+      branchId,
       number,
       clientId,
       userId: req.user!.id,

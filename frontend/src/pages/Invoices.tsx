@@ -7,6 +7,7 @@ import SearchPicker from '../components/SearchPicker'
 import ClientFormModal from '../components/ClientFormModal'
 import TablePickerModal from '../components/TablePickerModal'
 import { downloadPdf } from '../utils/pdf'
+import InvoicePrintLayout, { type PrintData } from '../components/InvoicePrintLayout'
 
 interface Product {
   id: number; name: string; code: string; price: number; currency: string; ivaPercent: number; stock: number
@@ -50,6 +51,7 @@ export default function Invoices() {
   const [showForm, setShowForm] = useState(false)
   const [showDetail, setShowDetail] = useState<Invoice | null>(null)
   const [showPrint, setShowPrint] = useState<Invoice | null>(null)
+  const [printData, setPrintData] = useState<PrintData | null>(null)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [items, setItems] = useState<{ productId: number; quantity: number }[]>([])
   const [paymentMethod, setPaymentMethod] = useState('efectivo_bs')
@@ -64,7 +66,6 @@ export default function Invoices() {
   const [submitting, setSubmitting] = useState(false)
   const idemRef = useRef<string | null>(null)
   const isOnline = useOnlineStatus()
-  const printRef = useRef<HTMLDivElement>(null)
 
   async function load() {
     const params = filterStatus ? `status=${filterStatus}` : ''
@@ -89,6 +90,18 @@ export default function Invoices() {
     setClients((prev) => [...prev, client])
     setSelectedClient(client)
     setShowNewClientForm(false)
+  }
+
+  async function openPrintModal(inv: Invoice) {
+    setShowDetail(null)
+    setShowPrint(inv)
+    setPrintData(null)
+    try {
+      const data = await api.invoices.print(inv.id)
+      setPrintData(data)
+    } catch {
+      setPrintData(null)
+    }
   }
 
   async function createInvoice() {
@@ -188,7 +201,8 @@ export default function Invoices() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <div className="flex items-center justify-between mb-4 no-print">
         <h2 className="text-2xl font-bold text-gray-800">Facturación</h2>
         <div className="flex items-center gap-2">
           {offlineCount > 0 && (
@@ -200,7 +214,7 @@ export default function Invoices() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 no-print">
         {['', 'activa', 'anulada'].map((s) => (
           <button key={s} onClick={() => setFilterStatus(s)}
             className={`px-3 py-1 rounded-full text-sm ${filterStatus === s ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-700'}`}>
@@ -210,7 +224,7 @@ export default function Invoices() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print" onClick={() => setShowForm(false)}>
           <div className="bg-white p-6 rounded-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">Nueva Factura</h3>
 
@@ -320,7 +334,7 @@ export default function Invoices() {
         onSaved={onClientCreated} />
 
       {showDetail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDetail(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print" onClick={() => setShowDetail(null)}>
           <div className="bg-white p-6 rounded-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <div>
@@ -354,7 +368,7 @@ export default function Invoices() {
               {showDetail.totalBs && <p className="text-sm text-gray-500">Bs. {Number(showDetail.totalBs).toFixed(2)}</p>}
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={() => { setShowPrint(showDetail); setShowDetail(null) }} className="flex-1 bg-gray-700 text-white py-2 rounded-lg">Imprimir</button>
+              <button onClick={() => openPrintModal(showDetail)} className="flex-1 bg-gray-700 text-white py-2 rounded-lg">Imprimir</button>
               {showDetail.status === 'activa' && (
                 <button onClick={() => cancelInvoice(showDetail.id)} className="flex-1 bg-red-600 text-white py-2 rounded-lg">Anular</button>
               )}
@@ -366,59 +380,34 @@ export default function Invoices() {
 
       {showPrint && (
         <div className="fixed inset-0 bg-white z-50 overflow-y-auto p-4">
-          <div className="max-w-sm mx-auto" ref={printRef}>
-            <div className="text-center mb-4">
-              <h2 className="font-bold text-lg">EFI- POS</h2>
-              <p className="text-xs">RIF: J-12345678-9</p>
-              <p className="text-xs">Av. Principal, Local 1</p>
-              <p className="text-xs">Tel: 0412-1234567</p>
-            </div>
-            <div className="border-t border-b py-2 mb-2 text-center">
-              <p className="font-bold">{showPrint.number}</p>
-              <p className="text-xs">{new Date(showPrint.createdAt).toLocaleString()}</p>
-            </div>
-            <p className="text-xs mb-2">Cliente: {showPrint.client.name}</p>
-            <table className="w-full text-xs mb-2">
-              <thead><tr className="border-b"><th className="text-left">Prod</th><th className="text-right">Cant</th><th className="text-right">Total</th></tr></thead>
-              <tbody>
-                {showPrint.items.map((item, i) => (
-                  <tr key={i}>
-                    <td className="truncate max-w-[150px]">{item.product?.name}</td>
-                    <td className="text-right">{item.quantity}</td>
-                    <td className="text-right font-mono">${Number(item.subtotal).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="border-t pt-1 text-xs text-right space-y-0.5">
-              <p>Subtotal: {showPrint.currency === 'usd' ? '$' : 'Bs.'}{Number(showPrint.subtotal).toFixed(2)}</p>
-              <p>IVA: {showPrint.currency === 'usd' ? '$' : 'Bs.'}{Number(showPrint.ivaTotal).toFixed(2)}</p>
-              <p className="font-bold text-sm">Total: {showPrint.currency === 'usd' ? '$' : 'Bs.'}{Number(showPrint.total).toFixed(2)}</p>
-              {showPrint.totalBs && <p>Bs. {Number(showPrint.totalBs).toFixed(2)}</p>}
-            </div>
-            <p className="text-xs text-center mt-4">Forma de pago: {showPrint.paymentMethod}</p>
-            <p className="text-xs text-center mt-2">¡Gracias por su compra!</p>
-          </div>
-          <div className="flex gap-2 mt-6 max-w-sm mx-auto">
-            <button onClick={() => window.print()} className="flex-1 bg-blue-900 text-white py-2 rounded-lg">Imprimir</button>
-            <button onClick={() => downloadPdf({
-              title: 'Factura',
-              number: showPrint.number,
-              clientName: showPrint.client.name,
-              date: new Date(showPrint.createdAt).toLocaleString(),
-              items: showPrint.items.map((i) => ({ name: i.product?.name || '', quantity: i.quantity, unitPrice: Number(i.unitPrice), subtotal: Number(i.subtotal) })),
-              subtotal: Number(showPrint.subtotal),
-              ivaTotal: Number(showPrint.ivaTotal),
-              total: Number(showPrint.total),
-              currency: showPrint.currency,
-              paymentMethod: showPrint.paymentMethod,
-            })} className="flex-1 bg-gray-700 text-white py-2 rounded-lg">Descargar PDF</button>
-            <button onClick={() => setShowPrint(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cerrar</button>
-          </div>
+          {printData ? (
+            <>
+              <InvoicePrintLayout data={printData} />
+              <div className="flex gap-2 mt-6 max-w-sm mx-auto no-print">
+                <button onClick={() => window.print()} className="flex-1 bg-blue-900 text-white py-2 rounded-lg">Imprimir</button>
+                <button onClick={() => downloadPdf({
+                  title: 'Factura',
+                  number: printData.invoice.number,
+                  clientName: printData.invoice.client.name,
+                  date: new Date(printData.invoice.createdAt).toLocaleString(),
+                  items: printData.invoice.items.map((i) => ({ name: i.product?.name || '', quantity: i.quantity, unitPrice: Number(i.unitPrice), subtotal: Number(i.subtotal) })),
+                  subtotal: Number(printData.invoice.subtotal),
+                  ivaTotal: Number(printData.invoice.ivaTotal),
+                  total: Number(printData.invoice.total),
+                  currency: printData.invoice.currency,
+                  paymentMethod: printData.invoice.paymentMethod,
+                  company: printData.company,
+                })} className="flex-1 bg-gray-700 text-white py-2 rounded-lg">Descargar PDF</button>
+                <button onClick={() => setShowPrint(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cerrar</button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center min-h-screen text-gray-400">Cargando factura...</div>
+          )}
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-2 no-print">
         {invoices.map((inv) => (
           <div key={inv.id} onClick={() => setShowDetail(inv)} className="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
             <div>
