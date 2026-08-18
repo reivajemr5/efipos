@@ -584,30 +584,8 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
                       ))}
                     {attributeTemplates.filter((t) => t.name.toLowerCase().includes(form.templateSearch.toLowerCase())).length === 0 && (
                       <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
-            )}
-
-            <div className="mt-4 space-y-2 border-t border-gray-100 pt-3">
-              <label className="text-xs text-gray-500 mb-1 block">Opciones de venta</label>
-              <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
-                <span className="text-sm text-gray-700">Vender por peso (cantidades decimales)</span>
-                <input type="checkbox" checked={form.decimalQuantity}
-                  onChange={(e) => setForm({ ...form, decimalQuantity: e.target.checked })}
-                  className="w-5 h-5 accent-blue-900" />
-              </label>
-              <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
-                <span className="text-sm text-gray-700">Permitir venta sin stock</span>
-                <input type="checkbox" checked={form.sellWithoutStock}
-                  onChange={(e) => setForm({ ...form, sellWithoutStock: e.target.checked })}
-                  className="w-5 h-5 accent-blue-900" />
-              </label>
-              <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
-                <span className="text-sm text-gray-700">Permitir cambiar el precio en la factura</span>
-                <input type="checkbox" checked={form.priceOverride}
-                  onChange={(e) => setForm({ ...form, priceOverride: e.target.checked })}
-                  className="w-5 h-5 accent-blue-900" />
-              </label>
-            </div>
-          </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -652,6 +630,29 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
               ))}
             </div>
           )}
+
+          {/* Opciones de venta */}
+          <div className="mt-4 space-y-2 border-t border-gray-100 pt-3">
+            <label className="text-xs text-gray-500 mb-1 block">Opciones de venta</label>
+            <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
+              <span className="text-sm text-gray-700">Vender por peso (cantidades decimales)</span>
+              <input type="checkbox" checked={form.decimalQuantity}
+                onChange={(e) => setForm({ ...form, decimalQuantity: e.target.checked })}
+                className="w-5 h-5 accent-blue-900" />
+            </label>
+            <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
+              <span className="text-sm text-gray-700">Permitir venta sin stock</span>
+              <input type="checkbox" checked={form.sellWithoutStock}
+                onChange={(e) => setForm({ ...form, sellWithoutStock: e.target.checked })}
+                className="w-5 h-5 accent-blue-900" />
+            </label>
+            <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
+              <span className="text-sm text-gray-700">Permitir cambiar el precio en la factura</span>
+              <input type="checkbox" checked={form.priceOverride}
+                onChange={(e) => setForm({ ...form, priceOverride: e.target.checked })}
+                className="w-5 h-5 accent-blue-900" />
+            </label>
+          </div>
 
           {/* Componentes (compuesto) */}
           {form.type === 'compuesto' && (
