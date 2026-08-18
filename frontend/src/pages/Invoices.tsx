@@ -8,9 +8,14 @@ import ClientFormModal from '../components/ClientFormModal'
 import TablePickerModal from '../components/TablePickerModal'
 import { downloadPdf } from '../utils/pdf'
 import InvoicePrintLayout, { type PrintData } from '../components/InvoicePrintLayout'
+import { useSaleModes } from '../hooks/useSaleModes'
+import { effectiveFlag, QTY_STEP, formatQty } from '../utils/config'
 
 interface Product {
   id: number; name: string; code: string; price: number; currency: string; ivaPercent: number; stock: number
+  decimalQuantity?: boolean
+  sellWithoutStock?: boolean
+  priceOverride?: boolean
 }
 
 interface Client {
@@ -45,6 +50,7 @@ interface Invoice {
 }
 
 export default function Invoices() {
+  const saleModes = useSaleModes()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -164,11 +170,24 @@ export default function Invoices() {
     addItem(product.id)
   }
 
+  function productById(id: number): Product | undefined {
+    return products.find((x) => x.id === id)
+  }
+
+  function allowDecimalQty(p: Product | undefined): boolean {
+    return p ? effectiveFlag(saleModes.decimalQuantityMode, p.decimalQuantity) : false
+  }
+
+  function allowNoStock(p: Product | undefined): boolean {
+    return p ? effectiveFlag(saleModes.sellWithoutStockMode, p.sellWithoutStock) : false
+  }
+
   function addItem(productId: number) {
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === productId)
-      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
-      return [...prev, { productId, quantity: 1 }]
+      const inc = allowDecimalQty(productById(productId)) ? 0.5 : 1
+      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + inc } : i)
+      return [...prev, { productId, quantity: allowDecimalQty(productById(productId)) ? QTY_STEP : 1 }]
     })
   }
 
@@ -280,11 +299,13 @@ export default function Invoices() {
               {items.map((item) => {
                 const p = products.find((x) => x.id === item.productId)
                 if (!p) return null
-                const lowStock = item.quantity > p.stock
+                const noStockAllowed = allowNoStock(p)
+                const lowStock = !noStockAllowed && item.quantity > p.stock
                 return (
                   <div key={item.productId} className={`flex items-center gap-2 p-2 rounded-lg ${lowStock ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                     <span className="flex-1 text-sm">{p.name}</span>
-                    <input type="number" value={item.quantity} min="1" max={p.stock}
+                    <input type="number" value={item.quantity} min={allowDecimalQty(p) ? QTY_STEP : 1} step={allowDecimalQty(p) ? 0.5 : 1}
+                      {...(noStockAllowed ? {} : { max: p.stock })}
                       onChange={(e) => updateQty(item.productId, Number(e.target.value))}
                       className="w-16 px-2 py-1 border rounded text-center text-sm" />
                     <span className="text-sm font-mono w-20 text-right">${calcItemTotal(item).toFixed(2)}</span>
@@ -300,7 +321,7 @@ export default function Invoices() {
               filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
               renderItem={(p) => (
                 <span className="flex justify-between w-full">
-                  <span>{p.code} - {p.name} {p.stock <= 0 && <span className="text-red-500">(sin stock)</span>}</span>
+                  <span>{p.code} - {p.name} {p.stock <= 0 && !allowNoStock(p) && <span className="text-red-500">(sin stock)</span>}</span>
                   <span className="text-gray-500">${Number(p.price).toFixed(2)}</span>
                 </span>
               )}
@@ -355,7 +376,7 @@ export default function Invoices() {
                 {showDetail.items.map((item, i) => (
                   <tr key={i} className="border-b last:border-0">
                     <td className="py-1">{item.product?.name}</td>
-                    <td className="text-right py-1">{item.quantity}</td>
+                    <td className="text-right py-1">{formatQty(Number(item.quantity))}</td>
                     <td className="text-right py-1 font-mono">${Number(item.subtotal).toFixed(2)}</td>
                   </tr>
                 ))}

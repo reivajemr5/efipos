@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { formatQty } from './config'
 
 interface ItemRow {
   name: string
@@ -61,7 +62,7 @@ export function downloadPdf(data: DocData) {
     head: [['Producto', 'Cant', 'Total']],
     body: data.items.map((i) => [
       i.name,
-      String(i.quantity),
+      String(formatQty(i.quantity)),
       `${symbol(data.currency)}${i.subtotal.toFixed(2)}`,
     ]),
     theme: 'plain',

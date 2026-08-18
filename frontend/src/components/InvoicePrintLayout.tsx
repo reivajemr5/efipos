@@ -32,6 +32,7 @@ export interface PrintData {
 
 export default function InvoicePrintLayout({ data }: { data: PrintData }) {
   const { company, invoice } = data
+  const formatQty = (q: number) => (Number.isInteger(q) ? String(q) : String(Number(q.toFixed(3))))
   const symbol = invoice.currency === 'bs' ? 'Bs.' : '$'
   const discountUsd = invoice.discount ? Number(invoice.discount) : 0
   const d = new Date(invoice.createdAt)
@@ -81,7 +82,7 @@ export default function InvoicePrintLayout({ data }: { data: PrintData }) {
         <tbody>
           {invoice.items.map((item, i) => (
             <tr key={i} className="border-b border-gray-100">
-              <td className="py-1">{item.quantity}</td>
+              <td className="py-1">{formatQty(Number(item.quantity))}</td>
               <td className="py-1">{item.product.name}</td>
               <td className="py-1 text-right">{symbol} {Number(item.unitPrice).toFixed(2)}</td>
               <td className="py-1 text-right">{symbol} {Number(item.subtotal).toFixed(2)}</td>

@@ -10,6 +10,9 @@ export interface OfflineProduct {
   minStock: number
   supplierId: number | null
   supplierName: string | null
+  decimalQuantity: boolean
+  sellWithoutStock: boolean
+  priceOverride: boolean
   updatedAt: string
 }
 

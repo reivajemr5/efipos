@@ -9,11 +9,21 @@ import ProductGrid from '../components/pos/ProductGrid'
 import ClientFormModal from '../components/ClientFormModal'
 import LoadModal from '../components/LoadModal'
 import InvoicePrintLayout, { type PrintData } from '../components/InvoicePrintLayout'
+import { effectiveFlag, formatQty, QTY_STEP } from '../utils/config'
+import { useToastStore } from '../store/toast'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
   phone: string | null; address: string | null
 }
+
+interface BusinessSettings {
+  decimalQuantityMode: string | null
+  sellWithoutStockMode: string | null
+  priceOverrideMode: string | null
+}
+
+const DEFAULT_SETTINGS: BusinessSettings = { decimalQuantityMode: 'none', sellWithoutStockMode: 'none', priceOverrideMode: 'none' }
 
 interface Product {
   id: number
@@ -28,6 +38,9 @@ interface Product {
   barcode?: string | null
   categoryId?: number | null
   category?: { id: number; name: string } | null
+  decimalQuantity?: boolean
+  sellWithoutStock?: boolean
+  priceOverride?: boolean
 }
 
 interface Category {
@@ -38,7 +51,9 @@ interface Category {
 const DEFAULT_CLIENT: Client = { id: 0, name: 'Consumidor Final', documentType: 'V', documentNumber: '0', phone: null, address: null }
 
 export default function POSPage() {
+  const addToast = useToastStore((s) => s.addToast)
   const [products, setProducts] = useState<Product[]>([])
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -79,14 +94,16 @@ export default function POSPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [prods, cats, clis] = await Promise.all([
+      const [prods, cats, clis, settings] = await Promise.all([
         api.products.list(),
         api.categories.list(),
         api.clients.list(),
+        api.businesses.settings(),
       ])
       setProducts(prods.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
       setCategories(cats)
       setClients(clis)
+      if (settings) setBusinessSettings(settings)
     } catch {
       const cached = await db.products.toArray()
       setProducts(cached.map((p: any) => ({ ...p, price: Number(p.price), ivaPercent: Number(p.ivaPercent) })))
@@ -150,23 +167,59 @@ export default function POSPage() {
     return matchesSearch && matchesCategory
   })
 
-  function handleSelectProduct(product: Product) {
-    if (product.stock <= 0) return
+  function allowSellWithoutStock(product: Product): boolean {
+    return effectiveFlag(businessSettings.sellWithoutStockMode, product.sellWithoutStock)
+  }
+
+  function allowDecimalQty(product: Product): boolean {
+    return effectiveFlag(businessSettings.decimalQuantityMode, product.decimalQuantity)
+  }
+
+  function allowPriceOverride(product: Product): boolean {
+    return effectiveFlag(businessSettings.priceOverrideMode, product.priceOverride)
+  }
+
+  function addProductWithQty(product: Product, qty: number) {
+    if (!allowSellWithoutStock(product) && product.stock <= 0) {
+      addToast(`"${product.name}" está sin stock`, 'error')
+      return
+    }
+    const q = Math.max(allowDecimalQty(product) ? QTY_STEP : 1, Number(qty) || (allowDecimalQty(product) ? QTY_STEP : 1))
+    if (!allowSellWithoutStock(product) && q > product.stock) {
+      addToast(`Stock insuficiente de "${product.name}" (disponible: ${product.stock})`, 'error')
+      return
+    }
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
       if (existing) {
         return prev.map((i) =>
-          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.productId === product.id ? { ...i, quantity: q } : i
         )
       }
-      return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent), discount: 0 }]
+      return [...prev, {
+        productId: product.id,
+        name: product.name,
+        quantity: q,
+        unitPrice: Number(product.price),
+        ivaPercent: Number(product.ivaPercent),
+        discount: 0,
+        allowDecimal: allowDecimalQty(product),
+        allowPriceOverride: allowPriceOverride(product),
+      }]
     })
+  }
+
+  function handleSelectProduct(product: Product) {
+    addProductWithQty(product, (() => {
+      const existing = cart.find((i) => i.productId === product.id)
+      return existing ? existing.quantity + (allowDecimalQty(product) ? 0.5 : 1) : (allowDecimalQty(product) ? QTY_STEP : 1)
+    })())
   }
 
   function handleSearchSubmit() {
     if (filteredProducts.length > 0) {
       setQtyModalProduct(filteredProducts[0])
-      setQtyValue(1)
+      setQtyValue(allowDecimalQty(filteredProducts[0]) ? 0.5 : 1)
     }
   }
 
@@ -188,7 +241,17 @@ export default function POSPage() {
       setCart((prev) => prev.filter((i) => i.productId !== productId))
       return
     }
+    const product = products.find((p) => p.id === productId)
+    if (product && !allowSellWithoutStock(product) && qty > product.stock) {
+      addToast(`Stock insuficiente de "${product.name}" (disponible: ${product.stock})`, 'error')
+      setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity: product.stock } : i)))
+      return
+    }
     setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity: qty } : i)))
+  }
+
+  function handleUpdatePrice(productId: number, price: number) {
+    setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, unitPrice: price } : i)))
   }
 
   function handleRemove(productId: number) {
@@ -242,14 +305,19 @@ export default function POSPage() {
   }
 
   function handleLoadFromSource(source: { type: 'draft' | 'quote'; id: number; items: any[]; client: any; exchangeRate?: number; discount?: number }) {
-    setCart(source.items.map((i: any) => ({
-      productId: i.productId,
-      name: i.name || '',
-      quantity: i.quantity,
-      unitPrice: Number(i.unitPrice),
-      ivaPercent: Number(i.ivaPercent),
-      discount: i.discount ? Number(i.discount) : 0,
-    })))
+    setCart(source.items.map((i: any) => {
+      const p = products.find((pp) => pp.id === i.productId)
+      return {
+        productId: i.productId,
+        name: i.name || '',
+        quantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice),
+        ivaPercent: Number(i.ivaPercent),
+        discount: i.discount ? Number(i.discount) : 0,
+        allowDecimal: p ? allowDecimalQty(p) : false,
+        allowPriceOverride: p ? allowPriceOverride(p) : false,
+      }
+    }))
     if (source.discount) setDiscount(Number(source.discount))
     if (source.client) {
       setSelectedClient({ id: source.client.id, name: source.client.name, documentType: source.client.documentType, documentNumber: source.client.documentNumber, phone: null, address: null })
@@ -317,7 +385,7 @@ export default function POSPage() {
       }
 
       setLastSaleAmount(paidTotal)
-      setSuccessSale({ number: invoice.number || invoice.number, id: invoice.id })
+      setSuccessSale({ number: invoice.number, id: invoice.id })
       setCart([])
       setDiscount(0)
       setNotes('')
@@ -479,6 +547,7 @@ export default function POSPage() {
               items={cart}
               discount={discount}
               onUpdateQuantity={handleUpdateQuantity}
+              onUpdatePrice={handleUpdatePrice}
               onRemove={handleRemove}
               onLineDiscount={setLineDiscountProduct}
               onCheckout={handleCheckout}
@@ -496,9 +565,10 @@ export default function POSPage() {
               selectedCategoryId={selectedCategory}
               onSelectCategory={setSelectedCategory}
                onSelectProduct={handleSelectProduct}
-               onSelectProductQuantity={(p) => { setQtyModalProduct(p); setQtyValue(1) }}
+               onSelectProductQuantity={(p) => { setQtyModalProduct(p); setQtyValue(allowDecimalQty(p) ? 0.5 : 1) }}
                onArrowUpFromFirst={() => searchInputRef.current?.focus()}
                exchangeRate={exchangeRate}
+               sellWithoutStockMode={businessSettings.sellWithoutStockMode}
             />
           </div>
         </div>
@@ -528,6 +598,7 @@ export default function POSPage() {
                 items={cart}
                 discount={discount}
                 onUpdateQuantity={handleUpdateQuantity}
+                onUpdatePrice={handleUpdatePrice}
                 onRemove={handleRemove}
                 onLineDiscount={setLineDiscountProduct}
                 onCheckout={handleCheckout}
@@ -895,12 +966,12 @@ export default function POSPage() {
                             {exchangeRate > 0 && <span className="block text-[10px] text-gray-400">Bs.{(Number(p.price) * exchangeRate).toFixed(2)}</span>}
                           </td>
                           <td className="px-4 py-2.5 text-right">
-                            <span className={`text-xs font-medium ${p.stock <= 0 ? 'text-red-500' : 'text-green-600'}`}>{p.stock}</span>
+                            <span className={`text-xs font-medium ${p.stock <= 0 ? 'text-red-500' : 'text-green-600'}`}>{formatQty(Number(p.stock))}</span>
                           </td>
                           <td className="px-4 py-2.5 text-right">
                             <button
                               onClick={() => { handleSelectProduct(p); setShowProductSearch(false); setModalSearch(''); setModalCategory(null) }}
-                              disabled={p.stock <= 0}
+                              disabled={!allowSellWithoutStock(p) && p.stock <= 0}
                               className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-medium hover:bg-blue-800 touch-manipulation disabled:opacity-40"
                             >
                               + Agregar
@@ -948,51 +1019,68 @@ export default function POSPage() {
         {qtyModalProduct && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setQtyModalProduct(null); setTimeout(() => searchInputRef.current?.focus(), 0) }}>
             <div className="bg-white rounded-2xl w-full max-w-xs p-6" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-gray-800 mb-1">{qtyModalProduct.name}</h3>
-              <p className="text-sm text-gray-500 mb-4">${Number(qtyModalProduct.price).toFixed(2)} c/u</p>
-              <div className="flex items-center gap-3 mb-4">
-                <button
-                  onClick={() => setQtyValue(Math.max(1, qtyValue - 1))}
-                  className="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold hover:bg-gray-300 touch-manipulation"
-                >−</button>
-                <input
-                  autoFocus
-                  type="number"
-                  min="1"
-                  max={qtyModalProduct.stock}
-                  value={qtyValue}
-                  onChange={(e) => setQtyValue(Math.max(1, Math.min(qtyModalProduct.stock, Number(e.target.value) || 1)))}
-                  onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => { if (e.key === 'Enter') {
-                    for (let i = 0; i < qtyValue; i++) handleSelectProduct(qtyModalProduct)
-                    setQtyModalProduct(null)
-                    setQtyValue(1)
-                    setTimeout(() => searchInputRef.current?.focus(), 0)
-                  }}}
-                  className="flex-1 text-center border border-gray-300 rounded-lg py-2 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-                <button
-                  onClick={() => setQtyValue(Math.min(qtyModalProduct.stock, qtyValue + 1))}
-                  className="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold hover:bg-gray-300 touch-manipulation"
-                >+</button>
-              </div>
-              <p className="text-xs text-gray-400 text-center mb-4">Stock: {qtyModalProduct.stock}</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setQtyModalProduct(null); setTimeout(() => searchInputRef.current?.focus(), 0) }}
-                  className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
-                >Cancelar</button>
-                <button
-                  onClick={() => {
-                    if (!qtyModalProduct) return
-                    for (let i = 0; i < qtyValue; i++) handleSelectProduct(qtyModalProduct)
-                    setQtyModalProduct(null)
-                    setQtyValue(1)
-                    setTimeout(() => searchInputRef.current?.focus(), 0)
-                  }}
-                  className="flex-1 py-3 bg-blue-900 text-white rounded-lg font-bold touch-manipulation"
-                >Agregar ({qtyValue})</button>
-              </div>
+              {(() => {
+                const p = qtyModalProduct
+                const dec = allowDecimalQty(p)
+                const allowNoStock = allowSellWithoutStock(p)
+                const step = dec ? QTY_STEP : 1
+                const min = dec ? QTY_STEP : 1
+                const max = allowNoStock ? undefined : Math.max(min, p.stock)
+                const clamp = (v: number) => Math.max(min, max === undefined ? v : Math.min(max, v))
+                const commit = () => {
+                  if (!p) return
+                  addProductWithQty(p, qtyValue)
+                  setQtyModalProduct(null)
+                  setQtyValue(1)
+                  setTimeout(() => searchInputRef.current?.focus(), 0)
+                }
+                return (
+                  <>
+                    <h3 className="text-lg font-bold text-gray-800 mb-1">{p.name}</h3>
+                    <p className="text-sm text-gray-500 mb-4">${Number(p.price).toFixed(2)} c/u</p>
+                    <div className="flex items-center gap-3 mb-4">
+                      <button
+                        onClick={() => setQtyValue(clamp(qtyValue - step))}
+                        className="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold hover:bg-gray-300 touch-manipulation"
+                      >−</button>
+                      <input
+                        autoFocus
+                        type="number"
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={qtyValue}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value)
+                          setQtyValue(Number.isFinite(raw) ? raw : min)
+                        }}
+                        onFocus={(e) => e.target.select()}
+                        onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
+                        className="flex-1 text-center border border-gray-300 rounded-lg py-2 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
+                      <button
+                        onClick={() => setQtyValue(clamp(qtyValue + step))}
+                        className="w-10 h-10 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold hover:bg-gray-300 touch-manipulation"
+                      >+</button>
+                    </div>
+                    <p className="text-xs text-gray-400 text-center mb-4">
+                      Stock: {p.stock}
+                      {dec && <span className="ml-1 text-blue-600">· acepta decimales</span>}
+                      {allowNoStock && p.stock <= 0 && <span className="ml-1 text-amber-600">· venta sin stock activa</span>}
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => { setQtyModalProduct(null); setTimeout(() => searchInputRef.current?.focus(), 0) }}
+                        className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium touch-manipulation"
+                      >Cancelar</button>
+                      <button
+                        onClick={commit}
+                        className="flex-1 py-3 bg-blue-900 text-white rounded-lg font-bold touch-manipulation"
+                      >Agregar ({qtyValue})</button>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           </div>
         )}

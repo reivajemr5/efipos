@@ -5,6 +5,9 @@ import * as c from '../controllers/businesses'
 const router = Router()
 
 router.use(authenticate)
+
+router.get('/context', c.context)
+
 router.use(authorize('superadmin', 'dueno'))
 
 router.get('/', c.list)

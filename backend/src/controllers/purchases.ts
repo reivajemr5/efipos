@@ -4,8 +4,28 @@ import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
-import { validateItems } from '../lib/validation'
+import { validateItems, validateItemPolicy } from '../lib/validation'
+import { effectiveFlag } from '../lib/config'
 import { nextDocumentNumber } from '../lib/numbering'
+
+async function validateDecimalPolicy(items: any[], businessId: number): Promise<string | null> {
+  const productIds = items.map((i: any) => i.productId)
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId } })
+  const productMap = new Map(products.map((p) => [p.id, p]))
+  const business = await prisma.business.findUnique({ where: { id: businessId }, select: { decimalQuantityMode: true } })
+  for (const i of items) {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const err = validateItemPolicy(i, product, {
+      allowDecimal: effectiveFlag(business?.decimalQuantityMode, product.decimalQuantity),
+      allowPriceOverride: true,
+      allowSellWithoutStock: true,
+      stock: null,
+    })
+    if (err) return err
+  }
+  return null
+}
 
 export async function list(req: AuthRequest, res: Response) {
   const { status } = req.query
@@ -79,6 +99,9 @@ export async function create(req: AuthRequest, res: Response) {
     res.status(400).json({ error: itemsError })
     return
   }
+
+  const policyError = await validateDecimalPolicy(items, ctx.businessId)
+  if (policyError) { res.status(400).json({ error: policyError }); return }
 
   const supplier = await prisma.supplier.findUnique({ where: { id: Number(supplierId) } })
   if (!supplier) {
@@ -250,6 +273,9 @@ export async function receive(req: AuthRequest, res: Response) {
       return
     }
 
+    const policyError = await validateDecimalPolicy(receivedItems, ctx.businessId ?? 0)
+    if (policyError) { res.status(400).json({ error: policyError }); return }
+
     const receivedIds = receivedItems.map((i: any) => i.productId)
     const products = await prisma.product.findMany({ where: { id: { in: receivedIds }, businessId: ctx.businessId ?? 0 } })
     const productMap = new Map(products.map((p) => [p.id, p]))
@@ -324,7 +350,7 @@ export async function receive(req: AuthRequest, res: Response) {
           branchId: purchase.branchId,
           productId: item.productId,
           type: 'purchase',
-          quantity: item.quantity,
+          quantity: Number(item.quantity),
           reference: purchase.number,
           notes: `Recepción de compra #${purchase.number}`,
           userId: req.user!.id,

@@ -4,7 +4,8 @@ import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext, resolveEffectiveBranchId } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
-import { validateItems } from '../lib/validation'
+import { validateItems, validateItemPolicy } from '../lib/validation'
+import { effectiveFlag } from '../lib/config'
 import { nextDocumentNumber } from '../lib/numbering'
 
 async function creditClientError(paymentMethod: string | undefined, clientId: number): Promise<string | null> {
@@ -111,6 +112,31 @@ export async function create(req: AuthRequest, res: Response) {
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
 
+  const business = await prisma.business.findUnique({
+    where: { id: ctx.businessId },
+    select: { decimalQuantityMode: true, sellWithoutStockMode: true, priceOverrideMode: true },
+  })
+
+  const stocks = await prisma.branchStock.findMany({ where: { branchId, productId: { in: productIds } } })
+  const stockMap = new Map(stocks.map((s) => [s.productId, Number(s.stock)]))
+  const allowNoStockByProduct = new Map<number, boolean>()
+
+  for (const i of items) {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const allowDecimal = effectiveFlag(business?.decimalQuantityMode, product.decimalQuantity)
+    const allowPriceOverride = effectiveFlag(business?.priceOverrideMode, product.priceOverride)
+    const allowSellWithoutStock = effectiveFlag(business?.sellWithoutStockMode, product.sellWithoutStock)
+    allowNoStockByProduct.set(i.productId, allowSellWithoutStock)
+    const policyErr = validateItemPolicy(i, product, {
+      allowDecimal,
+      allowPriceOverride,
+      allowSellWithoutStock,
+      stock: isDraft ? null : (stockMap.get(i.productId) ?? null),
+    })
+    if (policyErr) { res.status(400).json({ error: policyErr }); return }
+  }
+
   const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
   let ivaTotal = 0
@@ -209,6 +235,7 @@ export async function create(req: AuthRequest, res: Response) {
           productId: item.productId,
           type: 'sale',
           quantity: -item.quantity,
+          allowNegative: allowNoStockByProduct.get(item.productId) || undefined,
           reference: number,
           notes: `Venta #${number}`,
           userId: req.user!.id,
@@ -308,6 +335,33 @@ export async function completeDraft(req: AuthRequest, res: Response) {
     })
   }
 
+  const finalProductIds = Array.from(new Set(finalItems.map((i: any) => i.productId)))
+  const finalProducts = await prisma.product.findMany({ where: { id: { in: finalProductIds }, businessId: invoice.businessId } })
+  const finalProductMap = new Map(finalProducts.map((p) => [p.id, p]))
+  const business = await prisma.business.findUnique({
+    where: { id: invoice.businessId },
+    select: { decimalQuantityMode: true, sellWithoutStockMode: true, priceOverrideMode: true },
+  })
+  const finalStocks = await prisma.branchStock.findMany({ where: { branchId: invoice.branchId, productId: { in: finalProductIds } } })
+  const finalStockMap = new Map(finalStocks.map((s) => [s.productId, Number(s.stock)]))
+  const allowNoStockByProduct = new Map<number, boolean>()
+
+  for (const i of finalItems) {
+    const product = finalProductMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const allowDecimal = effectiveFlag(business?.decimalQuantityMode, product.decimalQuantity)
+    const allowPriceOverride = effectiveFlag(business?.priceOverrideMode, product.priceOverride)
+    const allowSellWithoutStock = effectiveFlag(business?.sellWithoutStockMode, product.sellWithoutStock)
+    allowNoStockByProduct.set(i.productId, allowSellWithoutStock)
+    const policyErr = validateItemPolicy(i, product, {
+      allowDecimal,
+      allowPriceOverride,
+      allowSellWithoutStock,
+      stock: finalStockMap.get(i.productId) ?? null,
+    })
+    if (policyErr) { res.status(400).json({ error: policyErr }); return }
+  }
+
   await prisma.$transaction(async (tx) => {
     for (const item of finalItems) {
       await changeStock(tx, {
@@ -315,7 +369,8 @@ export async function completeDraft(req: AuthRequest, res: Response) {
         branchId: invoice.branchId,
         productId: item.productId,
         type: 'sale',
-        quantity: -item.quantity,
+        quantity: -Number(item.quantity),
+        allowNegative: allowNoStockByProduct.get(item.productId) || undefined,
         reference: invoice.number,
         notes: `Venta #${invoice.number}`,
         userId: req.user!.id,
@@ -383,7 +438,7 @@ export async function cancel(req: AuthRequest, res: Response) {
         branchId: invoice.branchId,
         productId: item.productId,
         type: 'cancellation',
-        quantity: item.quantity,
+        quantity: Number(item.quantity),
         reference: invoice.number,
         notes: `Anulación #${invoice.number}`,
         userId: req.user!.id,
@@ -499,6 +554,23 @@ export async function updateDraft(req: AuthRequest, res: Response) {
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId ?? 0 } })
   const productMap = new Map(products.map((p) => [p.id, p]))
+
+  const business = await prisma.business.findUnique({
+    where: { id: ctx.businessId ?? 0 },
+    select: { decimalQuantityMode: true, sellWithoutStockMode: true, priceOverrideMode: true },
+  })
+
+  for (const i of items) {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const policyErr = validateItemPolicy(i, product, {
+      allowDecimal: effectiveFlag(business?.decimalQuantityMode, product.decimalQuantity),
+      allowPriceOverride: effectiveFlag(business?.priceOverrideMode, product.priceOverride),
+      allowSellWithoutStock: true,
+      stock: null,
+    })
+    if (policyErr) { res.status(400).json({ error: policyErr }); return }
+  }
 
   const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0

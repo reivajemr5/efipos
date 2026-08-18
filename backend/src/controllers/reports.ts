@@ -63,7 +63,7 @@ export async function topProducts(req: AuthRequest, res: Response) {
     if (!productMap[item.productId]) {
       productMap[item.productId] = { name: item.product.name, code: item.product.code, quantity: 0, total: 0 }
     }
-    productMap[item.productId].quantity += item.quantity
+    productMap[item.productId].quantity += Number(item.quantity)
     productMap[item.productId].total += Number(item.subtotal)
   }
 
@@ -192,8 +192,8 @@ export async function dashboard(req: AuthRequest, res: Response) {
     id: t.productId,
     name: topProductMap.get(t.productId)?.name || '',
     code: topProductMap.get(t.productId)?.code || '',
-    quantity: t._sum.quantity || 0,
-    total: t._sum.subtotal || 0,
+    quantity: Number(t._sum.quantity) || 0,
+    total: Number(t._sum.subtotal) || 0,
   }))
 
   const dailySales: { date: string; total: number; count: number }[] = []

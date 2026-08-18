@@ -27,11 +27,12 @@ interface ProductGridProps {
   onSelectProductQuantity?: (product: ProductGridProduct) => void
   onArrowUpFromFirst?: () => void
   exchangeRate: number
+  sellWithoutStockMode?: string | null
 }
 
 const PAGE_SIZE = 20
 
-export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity, onArrowUpFromFirst, exchangeRate }: ProductGridProps) {
+export default function ProductGrid({ products, categories, selectedCategoryId, onSelectCategory, onSelectProduct, onSelectProductQuantity, onArrowUpFromFirst, exchangeRate, sellWithoutStockMode }: ProductGridProps) {
   const tabsRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -136,6 +137,7 @@ export default function ProductGrid({ products, categories, selectedCategoryId, 
                   onSelect={onSelectProduct}
                   onSelectQuantity={onSelectProductQuantity}
                   exchangeRate={exchangeRate}
+                  sellWithoutStockMode={sellWithoutStockMode}
                 />
               ))}
             </div>

@@ -6,12 +6,15 @@ import SearchPicker from '../components/SearchPicker'
 import TablePickerModal from '../components/TablePickerModal'
 import LoadPurchaseOrderModal from '../components/LoadPurchaseOrderModal'
 import DistributeStockModal from '../components/DistributeStockModal'
+import { useSaleModes } from '../hooks/useSaleModes'
+import { effectiveFlag, QTY_STEP } from '../utils/config'
 
 interface Supplier { id: number; name: string; documentType: string; documentNumber: string }
 interface Product {
   id: number; name: string; code: string; price: number; cost?: number | null
   currency: string; ivaPercent: number; stock: number; minStock: number
   suppliers: { supplier: { id: number; name: string } }[]
+  decimalQuantity?: boolean
 }
 interface Branch { id: number; name: string }
 interface Distribution { branchId: number; quantity: number }
@@ -23,6 +26,7 @@ function uuid() {
 
 export default function PurchaseFormPage() {
   const navigate = useNavigate()
+  const saleModes = useSaleModes()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
@@ -93,6 +97,10 @@ export default function PurchaseFormPage() {
     return list
   }
   function sortByStock(list: any[]) { return [...list].sort((a, b) => Number(a.stock) - Number(b.stock)) }
+
+  function allowDecimalQty(p?: Product): boolean {
+    return p ? effectiveFlag(saleModes.decimalQuantityMode, p.decimalQuantity) : false
+  }
 
   function addLine(productId: number, quantity = 1) {
     setItems((prev) => {
@@ -336,7 +344,7 @@ export default function PurchaseFormPage() {
             <div className={selectedSupplier ? '' : 'pointer-events-none opacity-40'}>
               <SearchPicker
                 items={filteredProducts()}
-                onSelect={(p) => { if (selectedSupplier) addLine(p.id) }}
+                onSelect={(p) => { if (selectedSupplier) addLine(p.id, allowDecimalQty(p) ? 0.5 : 1) }}
                 filter={(p, q) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
                 renderItem={(p) => {
                   const lowStock = p.stock <= p.minStock
@@ -398,7 +406,7 @@ export default function PurchaseFormPage() {
                         </td>
                       )}
                       <td className="py-1.5 text-center">
-                        <input type="number" min="1" value={item.quantity} onChange={(e) => updateQty(item.productId, Number(e.target.value))}
+                        <input type="number" min={allowDecimalQty(p) ? QTY_STEP : 1} step={allowDecimalQty(p) ? 0.5 : 1} value={item.quantity} onChange={(e) => updateQty(item.productId, Number(e.target.value))}
                           className="w-14 px-1.5 py-1 border rounded text-center text-sm" />
                       </td>
                       <td className="py-1.5 text-right font-mono">{money(item.unitPrice * item.quantity * (1 + Number(p.ivaPercent) / 100))}</td>
@@ -475,7 +483,7 @@ export default function PurchaseFormPage() {
         ) : undefined}
         filterFn={(p: any, q: string) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())}
         multiSelect
-        onMultiSelect={(sel: any[]) => { sel.forEach((p: any) => addLine(p.id)) }}
+        onMultiSelect={(sel: any[]) => { sel.forEach((p: any) => addLine(p.id, allowDecimalQty(p) ? 0.5 : 1)) }}
         onSelect={(p: any) => { if (selectedSupplier) addLine(p.id); setShowProductTable(false) }} searchPlaceholder="Buscar producto..." />
 
       <LoadPurchaseOrderModal open={showLoadOrder} onClose={() => setShowLoadOrder(false)}

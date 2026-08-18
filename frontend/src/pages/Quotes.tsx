@@ -10,6 +10,8 @@ import ClientFormModal from '../components/ClientFormModal'
 import LoadModal from '../components/LoadModal'
 import PaginationBar from '../components/PaginationBar'
 import { useNavigate } from 'react-router-dom'
+import { useSaleModes } from '../hooks/useSaleModes'
+import { effectiveFlag, QTY_STEP, formatQty } from '../utils/config'
 
 interface Client {
   id: number; name: string; documentType: string; documentNumber: string
@@ -29,6 +31,7 @@ interface Product {
   barcode?: string | null
   categoryId?: number | null
   category?: { id: number; name: string } | null
+  decimalQuantity?: boolean
 }
 
 interface Category {
@@ -39,6 +42,7 @@ interface Category {
 const DEFAULT_CLIENT: Client = { id: 0, name: 'Consumidor Final', documentType: 'V', documentNumber: '0', phone: null, address: null }
 
 export default function Quotes() {
+  const saleModes = useSaleModes()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
@@ -136,26 +140,32 @@ export default function Quotes() {
     return matchesSearch && matchesCategory
   })
 
+  function allowDecimalQty(product: Product): boolean {
+    return effectiveFlag(saleModes.decimalQuantityMode, product.decimalQuantity)
+  }
+
   function handleSelectProduct(product: Product) {
     if (product.stock <= 0) return
+    const dec = allowDecimalQty(product)
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
       if (existing) {
         return prev.map((i) =>
-          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.productId === product.id ? { ...i, quantity: i.quantity + (dec ? 0.5 : 1) } : i
         )
       }
-      return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent) }]
+      return [...prev, { productId: product.id, name: product.name, quantity: dec ? QTY_STEP : 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent), allowDecimal: dec }]
     })
   }
 
   function handleSelectProductQuantity(product: Product) {
     if (product.stock <= 0) return
+    const dec = allowDecimalQty(product)
     const existing = cart.find((i) => i.productId === product.id)
     if (existing) {
-      handleUpdateQuantity(product.id, existing.quantity + 1)
+      handleUpdateQuantity(product.id, existing.quantity + (dec ? 0.5 : 1))
     } else {
-      setCart((prev) => [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent) }])
+      setCart((prev) => [...prev, { productId: product.id, name: product.name, quantity: dec ? QTY_STEP : 1, unitPrice: Number(product.price), ivaPercent: Number(product.ivaPercent), allowDecimal: dec }])
     }
     setShowProductSearch(false)
   }
@@ -182,14 +192,18 @@ export default function Quotes() {
 
   function handleLoadQuote(source: { type: string; id: number; items: any[]; client: any; discount?: number }) {
     if (source.type !== 'quote') return
-    const items = source.items.map((i: any) => ({
-      productId: i.productId,
-      name: i.name || i.product?.name || `Producto #${i.productId}`,
-      quantity: i.quantity,
-      unitPrice: Number(i.unitPrice),
-      ivaPercent: Number(i.ivaPercent),
-      discount: i.discount ? Number(i.discount) : 0,
-    }))
+    const items = source.items.map((i: any) => {
+      const p = products.find((pp) => pp.id === i.productId)
+      return {
+        productId: i.productId,
+        name: i.name || i.product?.name || `Producto #${i.productId}`,
+        quantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice),
+        ivaPercent: Number(i.ivaPercent),
+        discount: i.discount ? Number(i.discount) : 0,
+        allowDecimal: p ? allowDecimalQty(p) : false,
+      }
+    })
     setCart(items)
     setDiscount(source.discount ? Number(source.discount) : 0)
     setEditingQuoteId(source.id)
@@ -303,7 +317,7 @@ export default function Quotes() {
         const pu = Number(item.unitPrice)
         const lineDisc = Number(item.discount) || 0
         const tot = Number(item.subtotal)
-        let cols = `<td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name || ''}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${item.quantity}</td>`
+        let cols = `<td style="padding:4px 6px;font-size:10px">${item.product?.code || ''}</td><td style="padding:4px 6px;font-size:10px">${item.product?.name || ''}</td><td style="padding:4px 6px;text-align:center;font-size:10px">${formatQty(Number(item.quantity))}</td>`
         if (showUsd) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">$${pu.toFixed(2)}</td>`
         if (showBs) cols += `<td style="padding:4px 6px;text-align:right;font-size:10px">Bs.${(pu * rate).toFixed(2)}</td>`
         if (hasLineDisc) {

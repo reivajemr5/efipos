@@ -14,6 +14,9 @@ export function useOfflineProducts() {
           price: Number(p.price), ivaPercent: Number(p.ivaPercent),
           stock: p.stock, minStock: p.minStock,
           supplierId: p.supplierId, supplierName: p.supplier?.name || null,
+          decimalQuantity: !!p.decimalQuantity,
+          sellWithoutStock: !!p.sellWithoutStock,
+          priceOverride: !!p.priceOverride,
           updatedAt: new Date().toISOString(),
         }))
         setProducts(mapped)

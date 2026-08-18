@@ -188,6 +188,7 @@ export const api = {
   businesses: {
     list: () => request('/businesses'),
     getById: (id: number) => request(`/businesses/${id}`),
+    settings: () => request('/businesses/context'),
     create: (data: any) => request('/businesses', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request(`/businesses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/businesses/${id}`, { method: 'DELETE' }),

@@ -13,6 +13,9 @@ interface Product {
   description: string | null; notes: string | null
   barcode: string | null; cost: number | null; price: number; price2: number | null
   currency: string; ivaPercent: number; stock: number; minStock: number
+  decimalQuantity?: boolean
+  sellWithoutStock?: boolean
+  priceOverride?: boolean
   category: Category | null; variations: any[]
   suppliers: { supplier: { id: number; name: string } }[]
   barcodes: { id: number; barcode: string }[]
@@ -73,6 +76,7 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
     barcode: '', barcodes: [] as string[],
     cost: '', margin: '', price: '', margin2: '', price2: '',
     currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
+    decimalQuantity: false, sellWithoutStock: false, priceOverride: false,
     categoryId: '', supplierIds: [] as number[],
     variations: [] as { name: string; values: { value: string; qty: number }[] }[],
     components: [] as { productId: number; name: string; quantity: number }[],
@@ -119,6 +123,9 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
         price2: p.price2 ? String(p.price2) : '',
         currency: p.currency, ivaPercent: String(p.ivaPercent),
         stock: String(p.stock), minStock: String(p.minStock),
+        decimalQuantity: !!p.decimalQuantity,
+        sellWithoutStock: !!p.sellWithoutStock,
+        priceOverride: !!p.priceOverride,
         categoryId: p.category ? String(p.category.id) : '',
         supplierIds: p.suppliers.map((ps) => ps.supplier.id),
         variations: isComposite ? [] : (Array.isArray(p.variations) ? p.variations.filter((v: any) => v.name) : []),
@@ -132,6 +139,7 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
         barcode: '', barcodes: [],
         cost: '', margin: '', price: '', margin2: '', price2: '',
         currency: 'bs', ivaPercent: '0', stock: '0', minStock: '5',
+        decimalQuantity: false, sellWithoutStock: false, priceOverride: false,
         categoryId: '', supplierIds: [], variations: [], components: [],
         newVarName: '', newVarValue: '', newVarQty: 0,
         templateSearch: '', templateSearchResults: [], showTemplateDropdown: false,
@@ -278,6 +286,9 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
       categoryId: form.categoryId ? Number(form.categoryId) : null,
       variations: form.type === 'compuesto' ? form.components : form.variations,
       supplierIds: form.supplierIds,
+      decimalQuantity: form.decimalQuantity,
+      sellWithoutStock: form.sellWithoutStock,
+      priceOverride: form.priceOverride,
     }
     try {
       const product = editing
@@ -573,8 +584,30 @@ export default function ProductFormModal({ open, onClose, editing, onSaved }: Pr
                       ))}
                     {attributeTemplates.filter((t) => t.name.toLowerCase().includes(form.templateSearch.toLowerCase())).length === 0 && (
                       <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
-                    )}
-                  </div>
+            )}
+
+            <div className="mt-4 space-y-2 border-t border-gray-100 pt-3">
+              <label className="text-xs text-gray-500 mb-1 block">Opciones de venta</label>
+              <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
+                <span className="text-sm text-gray-700">Vender por peso (cantidades decimales)</span>
+                <input type="checkbox" checked={form.decimalQuantity}
+                  onChange={(e) => setForm({ ...form, decimalQuantity: e.target.checked })}
+                  className="w-5 h-5 accent-blue-900" />
+              </label>
+              <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
+                <span className="text-sm text-gray-700">Permitir venta sin stock</span>
+                <input type="checkbox" checked={form.sellWithoutStock}
+                  onChange={(e) => setForm({ ...form, sellWithoutStock: e.target.checked })}
+                  className="w-5 h-5 accent-blue-900" />
+              </label>
+              <label className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-3 py-2 cursor-pointer">
+                <span className="text-sm text-gray-700">Permitir cambiar el precio en la factura</span>
+                <input type="checkbox" checked={form.priceOverride}
+                  onChange={(e) => setForm({ ...form, priceOverride: e.target.checked })}
+                  className="w-5 h-5 accent-blue-900" />
+              </label>
+            </div>
+          </div>
                 )}
               </div>
 

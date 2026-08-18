@@ -13,6 +13,8 @@ export interface ChangeStockOptions {
   reference?: string
   userId?: number | null
   minStock?: number
+  /** cuando es true, el stock puede quedar negativo (venta sin stock) */
+  allowNegative?: boolean
 }
 
 export interface StockResult {
@@ -30,7 +32,7 @@ export async function changeStock(tx: Tx, opts: ChangeStockOptions): Promise<Sto
   })
   const current = cur ? Number(cur.stock) : 0
   const next = opts.type === 'adjustment' ? opts.quantity : current + opts.quantity
-  const after = Math.max(0, next)
+  const after = opts.allowNegative ? next : Math.max(0, next)
 
   await tx.branchStock.upsert({
     where: { branchId_productId: { branchId: opts.branchId, productId: opts.productId } },

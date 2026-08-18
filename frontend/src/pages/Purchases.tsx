@@ -6,6 +6,8 @@ import SearchPicker from '../components/SearchPicker'
 import TablePickerModal from '../components/TablePickerModal'
 import PaginationBar from '../components/PaginationBar'
 import LoadPurchaseOrderModal from '../components/LoadPurchaseOrderModal'
+import { useSaleModes } from '../hooks/useSaleModes'
+import { effectiveFlag, QTY_STEP } from '../utils/config'
 
 interface Purchase {
   id: number
@@ -50,6 +52,7 @@ interface Product {
   minStock: number
   barcode?: string | null
   suppliers: { supplier: { id: number; name: string } }[]
+  decimalQuantity?: boolean
 }
 
 interface LineItem {
@@ -60,6 +63,7 @@ interface LineItem {
 }
 
 export default function Purchases() {
+  const saleModes = useSaleModes()
   const PAGE_SIZE = 25
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [purchasesTotal, setPurchasesTotal] = useState(0)
@@ -144,11 +148,16 @@ export default function Purchases() {
     setFilterStatus(s)
   }
 
+  function allowDecimalQty(p: Product | undefined): boolean {
+    return p ? effectiveFlag(saleModes.decimalQuantityMode, p.decimalQuantity) : false
+  }
+
   function addReceiveItem(productId: number) {
+    const inc = allowDecimalQty(products.find((x) => x.id === productId)) ? 0.5 : 1
     setReceiveItems((prev) => {
       const existing = prev.find((i) => i.productId === productId)
-      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
-      return [...prev, { productId, quantity: 1 }]
+      if (existing) return prev.map((i) => i.productId === productId ? { ...i, quantity: i.quantity + inc } : i)
+      return [...prev, { productId, quantity: inc }]
     })
   }
 
@@ -239,7 +248,7 @@ export default function Purchases() {
     if (existingOrder) {
       setDuplicateWarning(`"${products.find((p) => p.id === productId)?.name}" ya tiene un pedido pendiente con ${existingOrder.supplier.name} (${existingOrder.number})`)
     }
-    addLine(productId, 1)
+    addLine(productId, allowDecimalQty(products.find((p) => p.id === productId)) ? 0.5 : 1)
   }
 
   function defaultPrice(p: Product): number {
@@ -434,7 +443,7 @@ export default function Purchases() {
                                 </button>
                               </td>
                               <td className="py-1.5 text-center">
-                                <input type="number" min="1" value={item.quantity}
+                                <input type="number" min={allowDecimalQty(products.find((x) => x.id === item.productId)) ? QTY_STEP : 1} step={allowDecimalQty(products.find((x) => x.id === item.productId)) ? 0.5 : 1} value={item.quantity}
                                   onChange={(e) => updateQty(item.productId, Number(e.target.value))}
                                   className="w-14 px-1.5 py-1 border rounded text-center text-sm" />
                               </td>
@@ -563,7 +572,7 @@ export default function Purchases() {
                 return (
                   <div key={item.productId} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
                     <span className="flex-1 text-sm">{p.name}</span>
-                    <input type="number" value={item.quantity} min="0"
+                    <input type="number" value={item.quantity} min="0" step={allowDecimalQty(p) ? 0.5 : 1}
                       onChange={(e) => updateReceiveQty(item.productId, Number(e.target.value))}
                       className="w-16 px-2 py-1 border rounded text-center text-sm" />
                     <button onClick={() => updateReceiveQty(item.productId, 0)} className="text-red-500 text-sm">✕</button>

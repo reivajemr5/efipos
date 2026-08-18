@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateItems, isPositiveNumber } from '../lib/validation'
+import { validateItems, validateItemPolicy, isPositiveNumber } from '../lib/validation'
 
 describe('validateItems', () => {
   it('rechaza items vacíos', () => {
@@ -11,10 +11,14 @@ describe('validateItems', () => {
     expect(validateItems([{ quantity: 1 }])).toMatch(/productId/)
   })
 
-  it('rechaza cantidades no enteras o menores a 1', () => {
+  it('rechaza cantidades no positivas', () => {
     expect(validateItems([{ productId: 1, quantity: 0 }])).toMatch(/cantidad/)
     expect(validateItems([{ productId: 1, quantity: -3 }])).toMatch(/cantidad/)
-    expect(validateItems([{ productId: 1, quantity: 2.5 }])).toMatch(/cantidad/)
+  })
+
+  it('acepta cantidades decimales', () => {
+    expect(validateItems([{ productId: 1, quantity: 2.5 }])).toBeNull()
+    expect(validateItems([{ productId: 1, quantity: 0.5 }])).toBeNull()
   })
 
   it('rechaza precio unitario negativo', () => {
@@ -23,6 +27,22 @@ describe('validateItems', () => {
 
   it('acepta items válidos', () => {
     expect(validateItems([{ productId: 1, quantity: 3, unitPrice: 10.5 }])).toBeNull()
+  })
+})
+
+describe('validateItemPolicy', () => {
+  const product = { id: 1, decimalQuantity: false, sellWithoutStock: false, priceOverride: false }
+
+  it('rechaza cantidad decimal sin permiso', () => {
+    expect(validateItemPolicy({ quantity: 1.5 }, product, { allowDecimal: false, allowPriceOverride: false, allowSellWithoutStock: false, stock: 10 })).toMatch(/decimal/)
+  })
+
+  it('permite cantidad decimal con permiso', () => {
+    expect(validateItemPolicy({ quantity: 1.5 }, product, { allowDecimal: true, allowPriceOverride: false, allowSellWithoutStock: false, stock: 10 })).toBeNull()
+  })
+
+  it('rechaza unidad unitPrice si no usa pawn priceOverride', () => {
+    expect(validateItemPolicy({ quantity: 1, unitPrice: 999 }, product, { allowDecimal: false, allowPriceOverride: false, allowSellWithoutStock: false, stock: 10 })).toMatch(/precio/)
   })
 })
 

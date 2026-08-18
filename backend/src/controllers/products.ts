@@ -74,7 +74,7 @@ export async function getById(req: AuthRequest, res: Response) {
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, imageUrl } = req.body
+  const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, imageUrl, decimalQuantity, sellWithoutStock, priceOverride } = req.body
   const ctx = resolveContext(req)
   if (!name || price === undefined || price === null || price === '') {
     res.status(400).json({ error: 'Nombre y precio requeridos' })
@@ -101,6 +101,9 @@ export async function create(req: AuthRequest, res: Response) {
     categoryId: categoryId || null,
     imageUrl: imageUrl || null,
     variations: variations || [],
+    decimalQuantity: decimalQuantity ?? false,
+    sellWithoutStock: sellWithoutStock ?? false,
+    priceOverride: priceOverride ?? false,
     barcodes: barcodes?.length ? { create: barcodes.map((b: string) => ({ barcode: b })) } : undefined,
     suppliers: supplierIds?.length
       ? { create: supplierIds.map((id: number) => ({ supplierId: id })) }
@@ -146,7 +149,7 @@ export async function update(req: AuthRequest, res: Response) {
   })
   if (!existing) { res.status(404).json({ error: 'Producto no encontrado' }); return }
 
-  const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, active, imageUrl } = req.body
+  const { name, description, notes, type, price, cost, barcode, barcodes, price2, currency, ivaPercent, stock, minStock, categoryId, brandId, variations, supplierIds, active, imageUrl, decimalQuantity, sellWithoutStock, priceOverride } = req.body
 
   if (supplierIds) {
     await prisma.productSupplier.deleteMany({ where: { productId: id } })
@@ -175,6 +178,9 @@ export async function update(req: AuthRequest, res: Response) {
         currency, ivaPercent, categoryId: categoryId || null,
         imageUrl: imageUrl || null,
         variations,
+        decimalQuantity: decimalQuantity ?? false,
+        sellWithoutStock: sellWithoutStock ?? false,
+        priceOverride: priceOverride ?? false,
         ...(active !== undefined ? { active } : {}),
       },
     })

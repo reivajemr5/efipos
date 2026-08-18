@@ -4,11 +4,14 @@ import { useToastStore } from '../store/toast'
 import PaginationBar from '../components/PaginationBar'
 import { useAuthStore } from '../store/auth'
 import { useRole } from '../hooks/useRole'
+import { useSaleModes } from '../hooks/useSaleModes'
+import { effectiveFlag, QTY_STEP } from '../utils/config'
 
 const typeLabels: Record<string, string> = { sale: 'Venta', purchase: 'Compra', adjustment: 'Ajuste', import: 'Importación' }
 const typeColors: Record<string, string> = { sale: 'text-red-600 bg-red-50', purchase: 'text-green-600 bg-green-50', adjustment: 'text-amber-600 bg-amber-50', import: 'text-blue-600 bg-blue-50' }
 
 export default function Inventory() {
+  const saleModes = useSaleModes()
   const { isSuper, isDueno, isAdmin } = useRole()
   const myBranchId = useAuthStore((s) => s.user?.branchId ?? null)
   const [branches, setBranches] = useState<{ id: number; name: string }[]>([])
@@ -57,6 +60,10 @@ export default function Inventory() {
       setMovementsTotal(Array.isArray(mov) ? mov.length : mov.total)
       setProducts(prods)
     } catch {} finally { setLoading(false) }
+  }
+
+  function allowDecimalQty(p: any): boolean {
+    return p ? effectiveFlag(saleModes.decimalQuantityMode, p.decimalQuantity) : false
   }
 
   function applyFilters() {
@@ -176,7 +183,7 @@ export default function Inventory() {
               </div>
               <div>
                 <label className="label">Nuevo stock *</label>
-                <input type="number" min="0" className="input" value={adjustForm.quantity} onChange={(e) => setAdjustForm({ ...adjustForm, quantity: Number(e.target.value) })} required />
+                <input type="number" min={allowDecimalQty(products.find((p) => p.id === adjustForm.productId)) ? QTY_STEP : 0} step={allowDecimalQty(products.find((p) => p.id === adjustForm.productId)) ? 0.5 : 1} className="input" value={adjustForm.quantity} onChange={(e) => setAdjustForm({ ...adjustForm, quantity: Number(e.target.value) })} required />
                 <p className="text-xs text-gray-400 mt-1">Cantidad total a fijar en la sucursal</p>
               </div>
               <div>

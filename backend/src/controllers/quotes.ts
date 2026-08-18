@@ -4,7 +4,8 @@ import { AuthRequest } from '../middleware/auth'
 import { parsePagination, paginate } from '../lib/paginate'
 import { resolveContext, resolveEffectiveBranchId } from '../lib/tenant'
 import { changeStock } from '../lib/stock'
-import { validateItems } from '../lib/validation'
+import { validateItems, validateItemPolicy } from '../lib/validation'
+import { effectiveFlag } from '../lib/config'
 import { nextDocumentNumber } from '../lib/numbering'
 
 export async function list(req: AuthRequest, res: Response) {
@@ -70,6 +71,23 @@ export async function create(req: AuthRequest, res: Response) {
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId } })
   const productMap = new Map(products.map((p) => [p.id, p]))
+
+  const business = await prisma.business.findUnique({
+    where: { id: ctx.businessId },
+    select: { decimalQuantityMode: true },
+  })
+
+  for (const i of items) {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const policyErr = validateItemPolicy(i, product, {
+      allowDecimal: effectiveFlag(business?.decimalQuantityMode, product.decimalQuantity),
+      allowPriceOverride: true,
+      allowSellWithoutStock: true,
+      stock: null,
+    })
+    if (policyErr) { res.status(400).json({ error: policyErr }); return }
+  }
 
   const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
@@ -143,6 +161,23 @@ export async function update(req: AuthRequest, res: Response) {
   const productIds = items.map((i: any) => i.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, businessId: ctx.businessId ?? 0 } })
   const productMap = new Map(products.map((p) => [p.id, p]))
+
+  const business = await prisma.business.findUnique({
+    where: { id: ctx.businessId ?? 0 },
+    select: { decimalQuantityMode: true },
+  })
+
+  for (const i of items) {
+    const product = productMap.get(i.productId)
+    if (!product) throw new Error(`Producto ${i.productId} no encontrado`)
+    const policyErr = validateItemPolicy(i, product, {
+      allowDecimal: effectiveFlag(business?.decimalQuantityMode, product.decimalQuantity),
+      allowPriceOverride: true,
+      allowSellWithoutStock: true,
+      stock: null,
+    })
+    if (policyErr) { res.status(400).json({ error: policyErr }); return }
+  }
 
   const globalDisc = Math.max(0, Number(discount) || 0)
   let subtotal = 0
@@ -245,7 +280,7 @@ export async function convertToInvoice(req: AuthRequest, res: Response) {
         branchId: ctx.branchId ?? quote.branchId,
         productId: item.productId,
         type: 'sale',
-        quantity: -item.quantity,
+        quantity: -Number(item.quantity),
         userId: req.user!.id,
         reference: `FACT-${invoiceNumber}`,
       })

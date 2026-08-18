@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { effectiveFlag } from '../../utils/config'
 
 interface ProductCardProduct {
   id: number
@@ -9,6 +10,7 @@ interface ProductCardProduct {
   ivaPercent: number
   imageUrl?: string | null
   stock: number
+  sellWithoutStock?: boolean
   category?: { id: number; name: string } | null
 }
 
@@ -17,16 +19,18 @@ interface ProductCardProps {
   onSelect: (product: ProductCardProduct) => void
   onSelectQuantity?: (product: ProductCardProduct) => void
   exchangeRate: number
+  sellWithoutStockMode?: string | null
 }
 
 const categoryColors: Record<string, string> = {
   default: 'bg-blue-100 text-blue-700',
 }
 
-export default function ProductCard({ product, onSelect, onSelectQuantity, exchangeRate }: ProductCardProps) {
+export default function ProductCard({ product, onSelect, onSelectQuantity, exchangeRate, sellWithoutStockMode }: ProductCardProps) {
   const catName = product.category?.name || ''
   const colorClass = categoryColors[catName] || 'bg-blue-100 text-blue-700'
   const keyboardSelected = useRef(false)
+  const allowNoStock = effectiveFlag(sellWithoutStockMode, product.sellWithoutStock)
 
   const priceBs = exchangeRate > 0 ? product.price * exchangeRate : 0
 
@@ -73,7 +77,7 @@ export default function ProductCard({ product, onSelect, onSelectQuantity, excha
             </span>
           )}
         </div>
-        {product.stock <= 0 && (
+        {product.stock <= 0 && !allowNoStock && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
             <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Sin stock</span>
           </div>

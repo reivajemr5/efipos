@@ -3,6 +3,7 @@ import { api } from '../services/api'
 import { useToastStore } from '../store/toast'
 import PaginationBar from '../components/PaginationBar'
 import { useRole } from '../hooks/useRole'
+import { formatQty } from '../utils/config'
 
 interface InvoiceListItem {
   id: number
@@ -269,7 +270,7 @@ export default function InvoicesHistory() {
                   {detail.items.map((item, i) => (
                     <tr key={i} className="border-b border-gray-100">
                       <td className="py-1.5">{item.product?.name || 'Producto'}</td>
-                      <td className="py-1.5 text-center">{item.quantity}</td>
+                      <td className="py-1.5 text-center">{formatQty(Number(item.quantity))}</td>
                       <td className="py-1.5 text-right">{sym(detail)}{Number(item.unitPrice).toFixed(2)}</td>
                       {detail.items.some((x) => Number(x.discount) > 0) && (
                         <td className="py-1.5 text-right text-amber-600">{Number(item.discount) > 0 ? `-${sym(detail)}${Number(item.discount).toFixed(2)}` : ''}</td>
